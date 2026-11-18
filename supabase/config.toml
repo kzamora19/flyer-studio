@@ -1,0 +1,3 @@
+project_id = "tzklsscoiwnmeantcefw"
+[functions.flyer-catalog]
+verify_jwt = false  # Public catalog metadata/images only; user-specific data never exposed here.
