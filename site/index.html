@@ -6209,6 +6209,176 @@ const CLOUD_AUTH_STORE='flyer-studio-cloud-auth-v1';
 let cloudSession=null,cloudUser=null,cloudProject=null,cloudRevision=0,cloudLastDocument=null;
 let cloudSaving=false,cloudDirty=false,cloudConflict=false,cloudTimer=null,cloudInitialized=false,cloudSuspend=false;
 let cloudProjects=[],cloudVersions=[];
+
+/* Google Drive backups: users explicitly authorize drive.file; access tokens live in memory only. */
+const DRIVE_CLIENT_STORE='flyer-studio-google-client-id-v1';
+const DRIVE_AUTO_STORE='flyer-studio-drive-backup-enabled-v1';
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const DRIVE_FOLDER='Flyer Studio Backups';
+const DRIVE_AUTO_INTERVAL=15*60*1000;
+let driveClientId='',driveAuto=true,driveToken='',driveTokenExpiry=0,driveFolderId='',driveUploading=false;
+let driveLastBackedRevision=0,driveLastBackupAt=0,driveLibraryPromise=null,driveTokenClient=null,driveLastProjectId='';
+try{driveClientId=localStorage.getItem(DRIVE_CLIENT_STORE)||'';driveAuto=localStorage.getItem(DRIVE_AUTO_STORE)!=='false';}catch{}
+function driveStatus(message,good=false){const el=$c('driveStatus');if(el){el.textContent=message;el.dataset.ok=String(good);}}
+function driveRender(){
+ const status=$c('driveStatus');if(!status)return;
+ const connected=!!driveToken&&Date.now()<driveTokenExpiry-60000;
+ const b=$c('driveConnect');if(b)b.textContent=connected?'Reconnect Google Drive':'Connect Google Drive';
+ const input=$c('driveClientId');if(input&&input!==document.activeElement)input.value=driveClientId;
+ const toggle=$c('driveAuto');if(toggle)toggle.checked=driveAuto;
+ const backup=$c('driveBackup');if(backup)backup.disabled=!cloudUser||!cloudProject||!connected||driveUploading;
+ const browse=$c('driveBrowse');if(browse)browse.disabled=!connected||driveUploading;
+ if(!connected && (!status.textContent.trim() || status.dataset.ok==='true')){if(driveLastBackedRevision)driveStatus('Google Drive authorization expired. Supabase autosave continues; reconnect Drive for backups.');else driveStatus('Connect Google Drive once per browser session to enable backups.');}
+ else if(connected && !status.textContent.trim()){driveStatus('Drive connected · '+(driveAuto?'Automatic backups are on.':'Automatic backups are off.'),true);}
+}
+function driveSetClientId(){
+ const id=($c('driveClientId')?.value||'').trim();
+ if(!/^\d+-[a-z0-9_-]+\.apps\.googleusercontent\.com$/i.test(id)){driveStatus('Enter the Google OAuth Web application Client ID (ends in .apps.googleusercontent.com).');return false;}
+ driveClientId=id;driveToken='';driveTokenExpiry=0;driveTokenClient=null;driveFolderId='';
+ try{localStorage.setItem(DRIVE_CLIENT_STORE,id);}catch{}
+ driveStatus('Google OAuth Client ID saved in this browser. Click Connect Google Drive.');driveRender();return true;
+}
+function driveLoadLibrary(){
+ if(window.google?.accounts?.oauth2)return Promise.resolve();
+ if(driveLibraryPromise)return driveLibraryPromise;
+ driveLibraryPromise=new Promise((resolve,reject)=>{
+  const tag=document.createElement('script');tag.src='https://accounts.google.com/gsi/client';tag.async=true;
+  tag.onload=()=>window.google?.accounts?.oauth2?resolve():reject(Error('Google authorization library did not start.'));
+  tag.onerror=()=>reject(Error('Could not load Google Identity Services. Check your connection or content blocker.'));
+  document.head.append(tag);
+ }).catch(e=>{driveLibraryPromise=null;throw e;});
+ return driveLibraryPromise;
+}
+function driveConnect(){
+ if(!driveClientId){driveStatus('Configure a Google OAuth Client ID before connecting.');return;}
+ if(!window.google?.accounts?.oauth2){driveStatus('Loading Google authorization. Click Connect Google Drive again after it loads.');void driveLoadLibrary().catch(e=>driveStatus(e.message));return;}
+ if(!driveTokenClient){
+  driveTokenClient=google.accounts.oauth2.initTokenClient({client_id:driveClientId,scope:DRIVE_SCOPE,
+   callback:response=>{
+    if(response?.error||!response?.access_token){driveStatus('Google authorization was not completed. '+(response?.error||''));return;}
+    driveToken=response.access_token;
+    driveTokenExpiry=Date.now()+Math.max(60,Number(response.expires_in||3600))*1000;
+    driveFolderId='';driveStatus('Google Drive connected. '+(driveAuto?'Automatic backups will follow successful cloud saves.':'Use Back Up Now when needed.'),true);
+    driveRender();void driveBrowseBackups();
+   },
+   error_callback:error=>driveStatus('Google authorization failed or the popup was closed. '+(error?.type||''))
+  });
+ }
+ try{driveTokenClient.requestAccessToken({prompt:'consent'});}catch(e){driveStatus('Could not open Google authorization: '+cloudErr(e));}
+}
+async function driveFetch(url,options={}){
+ if(!driveToken||Date.now()>driveTokenExpiry-60000){driveToken='';driveTokenExpiry=0;driveRender();throw Error('Drive authorization expired. Reconnect Google Drive.');}
+ const response=await fetch(url,{...options,headers:{Authorization:'Bearer '+driveToken,...options.headers}});
+ if(!response.ok){let message='Google Drive request failed ('+response.status+').';
+  try{const d=await response.json();message=d.error?.message||d.error_description||message;}catch{}
+  if(response.status===401||response.status===403){driveToken='';driveTokenExpiry=0;driveRender();}
+  throw Error(message);
+ }
+ if(response.status===204)return {};
+ return response.json();
+}
+function driveQuote(value){return String(value).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+async function driveEnsureFolder(){
+ if(driveFolderId)return driveFolderId;
+ const q="name = '"+driveQuote(DRIVE_FOLDER)+"' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+ const list=await driveFetch('https://www.googleapis.com/drive/v3/files?'+new URLSearchParams({q,fields:'files(id,name),nextPageToken',pageSize:'30',spaces:'drive'}));
+ if(list.files?.[0]?.id){driveFolderId=list.files[0].id;return driveFolderId;}
+ const result=await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id,name',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FOLDER,mimeType:'application/vnd.google-apps.folder'})});
+ if(!result.id)throw Error('Drive did not return a backup folder ID.');driveFolderId=result.id;return driveFolderId;
+}
+async function driveUploadFile(name,content,folderId){
+ const metadata={name,mimeType:'application/json',parents:[folderId],description:'Flyer Studio cloud project backup'};
+ const boundary='flyer_backup_'+Date.now().toString(36)+Math.random().toString(36).slice(2);
+ const payload=new Blob([
+  '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',JSON.stringify(metadata),
+  '\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n',JSON.stringify(content),
+  '\r\n--'+boundary+'--'
+ ],{type:'multipart/related; boundary='+boundary});
+ return driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',{
+  method:'POST',headers:{'Content-Type':'multipart/related; boundary='+boundary},body:payload
+ });
+}
+async function driveBackupNow({force=false,packed=null,project=null,revision=null}={}){
+ if(!cloudUser||!cloudProject){if(force)driveStatus('Sign in and select a Supabase cloud project first.');return;}
+ if(!force&&!driveAuto)return;
+ if(driveUploading){if(force)driveStatus('A Drive backup is already running.');return;}
+ if(!driveToken||Date.now()>driveTokenExpiry-60000){if(force)driveStatus('Connect Google Drive to back up this flyer.');else if(driveLastBackedRevision)driveStatus('Google Drive session expired. Supabase is still saving; reconnect Drive for more backups.');driveRender();return;}
+ const target=project||cloudProject;const targetRevision=revision||cloudRevision;
+ if(!target?.id||!Number.isInteger(targetRevision)||targetRevision<1)return;
+ if(!force&&driveLastProjectId===target.id&&driveLastBackedRevision>=targetRevision)return;
+ if(!force&&driveLastBackupAt&&Date.now()-driveLastBackupAt<DRIVE_AUTO_INTERVAL)return;
+ driveUploading=true;driveStatus('Creating Google Drive backup…');driveRender();
+ try{
+  const document=packed||await cloudPack(structuredClone(state));
+  const backup={kind:'FlyerStudioGoogleDriveBackup',version:1,createdAt:new Date().toISOString(),
+   project:{id:target.id,name:target.name,revision:targetRevision},document};
+  const folder=await driveEnsureFolder();
+  const safeName=(target.name||'Flyer').replace(/[\\/:*?"<>|]/g,'_').slice(0,65);
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  const file=await driveUploadFile('Flyer Studio - '+safeName+' - r'+targetRevision+' - '+stamp+'.json',backup,folder);
+  driveLastBackedRevision=targetRevision;driveLastProjectId=target.id;driveLastBackupAt=Date.now();
+  driveStatus('Backup saved to Google Drive · '+safeName+' · revision '+targetRevision,true);
+  if(force)await driveBrowseBackups();
+ }catch(e){driveStatus('Google Drive backup failed: '+cloudErr(e)+'. Supabase cloud saving is unaffected.');}
+ finally{driveUploading=false;driveRender();}
+}
+async function driveBrowseBackups(){
+ const list=$c('driveBackupList');if(!list)return;
+ if(!driveToken){list.textContent='Connect Google Drive to browse your backups.';return;}
+ list.textContent='Checking Google Drive backups…';
+ try{
+  const folder=await driveEnsureFolder();
+  const q="'"+driveQuote(folder)+"' in parents and trashed = false and mimeType = 'application/json'";
+  const url='https://www.googleapis.com/drive/v3/files?'+new URLSearchParams({q,fields:'nextPageToken,files(id,name,createdTime,size)',orderBy:'createdTime desc',pageSize:'50'});
+  const response=await driveFetch(url);list.replaceChildren();
+  if(!response.files?.length){list.textContent='No Google Drive backups yet.';return;}
+  for(const item of response.files){
+   cloudItem(list,item.name,new Date(item.createdTime).toLocaleString(),[['Open a local copy',()=>driveRestoreBackup(item)]]);
+  }
+ }catch(e){list.textContent='Could not read Google Drive backups: '+cloudErr(e);}
+}
+async function driveRestoreBackup(file){
+ if(!confirm('Restore "'+file.name+'" from Google Drive? It will replace the current browser flyer, not overwrite a cloud project. Back up the current flyer first.'))return;
+ try{
+  const record=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
+  if(record?.kind!=='FlyerStudioGoogleDriveBackup'||record.version!==1)throw Error('Unsupported Flyer Studio backup format.');
+  const value=cloudCheckFlyer(await cloudUnpack(record.document));
+  if(cloudProject&&cloudDirty){await cloudSaveNow(true);if(cloudDirty)throw Error('Finish saving the current cloud project before restoring.');}
+  cloudDetach();cloudSuspend=true;
+  try{state=structuredClone(value);state.campaign={...defaultCampaign,...state.campaign,
+   brandHeader:brandHeaderChoice(state.campaign),headlineDesign:headlineDesignChoice(state.campaign)};
+   registerCustomSections(state.campaign);
+   if(state.campaign.sectionLayout)state.campaign.sectionLayout=sanitizeSectionLayout(state.campaign.sectionLayout);
+   selected=offerKey(state.offers[0]);save();setup();refresh();
+  }finally{cloudSuspend=false;}
+  cloudInfo('Restored a Google Drive backup to your local editor. Use Save New Cloud Copy to sync it to Supabase.',true);
+  driveStatus('Restored '+file.name+'. The original cloud project was not overwritten.',true);
+ }catch(e){driveStatus('Could not restore Drive backup: '+cloudErr(e));}
+}
+function driveMakeUI(){
+ const parent=$c('cloudSignedIn');if(!parent||$c('driveClientId'))return;
+ const section=document.createElement('div');section.className='cloudDriveSection';
+ section.innerHTML=`<div class="cloudSubTitle">Google Drive Backups</div>
+ <p>Supabase saves your active flyer automatically. Google Drive stores separate backup snapshots in <b>My Drive / Flyer Studio Backups</b>. Google Drive authorization is optional and does not replace Supabase sign-in.</p>
+ <div class="cloudSignedRow"><label>Google OAuth Client ID (first-time setup)
+ <input type="text" id="driveClientId" placeholder="0000000-xxxxxxxx.apps.googleusercontent.com" autocomplete="off"></label>
+ <button type="button" id="driveSaveClient">Save Client ID</button></div>
+ <p class="powerHint">For this GitHub Pages app, create a Google OAuth <b>Web application</b> with authorized JavaScript origin <code>https://kzamora19.github.io</code>, and enable the Google Drive API. Add yourself as a test user if the Google consent screen is in Testing. Client IDs are public; never paste a client secret here.</p>
+ <div class="powerRow"><button type="button" id="driveConnect">Connect Google Drive</button>
+ <button type="button" id="driveBackup">Back Up Current Cloud Project</button>
+ <button type="button" id="driveBrowse">Browse / Restore Backups</button></div>
+ <label class="cloudSignedRow"><input type="checkbox" id="driveAuto" checked style="width:auto"> Automatically back up to Drive after successful Supabase saves (no more often than every 15 minutes while authorized)</label>
+ <p id="driveStatus" role="status" class="powerHint"></p><div id="driveBackupList"></div>`;
+ parent.append(section);
+ const css=document.createElement('style');css.textContent='.cloudDriveSection{border-top:2px solid #d5dce7;margin-top:16px;padding-top:9px}.cloudDriveSection code{user-select:text}.cloudDriveSection #driveStatus{min-height:20px}.cloudDriveSection #driveStatus[data-ok="true"]{color:#216b42}.cloudDriveSection #driveBackupList .cloudItem{margin:5px 0}';document.head.append(css);
+ $c('driveClientId').value=driveClientId;
+ $c('driveSaveClient').onclick=()=>{if(driveSetClientId())void driveLoadLibrary().catch(e=>driveStatus(e.message));};
+ $c('driveConnect').onclick=driveConnect;$c('driveBackup').onclick=()=>driveBackupNow({force:true});
+ $c('driveBrowse').onclick=driveBrowseBackups;
+ $c('driveAuto').onchange=e=>{driveAuto=!!e.target.checked;try{localStorage.setItem(DRIVE_AUTO_STORE,String(driveAuto));}catch{}driveStatus('Automatic Drive backups '+(driveAuto?'enabled.':'disabled.'),true);driveRender();};
+ driveRender();if(driveClientId)void driveLoadLibrary().catch(()=>{});
+}
+
 const $c=id=>document.getElementById(id);
 const cloudErr=e=>e instanceof Error?e.message:String(e);
 function cloudStatus(text,good=false){const el=$c('cloudStatus');if(el){el.textContent=text;el.dataset.ok=String(good);} const pill=$c('cloudToolbar');if(pill){pill.textContent=cloudUser?(cloudProject?'☁ Auto-sync':'☁ Connected'):'☁ Cloud';pill.dataset.connected=String(!!cloudUser);}}
@@ -6254,6 +6424,7 @@ function cloudRenderAuth(){
  $c('cloudActive').textContent=cloudProject?'Editing cloud project: '+cloudProject.name+' (revision '+cloudRevision+')':'Local-only flyer: no cloud project selected';
  $c('cloudSave').disabled=!cloudProject||!cloudUser||cloudConflict;
  $c('cloudDetach').disabled=!cloudProject;
+ if($c('driveStatus'))driveRender();
  const pill=$c('cloudToolbar');if(pill){pill.textContent=cloudUser?(cloudProject?'☁ Auto-sync':'☁ Connected'):'☁ Cloud';pill.dataset.connected=String(!!cloudUser);}
 }
 function cloudMakeButton(label,onClick,cls=''){
@@ -6273,6 +6444,11 @@ async function cloudSignIn(){
   cloudApplySession(result);$c('cloudPassword').value='';cloudInfo('Signed in. Your existing browser flyer has not been uploaded. Use Save New Cloud Copy.',true);await cloudRefreshList();
  }catch(e){cloudInfo('Sign-in failed: '+cloudErr(e));}finally{cloudBusy(false)}
 }
+function cloudSignInGoogle(){
+ const redirect=location.origin+location.pathname;
+ const url=CLOUD_ROOT+'/auth/v1/authorize?'+new URLSearchParams({provider:'google',redirect_to:redirect});
+ location.assign(url);
+}
 async function cloudSignUp(){
  const email=($c('cloudEmail').value||'').trim(),password=$c('cloudPassword').value;
  if(!email||password.length<8){cloudInfo('Enter an email and a password of at least 8 characters.');return;}
@@ -6287,7 +6463,7 @@ async function cloudSignOut(){
  if(cloudSaving){cloudInfo('Finish the current cloud save before signing out.');return;}
  try{if(cloudSession?.access_token)await cloudRequest('/auth/v1/logout',{method:'POST'});}catch{}
  cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;cloudDirty=false;
- clearTimeout(cloudTimer);cloudStoreSession(null);cloudProjects=[];cloudVersions=[];cloudRenderAuth();cloudDrawProjects();cloudDrawVersions();cloudInfo('Signed out. Your local browser project remains available.');
+ clearTimeout(cloudTimer);cloudStoreSession(null);cloudProjects=[];cloudVersions=[];driveToken='';driveTokenExpiry=0;driveFolderId='';driveRender();cloudRenderAuth();cloudDrawProjects();cloudDrawVersions();cloudInfo('Signed out. Your local browser project remains available.');
 }
 function cloudBase64(bytes){let out='';for(let i=0;i<bytes.length;i+=16384)out+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(out);}
 function cloudBytes(b64){const str=atob(b64),out=new Uint8Array(str.length);for(let i=0;i<str.length;i++)out[i]=str.charCodeAt(i);return out;}
@@ -6325,6 +6501,7 @@ async function cloudSaveNow(interactive=true){
   if(oldDocument){try{await cloudRequest(cloudTable('flyer_cloud_versions'),{method:'POST',data:{project_id:savingProject,owner_id:cloudUser.id,revision:oldRevision,document:oldDocument},headers:{Prefer:'resolution=ignore-duplicates,return=minimal'}});}catch(err){console.warn('Could not retain prior cloud revision:',err.message);}}
   cloudRevision=records[0].revision;cloudProject={...cloudProject,...records[0]};cloudLastDocument=document;cloudRenderAuth();
   cloudStatus('Saved to cloud · revision '+cloudRevision,true);
+  void driveBackupNow({packed:document,project:cloudProject,revision:cloudRevision});
   if(interactive)cloudInfo('Cloud save complete. Open this project from another device after signing in.',true);
  }catch(e){cloudDirty=true;cloudInfo('Cloud save failed: '+cloudErr(e)+'. The local browser flyer remains intact.');}
  finally{cloudSaving=false;if(cloudDirty&&!cloudConflict&&cloudProject)cloudQueue();}
@@ -6340,7 +6517,7 @@ async function cloudNewCopy(){
    const result=await cloudRequest(cloudTable('flyer_cloud_projects','select=id,name,revision,updated_at'),{method:'POST',data:{owner_id:cloudUser.id,name,document,status:['Draft','In review','Changes requested','Approved'].includes(snapshot.status)?snapshot.status:'Draft'},headers:{Prefer:'return=representation'}});
    if(!result?.[0]?.id)throw Error('Cloud did not return a project ID.');
    cloudProject=result[0];cloudRevision=result[0].revision;cloudLastDocument=document;cloudConflict=false;cloudDirty=false;cloudRenderAuth();
-   cloudInfo('New cloud copy created. Edits will now autosave to '+name+'. Your browser copy stays available.',true);await cloudRefreshList();
+   cloudInfo('New cloud copy created. Edits will now autosave to '+name+'. Your browser copy stays available.',true);void driveBackupNow({packed:document,project:cloudProject,revision:cloudRevision});await cloudRefreshList();
  }catch(e){cloudInfo('Could not create cloud project: '+cloudErr(e));}finally{cloudBusy(false)}
 }
 async function cloudRefreshList(){
@@ -6482,7 +6659,9 @@ function cloudMakeUI(){
  <div class="cloudSubTitle">Private Photo Library</div><label>Local approved photo <select id="cloudLocalPhoto"></select></label><div class="powerRow"><button type="button" id="cloudCloudPhoto">Upload Selected Photo</button><button type="button" id="cloudLocalPhotos">Download Cloud Photos</button></div><p id="cloudPhotoCount"></p>
  </div><p id="cloudNotice" role="status"></p><small id="cloudStatus">Browser-only until you sign in and save a cloud copy.</small>`;
  modal.querySelector('.powerContent').append(sec);
+ driveMakeUI();
  const toolbar=document.querySelector('.stage .toolbar');if(toolbar){const button=cloudMakeButton('☁ Cloud',()=>powerOpen('cloud'));button.id='cloudToolbar';button.title='Private cloud workspace and sync';toolbar.append(button);}
+ const googleSignIn=cloudMakeButton('Continue with Google',cloudSignInGoogle);googleSignIn.id='cloudGoogleSignIn';$c('cloudSignUp').after(googleSignIn);
  $c('cloudSignIn').onclick=cloudSignIn;$c('cloudSignUp').onclick=cloudSignUp;$c('cloudSignOut').onclick=cloudSignOut;
  $c('cloudNew').onclick=cloudNewCopy;$c('cloudSave').onclick=()=>cloudSaveNow(true);$c('cloudRefresh').onclick=cloudRefreshList;
  $c('cloudDetach').onclick=cloudDetach;$c('cloudLoadVersions').onclick=cloudLoadVersions;
@@ -6506,7 +6685,7 @@ async function cloudRecoverSession(){
 function cloudBootstrap(){if($c('powerModal'))cloudMakeUI();else window.addEventListener('flyerstudio:ready',cloudMakeUI,{once:true});}
 window.addEventListener('DOMContentLoaded',cloudBootstrap,{once:true});
 if(document.readyState!=='loading')cloudBootstrap();
-window.flyerCloud={open:()=>powerOpen('cloud'),getStatus:()=>({connected:!!cloudUser,project:cloudProject?.name||null,revision:cloudRevision,conflict:cloudConflict})};
+window.flyerCloud={open:()=>powerOpen('cloud'),getStatus:()=>({connected:!!cloudUser,project:cloudProject?.name||null,revision:cloudRevision,conflict:cloudConflict,driveAuthorized:!!driveToken&&Date.now()<driveTokenExpiry-60000,driveAutoBackup:driveAuto,driveLastBackupRevision:driveLastBackedRevision})};
 })();
 
 </script>
