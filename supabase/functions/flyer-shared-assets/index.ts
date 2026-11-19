@@ -28,7 +28,7 @@ async function identity(req:Request){
  const userClient=createClient(FLYER_URL,FLYER_PUBLIC,{auth:{autoRefreshToken:false,persistSession:false},global:{headers:{Authorization:flyerBearer}}});
  const {data:{user},error}=await userClient.auth.getUser();
  if(error||!user)throw new Denied("Invalid Flyer Cloud session.",401);
- const authResult=await fetch(PTG_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+ptgBearer,"x-ptg-session-id":ptgSession,"apikey":PTG_PUBLIC},body:JSON.stringify({action:"session"}),signal:AbortSignal.timeout(8000)});
+ const authResult=await fetch(PTG_URL,{method:"POST",headers:{"Content-Type":"application/json","Origin":"https://kzamora19.github.io","Authorization":"Bearer "+ptgBearer,"x-ptg-session-id":ptgSession,"apikey":PTG_PUBLIC},body:JSON.stringify({action:"session"}),signal:AbortSignal.timeout(8000)});
  if(!authResult.ok)throw new Denied("PTG session is inactive or unavailable.",401);
  const json=await authResult.json().catch(()=>null);
  if(!json?.ok||!ok(json.account)||json.account.mustChangePassword)throw new Denied("PTG account cannot access shared assets.");
