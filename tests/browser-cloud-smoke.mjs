@@ -84,8 +84,9 @@ try{
  browser=await chromium.launch({headless:true});
  const context=await browser.newContext({acceptDownloads:true});
  const page=await context.newPage();
- const errors=[];
+ const errors=[],warnings=[];
  page.on('pageerror',e=>errors.push(e.message));
+ page.on('console',msg=>{if(['warning','error'].includes(msg.type()))warnings.push(msg.text());});
  page.on('dialog',d=>d.accept());
  await page.route('https://tzklsscoiwnmeantcefw.supabase.co/**',supabase);
  await page.route('https://www.googleapis.com/**',googleDrive);
@@ -101,7 +102,14 @@ try{
  await page.locator('#cloudToolbar').click();
  await page.locator('#cloudSignedIn:not([hidden])').waitFor({timeout:10000});
  assert.equal(await page.locator('#cloudAccount').innerText(),user.email);
- assert.equal(await page.evaluate(()=>location.hash),'','OAuth tokens must be removed from address bar');
+ const hash=await page.evaluate(()=>location.hash);
+ if(hash)console.log('OAUTH DIAGNOSTIC',JSON.stringify({
+   hashPresent:!!hash,
+   connected:await page.evaluate(()=>window.flyerCloud?.getStatus()),
+   notice:await page.locator('#cloudNotice').innerText(),
+   warnings,errors
+ }));
+ assert.equal(hash,'','OAuth tokens must be removed from address bar');
 
  await page.locator('#cloudProjectName').fill('CI Flyer');
  await page.locator('#cloudNew').click();
