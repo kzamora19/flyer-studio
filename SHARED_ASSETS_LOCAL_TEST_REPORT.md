@@ -1,4 +1,4 @@
-# Shared Asset Library — Local simulated test report
+> **HISTORICAL DOCUMENT — SUPERSEDED BY [PTG_ONLY_SHARED_ASSETS_STATUS.md](PTG_ONLY_SHARED_ASSETS_STATUS.md).** The current ADD ASSET design uses PTG as the only login; no Flyer Cloud sign-in or account pairing is required. Backend version 2 and the PTG-only ownership migration are active. Public frontend is NOT deployed.\n\n# Shared Asset Library — Local simulated test report
 
 Date: 2026-11-19
 Scope: `feature/shared-asset-library` (NOT production)
