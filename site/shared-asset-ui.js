@@ -6,32 +6,21 @@
 const CONFIG=window.FLYER_SHARED_ASSET_CONFIG||null;
 const ROOT=CONFIG?.supabaseUrl||'';
 const KEY=CONFIG?.publishableKey||'';
-const AUTH_STORE='flyer-studio-cloud-auth-v1';
 const CATEGORIES=['logos','banners','backgrounds','templates','decorations','other'];
 const MAX=10*1024*1024;
 const TYPES=new Set(['image/png','image/jpeg','image/webp']);
 const el=id=>document.getElementById(id);
 let rows=[],canManage=false,busy=false,previewURL='',selected=null;
 function say(message,ok=false){el('sharedAssetNotice').textContent=message;el('sharedAssetNotice').dataset.ok=String(ok);}
-function cloudSession(){try{return JSON.parse(localStorage.getItem(AUTH_STORE)||'null');}catch{return null;}}
-async function cloudAccessToken(){
- let session=cloudSession();
- if(!session?.access_token)throw Error('Sign in to Flyer Studio Cloud first.');
- if((session.expires_at||0)*1000<Date.now()+60000){
-  const res=await fetch(ROOT+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});
-  if(!res.ok)throw Error('Cloud session expired. Sign in again.');
-  const refreshed=await res.json();
-  session={...session,...refreshed,expires_at:refreshed.expires_at||Math.floor(Date.now()/1000)+(refreshed.expires_in||3600)};
-  localStorage.setItem(AUTH_STORE,JSON.stringify(session));
- }
- return session.access_token;
-}
 async function gateway(action,fields={}){
- if(!/^https:\/\/[^/]+\.supabase\.co$/.test(ROOT)||!KEY)throw Error('Shared Asset Library is not enabled on this site.');
+ if(!/^https:\/\/[^/]+\.supabase\.co$/.test(ROOT)||!KEY)
+  throw Error('Shared Asset Library is not enabled on this site.');
  const ptg=typeof ptgSession!=='undefined'?ptgSession:null;
- if(!ptg?.token||!ptg?.id)throw Error('Connect to PTG with an active account first.');
- const cloud=await cloudAccessToken();
- const response=await fetch(ROOT+'/functions/v1/flyer-shared-assets',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+cloud,'x-ptg-access-token':ptg.token,'x-ptg-session-id':ptg.id},body:JSON.stringify({action,...fields})});
+ if(!ptg?.token||!ptg?.id)throw Error('Connect to PTG using a Team Leader or higher account.');
+ const response=await fetch(ROOT+'/functions/v1/flyer-shared-assets',{
+  method:'POST',cache:'no-store',
+  headers:{'Content-Type':'application/json',apikey:KEY,Authorization:'Bearer '+ptg.token,'x-ptg-session-id':ptg.id},
+  body:JSON.stringify({action,...fields})});
  const result=await response.json().catch(()=>({}));
  if(!response.ok)throw Error(result.error||'Asset service unavailable ('+response.status+').');
  return result;
@@ -158,8 +147,8 @@ function init(){
  const overlay=document.createElement('div');overlay.id='sharedAssetModal';overlay.hidden=true;
  overlay.innerHTML=`<div id="sharedAssetDialog" role="dialog" aria-modal="true" aria-labelledby="sharedAssetTitle">
  <div class="sa-row" style="justify-content:space-between"><h2 id="sharedAssetTitle">Shared Asset Library</h2><button type="button" id="sharedAssetClose">Close</button></div>
- <p id="sharedAssetManagerHint">Connect to PTG and Flyer Studio Cloud to access shared assets.</p>
- <div class="sa-row"><button type="button" id="sharedAssetConnectPTG">PTG sign-in</button><button type="button" id="sharedAssetConnectCloud">Cloud sign-in</button><button type="button" id="sharedAssetPair">Link verified accounts</button></div>
+ <p id="sharedAssetManagerHint">Sign in with PTG Team Leader or higher. No separate cloud login is required.</p>
+ <div class="sa-row"><button type="button" id="sharedAssetConnectPTG">PTG sign-in</button></div>
  <div class="sa-row"><label>Search<input id="sharedAssetSearch" placeholder="Find asset"></label><label>Category<select id="sharedAssetFilter"><option value="">All categories</option>${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><button type="button" id="sharedAssetRefresh">Refresh</button></div>
  <div id="sharedAssetAdd" hidden><h3>ADD NEW ASSET</h3><div class="sa-row"><label>Name<input id="sharedAssetName" maxlength="120"></label><label>Category<select id="sharedAssetCategory">${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><label>Image<input type="file" id="sharedAssetFile" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="sharedAssetUpload">ADD</button></div></div>
  <div id="sharedAssetList"></div><img id="sharedAssetPreview" alt="Shared asset preview" hidden>
@@ -177,21 +166,6 @@ function init(){
   const user=el('ptgUsername');
   if(user){user.scrollIntoView({block:'center',behavior:'smooth'});user.focus();}
   else say('Open PTG sign-in in the product lookup panel.');
- };
- el('sharedAssetPair').onclick=async()=>{
-  const button=el('sharedAssetPair');button.disabled=true;
-  try {
-   const result=await gateway('pair');
-   if(!result.linked)throw Error('Account pairing was not confirmed.');
-   await refresh();
-   say('PTG and Flyer Cloud accounts securely linked. Shared assets are now available.',true);
-  }catch(e){say('Account linking failed: '+e.message);}
-  finally{button.disabled=false;}
- };
- el('sharedAssetConnectCloud').onclick=()=>{
-  overlay.hidden=true;
-  if(window.flyerCloud?.open)window.flyerCloud.open();
-  else say('Open Cloud Workspace under Studio+ Tools.');
  };
  el('sharedAssetRefresh').onclick=refresh;el('sharedAssetFilter').onchange=refresh;el('sharedAssetSearch').onchange=refresh;el('sharedAssetUpload').onclick=add;
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden){overlay.hidden=true;launcher.focus();}});
