@@ -21,7 +21,7 @@ function response(origin:string,result:unknown,status=200){
 }
 function expected(error:unknown){return error instanceof Error?error.message:"Unexpected failure";}
 class Denied extends Error {status:number;constructor(message:string,status=403){super(message);this.status=status;}}
-async function identity(req:Request){
+async function identity(req:Request, allowPairing=false){
  const flyerBearer=req.headers.get("authorization")||"";
  const ptgBearer=req.headers.get("x-ptg-access-token")||"";
  const ptgSession=req.headers.get("x-ptg-session-id")||"";
@@ -45,14 +45,14 @@ async function identity(req:Request){
  const ptgIdentity=await ptgAuth.json().catch(()=>null);
  const ptgUserId=String(ptgIdentity?.id||"");
  if(!/^[a-f0-9-]{36}$/i.test(ptgUserId))throw new Denied("Invalid PTG account identity.",401);
- const {data:link,error:linkError}=await admin.from("flyer_ptg_identity_links")
-  .select("flyer_user_id").eq("flyer_user_id",user.id).eq("ptg_user_id",ptgUserId).maybeSingle();
- if(linkError||!link)throw new Denied("Flyer Cloud user is not linked to this PTG identity.");
  const role=String(account.role||"").toUpperCase(),legacy=String(account.legacyRole||"").toUpperCase();
  const manager=role==="SYSTEM_ADMIN"||role==="BRANCH_ADMIN"||(role==="BRANCH_USER"&&legacy==="TEAM LEADER");
- const viewer=manager; // Flyer Studio integration is TL-and-above only.
- if(!viewer)throw new Denied("PTG role is not authorized.");
- return {userId:user.id,manager};
+ if(!manager)throw new Denied("PTG role is not authorized.");
+ const {data:link,error:linkError}=await admin.from("flyer_ptg_identity_links")
+  .select("flyer_user_id").eq("flyer_user_id",user.id).eq("ptg_user_id",ptgUserId).maybeSingle();
+ if(linkError)throw new Denied("Could not validate account pairing.");
+ if(!link&&!allowPairing)throw new Denied("Flyer Cloud user is not linked to this PTG identity.");
+ return {userId:user.id,ptgUserId,manager,linked:Boolean(link)};
 }
 function ensureManager(user:{manager:boolean}){if(!user.manager)throw new Denied("Only Team Leader and higher accounts can manage shared assets.");}
 function pathOk(path:string){return /^[a-f0-9-]{36}\/[a-f0-9-]{36}\.(png|jpg|webp)$/.test(path);}
@@ -61,8 +61,19 @@ async function ownedAsset(id:unknown){
  const {data,error}=await admin.from("flyer_shared_assets").select("*").eq("id",id).maybeSingle();
  if(error)throw error;if(!data)throw new Denied("Asset not found.",404);return data;
 }
-async function run(body:Record<string,unknown>,user:{userId:string,manager:boolean}){
+async function run(body:Record<string,unknown>,user:{userId:string,ptgUserId:string,manager:boolean,linked:boolean}){
  const action=String(body.action||"");
+ if(action==="pair"){
+  ensureManager(user);
+  if(user.linked)return {ok:true,linked:true};
+  // The two bearer tokens are validated independently and bound by immutable
+  // Auth UUIDs; no IDs may be submitted by the browser for pairing.
+  const {error}=await admin.from("flyer_ptg_identity_links")
+   .insert({flyer_user_id:user.userId,ptg_user_id:user.ptgUserId});
+  if(error)throw new Denied("Account pairing could not be completed. Existing links cannot be overwritten.",409);
+  return {ok:true,linked:true};
+ }
+ if(!user.linked)throw new Denied("Link both verified accounts before using the library.");
  if(action==="permissions")return {canView:true,canManage:user.manager};
  if(action==="list"){
   let query=admin.from("flyer_shared_assets").select("id,name,category,storage_path,mime_type,byte_size,created_at,updated_at").order("name").limit(200);
@@ -137,9 +148,9 @@ Deno.serve(async req=>{
   if(!type.toLowerCase().includes("application/json"))throw new Denied("JSON required.",415);
   const declaredLength=Number(req.headers.get("content-length")||"0");
   if(declaredLength>14_500_000)throw new Denied("Request exceeds the maximum asset size.",413);
-  const user=await identity(req);
   const body=await req.json();
   if(!ok(body))throw new Denied("Invalid request.",400);
+  const user=await identity(req,body.action==="pair");
   return response(origin,await run(body,user));
  }catch(e){
   const status=e instanceof Denied?e.status:500;
