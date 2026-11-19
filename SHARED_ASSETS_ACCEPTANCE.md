@@ -9,7 +9,7 @@ GitHub Pages production publishes from `main`; this branch is `feature/shared-as
 2. Browser calls `flyer-shared-assets` gateway with both bearer tokens and PTG session ID.
 3. Gateway checks Flyer Supabase `auth.getUser()` and invokes live PTG `ptg-auth` with `action=session` on EVERY operation. PTG checks inactive accounts, revocations, expiration, branch state, and session version.
 4. Trusted administrator links Flyer user ID to PTG `username + branchCode` in private `flyer_ptg_identity_links`. No user may self-register links.
-5. Role verified from PTG response. Manager: `SYSTEM_ADMIN`, `BRANCH_ADMIN`, or `BRANCH_USER` with `legacyRole=TEAM LEADER`. Others read-only if `BRANCH_USER`; other roles denied.
+5. Role verified from PTG response. Manager: `SYSTEM_ADMIN`, `BRANCH_ADMIN`, or `BRANCH_USER` with `legacyRole=TEAM LEADER`. Ordinary `BRANCH_USER` accounts and all other roles are denied, consistent with the TL-and-above access rule.
 6. Database metadata and Storage are service-only with RLS enabled and private bucket. Clients cannot bypass the gateway with REST.
 7. Image files limited to PNG/JPEG/WebP, 10 MB; signatures checked server side. Signed previews expire after 60 seconds. Existing issued signed URLs may remain usable until expiry even after access is revoked.
 
@@ -26,7 +26,7 @@ GitHub Pages production publishes from `main`; this branch is `feature/shared-as
 - [ ] Configure `FLYER_PTG_PUBLISHABLE_KEY` in test backend secrets; do not expose any service role key in browser.
 - [ ] Deploy schema and function to a **separate staging Supabase project**, not the live project, for integration tests.
 - [ ] Ensure `ptg-auth` allows the gateway's trusted allowlisted origin for server-to-server validation without introducing a bypass.
-- [ ] Verify Team Leader write access (two users), Branch Admin/System Admin, ordinary Branch User read-only.
+- [ ] Verify Team Leader write access (two users), Branch Admin/System Admin, ordinary Branch User denied.
 - [ ] Verify disabled PTG user, expired PTG session, revoked session, branch OFF, wrong PTG+Flyer pairing, signed-out user: all denied.
 - [ ] Attempt direct REST and Storage access with Cloud token and with anon key: denied.
 - [ ] Check asset upload, rename, replace, delete, search, categories, preview, duplicate names, invalid MIME, invalid signatures, max upload size.
