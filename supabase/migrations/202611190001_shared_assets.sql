@@ -10,11 +10,7 @@ create table if not exists public.flyer_asset_memberships (
 );
 alter table public.flyer_asset_memberships enable row level security;
 revoke all on public.flyer_asset_memberships from anon, authenticated;
-grant select on public.flyer_asset_memberships to authenticated;
-
-create policy "members read own membership"
-on public.flyer_asset_memberships for select to authenticated
-using (user_id = (select auth.uid()));
+-- No client grants; effective permission comes from verified PTG session.
 
 create or replace function public.flyer_asset_can_view()
 returns boolean language sql stable security definer
@@ -52,19 +48,19 @@ create table if not exists public.flyer_shared_assets (
 create index if not exists flyer_shared_assets_category_name_idx
 on public.flyer_shared_assets(category, name);
 alter table public.flyer_shared_assets enable row level security;
-grant select, insert, update, delete on public.flyer_shared_assets to authenticated;
-create policy "authorized users view shared assets" on public.flyer_shared_assets
- for select to authenticated using ((select public.flyer_asset_can_view()));
-create policy "asset managers insert assets" on public.flyer_shared_assets
- for insert to authenticated with check (
-  (select public.flyer_asset_can_manage()) and created_by = (select auth.uid())
-  and updated_by = (select auth.uid())
- );
-create policy "asset managers edit assets" on public.flyer_shared_assets
- for update to authenticated using ((select public.flyer_asset_can_manage()))
- with check ((select public.flyer_asset_can_manage()) and updated_by = (select auth.uid()));
-create policy "asset managers delete assets" on public.flyer_shared_assets
- for delete to authenticated using ((select public.flyer_asset_can_manage()));
+revoke all on public.flyer_shared_assets from anon, authenticated;
+-- No direct client writes. All mutations require an endpoint that validates
+-- the current PTG account, role, active session, and linked Flyer user.
+create table if not exists public.flyer_ptg_identity_links (
+ flyer_user_id uuid primary key references auth.users(id) on delete cascade,
+ ptg_username text not null,
+ ptg_branch_code text not null default '',
+ created_at timestamptz not null default now(),
+ unique (ptg_username, ptg_branch_code)
+);
+alter table public.flyer_ptg_identity_links enable row level security;
+revoke all on public.flyer_ptg_identity_links from anon, authenticated;
+-- Only the trusted service role can access these mappings.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('flyer-shared-assets', 'flyer-shared-assets', false, 10485760,
@@ -73,25 +69,8 @@ on conflict (id) do nothing;
 
 -- Assets always use a UUID-prefixed object name. Reads require membership;
 -- writes require manager privileges and a user-owned first path segment.
-create policy "asset members read files" on storage.objects
-for select to authenticated using (
- bucket_id = 'flyer-shared-assets' and (select public.flyer_asset_can_view())
-);
-create policy "asset managers upload files" on storage.objects
-for insert to authenticated with check (
- bucket_id = 'flyer-shared-assets'
- and (select public.flyer_asset_can_manage())
- and (storage.foldername(name))[1] = (select auth.uid())::text
-);
-create policy "asset managers replace files" on storage.objects
-for update to authenticated using (
- bucket_id = 'flyer-shared-assets' and (select public.flyer_asset_can_manage())
-) with check (
- bucket_id = 'flyer-shared-assets' and (select public.flyer_asset_can_manage())
-);
-create policy "asset managers remove files" on storage.objects
-for delete to authenticated using (
- bucket_id = 'flyer-shared-assets' and (select public.flyer_asset_can_manage())
-);
+-- Do not grant clients storage read or write access.
+-- Backend validates current PTG session before producing a signed URL.
+
 -- TODO before rollout: provision memberships securely from verified PTG roles,
 -- prohibit self-provisioning, integrate UI, test RLS with multiple accounts.
