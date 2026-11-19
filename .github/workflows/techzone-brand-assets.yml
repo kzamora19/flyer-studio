@@ -1,0 +1,30 @@
+name: TechZone brand asset release checks
+on:
+  pull_request:
+    paths:
+      - "site/index.html"
+      - "site/assets/techzone-official-logo.png"
+      - "tests/techzone-*.mjs"
+      - ".github/workflows/techzone-brand-assets.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned browser dependencies
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.65.1
+          npx playwright install chromium --with-deps
+      - name: Verify logo and isolated release
+        run: node --test tests/techzone-logo.test.mjs
+      - name: Test Flyer Studio Brand Assets in Chromium
+        run: node tests/techzone-logo-browser.mjs

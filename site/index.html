@@ -5854,7 +5854,7 @@ async function boot() {
 boot();
 // Flyer Studio Studio+ enhancements: local-safe improvements. No authentication secrets are persisted.
 const POWER_TOOLS_VERSION='Studio+ 2026-11-18';
-const POWER_TABS=[['quick','Quick Edit'],['ptg','PTG Batch'],['photos','Photo Library'],['templates','Templates'],['quality','Pre-Print']];
+const POWER_TABS=[['quick','Quick Edit'],['ptg','PTG Batch'],['photos','Photo Library'],['templates','Templates'],['quality','Pre-Print'],['brands','Brand Assets']];
 let powerTab='quick', powerPhotos=[], powerTemplates=[], powerClipboard=null, powerStyleClipboard=null;
 function powerId(){
   if(typeof crypto.randomUUID==='function')return crypto.randomUUID();
@@ -6171,6 +6171,15 @@ function initPowerTools(){
       <section id="powerTab-photos" hidden><h3>Approved Photo Library</h3><p>Reuse an image you have explicitly saved. Photos remain local to this browser until cloud storage is connected.</p><div class="powerRow"><button type="button" id="powerPhotoSave">Save Current Card Photo</button><label>Filter <input id="powerPhotoFilter" placeholder="Model or barcode"></label></div><div id="powerPhotoList"></div><div class="powerRow"><button type="button" id="powerExportLibrary">Download Photo &amp; Template Library</button><label>Import Library <input id="powerImportLibrary" type="file" accept=".json,application/json"></label></div></section>
       <section id="powerTab-templates" hidden><h3>Reusable Flyer Templates</h3><p>Save layout, text styles, and section settings as a template without copying products or uploaded photos.</p><div class="powerRow"><label>Template name <input id="powerTemplateName" maxlength="80" placeholder="November Sale Layout"></label><button type="button" id="powerSaveTemplate">Save Current Layout</button></div><div id="powerTemplateList"></div></section>
       <section id="powerTab-quality" hidden><h3>Pre-Print Quality Check</h3><p>Check duplicate barcodes, missing photos, price conflicts, hidden products, overflow, and low-resolution images.</p><div class="powerRow"><button type="button" id="powerRunAudit">Run Validation</button><button type="button" id="powerExportSide">Export Current Side PDF</button></div><div id="powerAuditList"></div></section>
+      <section id="powerTab-brands" hidden><h3>Official Brand Assets</h3><p>Approved reference artwork built into Flyer Studio and available on any device using this version. These images are not inserted into existing flyers automatically.</p>
+        <div class="powerItem" style="display:block;max-width:380px">
+          <strong>MEGA TechZone — Official Logo</strong>
+          <p style="margin:8px 0"><img id="powerTechzoneLogo" src="assets/techzone-official-logo.png" alt="Polished official MEGA TechZone logo" width="2172" height="724" loading="lazy" style="display:block;width:100%;max-width:286px;height:auto"></p>
+          <small>Polished high-resolution PNG · 2172 × 724 pixels · approved brand reference</small>
+          <div class="powerRow" style="margin-top:10px"><a id="powerTechzoneDownload" class="primary" href="assets/techzone-official-logo.png" download="TechZone-Official-Logo.png">Download Official PNG</a></div>
+        </div>
+        <p class="powerHint">Use this official source when preparing TechZone materials. It does not modify the TechZone product grid, flyer headers, or saved customer projects.</p>
+      </section>
     </div><footer class="powerFooter"><span id="powerMsg" role="status"></span><button type="button" id="powerDone">Close</button></footer>
   </div>`;
   document.body.append(backdrop);
