@@ -33,10 +33,19 @@ async function identity(req:Request){
  const json=await authResult.json().catch(()=>null);
  if(!json?.ok||!ok(json.account)||json.account.mustChangePassword)throw new Denied("PTG account cannot access shared assets.");
  const account=json.account;
- const username=String(account.username||"").trim().toUpperCase();
- const branch=String(account.branchCode||"").trim().toUpperCase();
- if(!username)throw new Denied("Missing trusted PTG identity.");
- const {data:link,error:linkError}=await admin.from("flyer_ptg_identity_links").select("flyer_user_id").eq("flyer_user_id",user.id).eq("ptg_username",username).eq("ptg_branch_code",branch).maybeSingle();
+ // PTG's auth endpoint verifies the immutable subject of the same bearer token.
+ // The PTG action=session call above already checks the app session, account status,
+ // revocation and current role; do not trust client-supplied username for linking.
+ const ptgAuth=await fetch("https://agknxlowackphvwyvxge.supabase.co/auth/v1/user",{
+  headers:{"apikey":PTG_PUBLIC,"Authorization":"Bearer "+ptgBearer},
+  signal:AbortSignal.timeout(8000)
+ });
+ if(!ptgAuth.ok)throw new Denied("Could not verify PTG identity.",401);
+ const ptgIdentity=await ptgAuth.json().catch(()=>null);
+ const ptgUserId=String(ptgIdentity?.id||"");
+ if(!/^[a-f0-9-]{36}$/i.test(ptgUserId))throw new Denied("Invalid PTG account identity.",401);
+ const {data:link,error:linkError}=await admin.from("flyer_ptg_identity_links")
+  .select("flyer_user_id").eq("flyer_user_id",user.id).eq("ptg_user_id",ptgUserId).maybeSingle();
  if(linkError||!link)throw new Denied("Flyer Cloud user is not linked to this PTG identity.");
  const role=String(account.role||"").toUpperCase(),legacy=String(account.legacyRole||"").toUpperCase();
  const manager=role==="SYSTEM_ADMIN"||role==="BRANCH_ADMIN"||(role==="BRANCH_USER"&&legacy==="TEAM LEADER");
