@@ -22,5 +22,5 @@ test('one built-in official Brand Assets menu and exact reusable PNG link',()=>{
 test('logo-only release does not bring unrelated cloud-auth branch code',()=>{
  assert.doesNotMatch(html,/function cloudReadRotatedSession\s*\(/);
  assert.match(html,/function history\s*\(/);
- assert.match(html,/id="powerButton-quality"|powerButton-.*quality/);
+ assert.match(html,/\['quality','Pre-Print'\]/);
 });
