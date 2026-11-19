@@ -21,6 +21,7 @@ const harness=[
   "const cloudErr=e=>e.message||String(e);",
   "const cloudRequest=(...args)=>env.request(...args);",
   "const cloudAuthRaw=(...args)=>env.authRaw(...args);",
+  "const cloudRefreshToken=async()=>{const next=await env.authRaw('token?grant_type=refresh_token',{refresh_token:cloudSession.refresh_token});cloudApplySession(next);return next.access_token;};",
   "const cloudRefreshList=()=>env.list();",
   "const cloudListPhotos=()=>env.photos();",
   recovery,
