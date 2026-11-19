@@ -1,8 +1,8 @@
 /* Staged Shared Asset UI: calls dual-auth Edge gateway; NOT deployed. */
 (()=>{
 'use strict';
-// Explicit opt-in staging configuration: never direct this unreleased feature
-// at production Supabase merely because the main app is configured for it.
+// Explicit opt-in release configuration: never enable this feature before
+// backend permissions and account pairing are accepted.
 const CONFIG=window.FLYER_SHARED_ASSET_CONFIG||null;
 const ROOT=CONFIG?.supabaseUrl||'';
 const KEY=CONFIG?.publishableKey||'';
