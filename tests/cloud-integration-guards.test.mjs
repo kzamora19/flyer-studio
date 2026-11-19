@@ -10,14 +10,16 @@ function slice(start,end){
  assert.ok(a>=0&&b>a,'Missing production functions: '+start);
  return source.slice(a,b);
 }
-const authCode=slice('async function cloudRefreshToken(){','function cloudTable(');
+const authCode=slice('function cloudReadRotatedSession(','function cloudTable(');
 function authHarness(overrides={}){
  const env={refreshCalls:0,fetchCalls:0,storageCleared:0,...overrides};
  const code=[
   "let cloudSession={access_token:'old',refresh_token:'valid',expires_at:1,user:{id:'owner'}};",
   "let cloudUser=cloudSession.user,cloudProject={id:'p'},cloudRevision=3,cloudLastDocument={},cloudConflict=false,cloudTimer=null,cloudRefreshPromise=null;",
   "let driveToken='old-drive',driveTokenExpiry=1,driveFolderId='';",
-  "const CLOUD_ROOT='https://test.invalid';",
+  "const CLOUD_ROOT='https://test.invalid',CLOUD_AUTH_STORE='test-session';",
+  "const localStorage=env.localStorage||{getItem:()=>null};",
+  "const navigator=env.navigator;",
   "const cloudCreds=()=>({apikey:'publishable'});",
   "const cloudRenderAuth=()=>{};const driveRender=()=>{};const cloudStoreSession=value=>{if(!value)env.storageCleared++;};",
   "const clearTimeout=()=>{};",
@@ -180,4 +182,24 @@ test('opening a different project refuses unsaved edits before any API operation
  await run('other-project');
  assert.equal(env.queries,0);
  assert.match(env.status[0],/Unsaved cloud changes/);
+});
+
+test('second browser tab adopts a newer saved refresh token without rotating it twice',async()=>{
+ const updated={access_token:'other-tab-token',refresh_token:'other-tab-refresh',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'owner'}};
+ const {api,env}=authHarness({localStorage:{getItem:()=>JSON.stringify(updated)}});
+ assert.equal(await api.token(),'other-tab-token');
+ assert.equal(env.refreshCalls,0);
+});
+test('another account in browser storage cannot be adopted silently',async()=>{
+ const updated={access_token:'different-user',refresh_token:'different-refresh',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'someone-else'}};
+ const {api,env}=authHarness({localStorage:{getItem:()=>JSON.stringify(updated)}});
+ assert.equal(await api.token(),'new');
+ assert.equal(env.refreshCalls,1);
+});
+test('Web Locks wraps refresh token rotation when available',async()=>{
+ let locks=0;
+ const {api,env}=authHarness({navigator:{locks:{request:async(name,fn)=>{locks++;assert.equal(name,'flyer-studio-cloud-session-refresh');return fn();}}}});
+ assert.equal(await api.token(),'new');
+ assert.equal(locks,1);
+ assert.equal(env.refreshCalls,1);
 });
