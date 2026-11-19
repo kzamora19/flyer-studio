@@ -5,10 +5,8 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.flyer_ptg_identity_links (
  flyer_user_id uuid primary key references auth.users(id) on delete cascade,
- ptg_username text not null,
- ptg_branch_code text not null default '',
- created_at timestamptz not null default now(),
- unique(ptg_username,ptg_branch_code)
+ ptg_user_id uuid not null unique,
+ created_at timestamptz not null default now()
 );
 alter table public.flyer_ptg_identity_links enable row level security;
 revoke all on public.flyer_ptg_identity_links from anon, authenticated;
