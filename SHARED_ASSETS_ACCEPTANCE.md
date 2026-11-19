@@ -1,4 +1,4 @@
-# Shared Assets — PTG identity / permissions / device acceptance
+> **HISTORICAL DOCUMENT — SUPERSEDED BY [PTG_ONLY_SHARED_ASSETS_STATUS.md](PTG_ONLY_SHARED_ASSETS_STATUS.md).** The current ADD ASSET design uses PTG as the only login; no Flyer Cloud sign-in or account pairing is required. Backend version 2 and the PTG-only ownership migration are active. Public frontend is NOT deployed.\n\n# Shared Assets — PTG identity / permissions / device acceptance
 
 **STATUS: BACKEND APPLIED TO EXISTING FLYER SUPABASE; FRONTEND NOT DEPLOYED; NOT RELEASE READY.**
 Only new shared-asset tables, the private bucket, and the gated `flyer-shared-assets` Edge Function were activated. Existing Flyer Cloud tables and PTG database were not modified. GitHub Pages production remains on `main`; frontend changes are still only in `feature/shared-asset-library`.
