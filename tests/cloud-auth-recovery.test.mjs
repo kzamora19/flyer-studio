@@ -104,3 +104,9 @@ test('embedded JavaScript syntax is valid',()=>{
  assert.ok(scripts.length>=1);
  for(const script of scripts)new Script(script);
 });
+
+test('Flyer audit history helper does not overwrite the native browser History API',()=>{
+ assert.match(source,/function recordFlyerHistory\(/);
+ assert.doesNotMatch(source,/function history\s*\(/);
+ assert.match(source,/window\.history\.replaceState/);
+});
