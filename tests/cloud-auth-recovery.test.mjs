@@ -13,7 +13,7 @@ assert.ok(first>0 && last>first,'Cannot find cloud session recovery');
 const recovery=source.slice(first,last);
 const harness=[
   "let cloudSession=null,cloudUser=null;",
-  "const location=env.location,history=env.history,localStorage=env.localStorage,CLOUD_AUTH_STORE='auth-test';",
+  "const location=env.location,history=function history(){},window={history:env.history},localStorage=env.localStorage,CLOUD_AUTH_STORE='auth-test';",
   "const cloudInfo=(msg,good)=>env.messages.push({msg,good});",
   "const cloudRenderAuth=()=>env.renders.push(!!cloudUser);",
   "const cloudStoreSession=value=>{if(value)localStorage.setItem(CLOUD_AUTH_STORE,JSON.stringify(value));else localStorage.removeItem(CLOUD_AUTH_STORE);};",
