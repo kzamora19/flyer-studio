@@ -94,10 +94,15 @@ async function run(body:Record<string,unknown>,user:{userId:string,manager:boole
   const name=String(body.name||"").trim(),category=String(body.category||"");
   const mime=String(body.mime||""),base64=body.base64;
   if(!types.has(mime)||typeof base64!=="string"||base64.length>Math.ceil(MAX*4/3)+8||!/^[a-zA-Z0-9+/]*={0,2}$/.test(base64))throw new Denied("Invalid image format or size.",400);
-  const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+  let bytes:Uint8Array;
+  try {
+   bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+  } catch {
+   throw new Denied("Invalid base64 image data.",400);
+  }
   if(!bytes.length||bytes.length>MAX)throw new Denied("Image exceeds 10 MB.",400);
   if(!name||name.length>120||!categories.has(category))throw new Denied("Invalid name or category.",400);
-  const isPng=mime==="image/png"&&bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71;
+  const isPng=mime==="image/png"&&bytes.length>=8&&[137,80,78,71,13,10,26,10].every((n,i)=>bytes[i]===n);
   const isJpg=mime==="image/jpeg"&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
   const isWebp=mime==="image/webp"&&String.fromCharCode(...bytes.slice(0,4))==="RIFF"&&String.fromCharCode(...bytes.slice(8,12))==="WEBP";
   if(!(isPng||isJpg||isWebp))throw new Denied("Image file signature does not match its type.",400);
@@ -130,6 +135,8 @@ Deno.serve(async req=>{
  try{
   const type=req.headers.get("content-type")||"";
   if(!type.toLowerCase().includes("application/json"))throw new Denied("JSON required.",415);
+  const declaredLength=Number(req.headers.get("content-length")||"0");
+  if(declaredLength>14_500_000)throw new Denied("Request exceeds the maximum asset size.",413);
   const user=await identity(req);
   const body=await req.json();
   if(!ok(body))throw new Denied("Invalid request.",400);
