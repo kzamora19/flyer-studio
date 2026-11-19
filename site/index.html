@@ -6533,6 +6533,7 @@ async function cloudSignUp(){
 }
 async function cloudSignOut(){
  if(cloudSaving){cloudInfo('Finish the current cloud save before signing out.');return;}
+ if(cloudDirty&&!confirm('The latest edits are not saved to Supabase. Sign out anyway? They will remain in this browser only.'))return;
  try{if(cloudSession?.access_token)await cloudRequest('/auth/v1/logout',{method:'POST'});}catch{}
  cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;cloudDirty=false;
  clearTimeout(cloudTimer);cloudStoreSession(null);cloudProjects=[];cloudVersions=[];driveToken='';driveTokenExpiry=0;driveFolderId='';clearTimeout(drivePendingTimer);drivePendingBackup=null;driveRender();cloudRenderAuth();cloudDrawProjects();cloudDrawVersions();cloudInfo('Signed out. Your local browser project remains available.');
@@ -6563,14 +6564,13 @@ async function cloudSaveNow(interactive=true){
  if(!cloudUser||!cloudProject){if(interactive)cloudInfo('Select or create a cloud project first.');return;}
  if(cloudConflict){cloudInfo('A newer cloud version exists. Open the latest cloud copy or save a new copy to prevent overwriting it.');return;}
  if(cloudSaving){cloudDirty=true;return;}
- cloudSaving=true;const savingProject=cloudProject.id,oldRevision=cloudRevision,oldDocument=cloudLastDocument;
+ cloudSaving=true;const savingProject=cloudProject.id,oldRevision=cloudRevision;
  clearTimeout(cloudTimer);cloudDirty=false;cloudStatus('Saving cloud project…');cloudRenderAuth();
  try{
   const snapshot=structuredClone(state),document=await cloudPack(snapshot);
   const body={document,revision:oldRevision+1,updated_at:new Date().toISOString(),status:['Draft','In review','Changes requested','Approved'].includes(snapshot.status)?snapshot.status:'Draft'};
   const records=await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+savingProject+'&revision=eq.'+oldRevision+'&select=id,name,revision,updated_at'),{method:'PATCH',data:body,headers:{Prefer:'return=representation'}});
   if(!records?.length){cloudConflict=true;cloudInfo('Cloud conflict: this project was updated elsewhere. Your browser copy is safe. Open the latest cloud project, or save a separate cloud copy.');return;}
-  if(oldDocument){try{await cloudRequest(cloudTable('flyer_cloud_versions'),{method:'POST',data:{project_id:savingProject,owner_id:cloudUser.id,revision:oldRevision,document:oldDocument},headers:{Prefer:'resolution=ignore-duplicates,return=minimal'}});}catch(err){console.warn('Could not retain prior cloud revision:',err.message);}}
   cloudRevision=records[0].revision;cloudProject={...cloudProject,...records[0]};cloudLastDocument=document;cloudRetryDelay=3500;cloudRenderAuth();
   cloudStatus('Saved to cloud · revision '+cloudRevision,true);
   void driveBackupNow({packed:document,project:cloudProject,revision:cloudRevision});
@@ -6607,6 +6607,7 @@ async function cloudOpenProject(id){
  if(!cloudUser)return;
  if(!confirm('Open this cloud project? The current browser flyer will be replaced. Download a local project backup first if you need it.'))return;
  if(cloudSaving)return cloudInfo('Finish the pending save first.');
+ if(cloudDirty)return cloudInfo('Unsaved cloud changes are pending. Save the current cloud project before opening another flyer.');
  cloudBusy(true);try{
   const rows=await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+id+'&select=id,name,revision,status,updated_at,document&limit=1'));
   const p=rows?.[0];if(!p)throw Error('Project not found or no longer accessible.');
@@ -6642,6 +6643,7 @@ function cloudDrawVersions(){const list=$c('cloudVersions');if(!list)return;list
 async function cloudRestoreVersion(version){
  if(cloudSaving)return cloudInfo('Finish the current cloud save before restoring a revision.');
  if(!cloudProject)return;
+ if(cloudDirty)return cloudInfo('Unsaved changes are pending. Save your cloud project before restoring a revision.');
  if(!confirm('Restore revision '+version.revision+' into the browser and save it as a new cloud revision?'))return;
  try{
   const rows=await cloudRequest(cloudTable('flyer_cloud_versions','id=eq.'+version.id+'&select=document&limit=1'));
