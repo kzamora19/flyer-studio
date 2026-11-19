@@ -16,8 +16,16 @@ const el=id=>document.getElementById(id);
 function announce(message,ok=false){const node=el('sharedAssetNotice');node.textContent=message;node.dataset.ok=String(ok);}
 function session(){try {return JSON.parse(localStorage.getItem(AUTH_KEY)||'null');}catch{return null;}}
 async function request(path,{method='GET',body,raw=false,headers={}}={}){
- const token=session()?.access_token;
- if(!token)throw Error('Sign in to Flyer Studio Cloud first, then reopen Shared Assets.');
+ let credentials=session();
+ if(!credentials?.access_token)throw Error('Sign in to Flyer Studio Cloud first, then reopen Shared Assets.');
+ if((credentials.expires_at||0)*1000<Date.now()+60000){
+  const res=await fetch(ROOT+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:credentials.refresh_token})});
+  if(!res.ok)throw Error('Cloud session expired. Sign in again.');
+  const refreshed=await res.json();
+  credentials={...credentials,...refreshed,expires_at:refreshed.expires_at||Math.floor(Date.now()/1000)+(refreshed.expires_in||3600)};
+  localStorage.setItem(AUTH_KEY,JSON.stringify(credentials));
+ }
+ const token=credentials.access_token;
  const h={apikey:KEY,Authorization:'Bearer '+token,...headers};
  if(body!==undefined && !(body instanceof Blob))h['Content-Type']='application/json';
  const r=await fetch(ROOT+path,{method,headers:h,body:body===undefined?undefined:body instanceof Blob?body:JSON.stringify(body),cache:'no-store'});
@@ -59,7 +67,8 @@ function draw(){
   detail.append(title,small);row.append(detail);
   const btn=(label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;row.append(b);};
   btn('Preview',()=>preview(asset));
-  btn('Use',()=>use(asset));
+  btn('Select',()=>use(asset));
+  btn('Apply to card',()=>applyToCard(asset));
   if(access?.can_manage){btn('Rename',()=>rename(asset));btn('Replace',()=>replace(asset));btn('Delete',()=>remove(asset));}
   list.append(row);
  }
@@ -94,6 +103,20 @@ async function use(asset){
 }
 function fileCheck(file){
  if(!file||!(file.type in MIME)||file.size<1||file.size>MAX_BYTES)throw Error('Choose PNG, JPG or WebP up to 10 MB.');
+}
+async function applyToCard(asset){
+ try{
+  const url=await urlFor(asset);
+  const response=await fetch(url);if(!response.ok)throw Error('Cannot retrieve the selected image.');
+  const blob=await response.blob();
+  const input=el('cardPhotoUpload');
+  if(!input)throw Error('Product card photo editor was not found.');
+  const file=new File([blob],asset.name+MIME[blob.type],{type:blob.type});
+  const transfer=new DataTransfer();transfer.items.add(file);
+  input.files=transfer.files;
+  input.dispatchEvent(new Event('change',{bubbles:true}));
+  announce('Sent '+asset.name+' to the current card photo editor. Check the card preview.',true);
+ }catch(e){announce('Could not apply asset: '+e.message);}
 }
 async function uploadFile(file){
  fileCheck(file);
