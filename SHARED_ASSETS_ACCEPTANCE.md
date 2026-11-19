@@ -1,8 +1,7 @@
 # Shared Assets — PTG identity / permissions / device acceptance
 
-**STATUS: STAGING ONLY. NOT DEPLOYED. NOT RELEASE READY.**
-No changes applied to the live Flyer Studio or PTG Supabase database.
-GitHub Pages production publishes from `main`; this branch is `feature/shared-asset-library`.
+**STATUS: BACKEND APPLIED TO EXISTING FLYER SUPABASE; FRONTEND NOT DEPLOYED; NOT RELEASE READY.**
+Only new shared-asset tables, the private bucket, and the gated `flyer-shared-assets` Edge Function were activated. Existing Flyer Cloud tables and PTG database were not modified. GitHub Pages production remains on `main`; frontend changes are still only in `feature/shared-asset-library`.
 
 ## Architecture now staged
 1. Browser requires valid Flyer Cloud login and a currently connected PTG app session.
@@ -22,9 +21,9 @@ GitHub Pages production publishes from `main`; this branch is `feature/shared-as
 - [x] Confirmed new code is only on feature branch (not production).
 
 ## Release blockers / tests to complete
-- [ ] Provision verified Flyer Auth UUID ↔ PTG Auth UUID mappings through a protected admin mechanism. Never link identities by display name, username, or email alone.
-- [ ] Configure `FLYER_PTG_PUBLISHABLE_KEY` in test backend secrets; do not expose any service role key in browser.
-- [ ] **Free-plan rollout path (approved direction):** Use the existing Flyer Studio Supabase project at release time, with an additive migration and new private bucket only. Back up schemas, review all existing RLS policies, and require separate production-backend authorization before applying changes. No additional project is required.
+- [ ] Complete the **explicit dual-login pairing step** with a real Team Leader-or-above user, which validates both Auth tokens and live PTG app session before inserting a unique Flyer UUID ↔ PTG UUID link. Account linking endpoint is deployed but no accounts are paired yet. Never pair based on display name, username or email.
+- [x] Gateway uses an active PTG **publishable** key (environment variable preferred, public fallback configured). No service-role secret is sent to browser. Verify backend environment has Supabase service secret.
+- [x] Used existing Flyer Studio project at no additional subscription cost. Applied only additive schema and private bucket; did not alter existing Flyer Cloud tables or `flyer-studio-private` bucket.
 - [ ] Ensure `ptg-auth` allows the gateway's trusted allowlisted origin for server-to-server validation without introducing a bypass.
 - [ ] Verify Team Leader write access (two users), Branch Admin/System Admin, ordinary Branch User denied.
 - [ ] Verify disabled PTG user, expired PTG session, revoked session, branch OFF, wrong PTG+Flyer pairing, signed-out user: all denied.
@@ -62,3 +61,14 @@ GitHub Pages production publishes from `main`; this branch is `feature/shared-as
 - Configure `FLYER_PTG_PUBLISHABLE_KEY` only in Edge secrets. Both cloud and PTG accounts must be linked using immutable auth UUIDs through trusted administration.
 - Local tests have passed 29/29 simulated identity and asset scenarios; these are not live acceptance. Browser, PDF and cross-device integration tests still must be completed before final release declaration.
 - New UI target choices: product card, campaign logo, front and back sale artwork. All reuse existing image-upload handlers, preserving the original editing/export implementation.
+
+## Backend activation verification — 2026-11-19
+- Applied migration `flyer_shared_asset_secure_storage` successfully to existing Flyer Studio project `tzklsscoiwnmeantcefw`.
+- Verified `flyer_shared_assets` and `flyer_ptg_identity_links` have RLS enabled. Neither anon nor authenticated has SELECT on shared metadata or INSERT on identity links.
+- Verified private `flyer-shared-assets` bucket with 10 MB size limit and **zero** direct client storage policies targeting the bucket.
+- Deployed `flyer-shared-assets` Edge Function version 1, `ACTIVE`, `verify_jwt=true`.
+- Account counts at verification: **1** Flyer Cloud Auth user, **0** verified identity links, **0** shared assets. No actual user was linked without a validated dual-login.
+- New explicit `pair` action is supported by the gateway; it requires valid PTG and Flyer Cloud sessions, verified immutable Auth UUIDs and TL-or-higher role; uses unique one-to-one mapping and cannot overwrite links. Frontend pairing button is only on feature branch.
+- Supabase security advisor additionally shows an expected `rls_enabled_no_policy` info notice for server-only tables, and a pre-existing leaked-password-protection warning. No user data was copied into the new tables.
+- Live browser acceptance (two independent authenticated accounts, revoked account, card rendering, real PDF output) remains **unverified** because the frontend is not released and no test credentials were available.
+- **Do not deploy GitHub Pages frontend or claim feature complete until account pairing and print/output acceptance are verified.**
