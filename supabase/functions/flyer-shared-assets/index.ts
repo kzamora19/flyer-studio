@@ -8,7 +8,8 @@ const FLYER_SERVICE=Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SUPABAS
 if(!FLYER_SERVICE)throw Error("Missing Supabase server secret.");
 const FLYER_PUBLIC=Deno.env.get("SUPABASE_ANON_KEY")!;
 const PTG_URL="https://agknxlowackphvwyvxge.supabase.co/functions/v1/ptg-auth";
-const PTG_PUBLIC=Deno.env.get("FLYER_PTG_PUBLISHABLE_KEY")!;
+// Publishable keys are public credentials; prefer an Edge secret when available.
+const PTG_PUBLIC=Deno.env.get("FLYER_PTG_PUBLISHABLE_KEY") ?? "sb_publishable_kv2q3dnNQt4ij0mgkOLbQQ_S2MO9FvG";
 const allowedOrigins=new Set(["https://kzamora19.github.io","http://localhost:3000","http://127.0.0.1:3000"]);
 const admin=createClient(FLYER_URL,FLYER_SERVICE,{auth:{autoRefreshToken:false,persistSession:false}});
 const bucket=admin.storage.from("flyer-shared-assets");
