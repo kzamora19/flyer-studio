@@ -6802,7 +6802,7 @@ async function cloudRecoverSession(){
  const fragment=new URLSearchParams(location.hash.replace(/^#/,''));
  const hasCallback=['access_token','refresh_token','error','error_description'].some(key=>fragment.has(key));
  if(hasCallback){
-  try{history.replaceState(history.state,'',location.pathname+location.search);}
+  try{window.history.replaceState(window.history.state,'',location.pathname+location.search);}
   catch(e){console.warn('Could not clear the OAuth callback URL:',cloudErr(e));}
  }
  if(fragment.has('error')){
