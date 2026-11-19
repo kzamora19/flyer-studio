@@ -159,7 +159,7 @@ function init(){
  overlay.innerHTML=`<div id="sharedAssetDialog" role="dialog" aria-modal="true" aria-labelledby="sharedAssetTitle">
  <div class="sa-row" style="justify-content:space-between"><h2 id="sharedAssetTitle">Shared Asset Library</h2><button type="button" id="sharedAssetClose">Close</button></div>
  <p id="sharedAssetManagerHint">Connect to PTG and Flyer Studio Cloud to access shared assets.</p>
- <div class="sa-row"><button type="button" id="sharedAssetConnectPTG">PTG sign-in</button><button type="button" id="sharedAssetConnectCloud">Cloud sign-in</button></div>
+ <div class="sa-row"><button type="button" id="sharedAssetConnectPTG">PTG sign-in</button><button type="button" id="sharedAssetConnectCloud">Cloud sign-in</button><button type="button" id="sharedAssetPair">Link verified accounts</button></div>
  <div class="sa-row"><label>Search<input id="sharedAssetSearch" placeholder="Find asset"></label><label>Category<select id="sharedAssetFilter"><option value="">All categories</option>${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><button type="button" id="sharedAssetRefresh">Refresh</button></div>
  <div id="sharedAssetAdd" hidden><h3>ADD NEW ASSET</h3><div class="sa-row"><label>Name<input id="sharedAssetName" maxlength="120"></label><label>Category<select id="sharedAssetCategory">${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><label>Image<input type="file" id="sharedAssetFile" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="sharedAssetUpload">ADD</button></div></div>
  <div id="sharedAssetList"></div><img id="sharedAssetPreview" alt="Shared asset preview" hidden>
@@ -177,6 +177,16 @@ function init(){
   const user=el('ptgUsername');
   if(user){user.scrollIntoView({block:'center',behavior:'smooth'});user.focus();}
   else say('Open PTG sign-in in the product lookup panel.');
+ };
+ el('sharedAssetPair').onclick=async()=>{
+  const button=el('sharedAssetPair');button.disabled=true;
+  try {
+   const result=await gateway('pair');
+   if(!result.linked)throw Error('Account pairing was not confirmed.');
+   await refresh();
+   say('PTG and Flyer Cloud accounts securely linked. Shared assets are now available.',true);
+  }catch(e){say('Account linking failed: '+e.message);}
+  finally{button.disabled=false;}
  };
  el('sharedAssetConnectCloud').onclick=()=>{
   overlay.hidden=true;
