@@ -27,7 +27,7 @@ async function cloudAccessToken(){
  return session.access_token;
 }
 async function gateway(action,fields={}){
- if(!/^https:\/\/[^/]+\.supabase\.co$/.test(ROOT)||!KEY)throw Error('Shared Asset Library is not configured for an isolated test environment.');
+ if(!/^https:\/\/[^/]+\.supabase\.co$/.test(ROOT)||!KEY)throw Error('Shared Asset Library is not enabled on this site.');
  const ptg=typeof ptgSession!=='undefined'?ptgSession:null;
  if(!ptg?.token||!ptg?.id)throw Error('Connect to PTG with an active account first.');
  const cloud=await cloudAccessToken();
