@@ -4,7 +4,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.8";
 
 const FLYER_URL=Deno.env.get("SUPABASE_URL")!;
-const FLYER_SERVICE=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FLYER_SERVICE=Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+if(!FLYER_SERVICE)throw Error("Missing Supabase server secret.");
 const FLYER_PUBLIC=Deno.env.get("SUPABASE_ANON_KEY")!;
 const PTG_URL="https://agknxlowackphvwyvxge.supabase.co/functions/v1/ptg-auth";
 const PTG_PUBLIC=Deno.env.get("FLYER_PTG_PUBLISHABLE_KEY")!;
