@@ -6387,13 +6387,13 @@ function cloudCreds(){return {apikey:CLOUD_KEY,Accept:'application/json'};}
 function cloudStoreSession(value){try{if(value)localStorage.setItem(CLOUD_AUTH_STORE,JSON.stringify(value));else localStorage.removeItem(CLOUD_AUTH_STORE);}catch{}}
 function cloudApplySession(result){
   if(!result?.access_token||!result?.refresh_token)throw Error('Authentication response missing a session.');
-  cloudSession={access_token:result.access_token,refresh_token:result.refresh_token,expires_at:result.expires_at||Math.floor(Date.now()/1000)+(result.expires_in||3600),user:result.user||cloudSession?.user};
+  cloudSession={access_token:result.access_token,refresh_token:result.refresh_token,expires_at:result.expires_at||Math.floor(Date.now()/1000)+(result.expires_in||3600),user:result.user===undefined?(cloudSession?.user||null):result.user};
   cloudUser=cloudSession.user||null;cloudStoreSession(cloudSession);cloudRenderAuth();
 }
 async function cloudAuthRaw(path,body,method='POST'){
  const response=await fetch(CLOUD_ROOT+'/auth/v1/'+path,{method,headers:{...cloudCreds(),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
  const data=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(data.msg||data.message||data.error_description||data.error||'Authentication error ('+response.status+').');
+ if(!response.ok){const error=Error(data.msg||data.message||data.error_description||data.error||'Authentication error ('+response.status+').');error.status=response.status;throw error;}
  return data;
 }
 async function cloudToken(){
@@ -6409,7 +6409,7 @@ async function cloudRequest(path,{method='GET',data,headers={},binary=false,raw=
  const h={...cloudCreds(),Authorization:'Bearer '+token,...headers};
  if(data!==undefined&&!binary&&!('Content-Type'in h))h['Content-Type']='application/json';
  const response=await fetch(CLOUD_ROOT+path,{method,headers:h,body:data===undefined?undefined:binary?data:JSON.stringify(data),cache:'no-store'});
- if(!response.ok){let detail='Request failed ('+response.status+').';try{const j=await response.json();detail=j.message||j.error||j.msg||detail;}catch{}throw Error(detail);}
+ if(!response.ok){let detail='Request failed ('+response.status+').';try{const j=await response.json();detail=j.message||j.error||j.msg||detail;}catch{}const error=Error(detail);error.status=response.status;throw error;}
  if(raw)return response;
  const txt=await response.text();return txt?JSON.parse(txt):null;
 }
@@ -6673,14 +6673,61 @@ function cloudMakeUI(){
  cloudRenderAuth();cloudRecoverSession();
 }
 async function cloudRecoverSession(){
+ // A Google OAuth redirect carries short-lived credentials in the URL fragment.
+ // Read them once, then clear the fragment before rendering UI or doing network work.
+ const fragment=new URLSearchParams(location.hash.replace(/^#/,''));
+ const hasCallback=['access_token','refresh_token','error','error_description'].some(key=>fragment.has(key));
+ if(hasCallback){
+  try{history.replaceState(history.state,'',location.pathname+location.search);}
+  catch(e){console.warn('Could not clear the OAuth callback URL:',cloudErr(e));}
+ }
+ if(fragment.has('error')){
+  cloudInfo('Google sign-in was not completed. Please try again.');
+  return;
+ }
  try{
-  const fragment=new URLSearchParams(location.hash.replace(/^#/,''));
-  if(fragment.has('access_token')&&fragment.has('refresh_token')){
+  if(hasCallback){
+   if(!fragment.get('access_token')||!fragment.get('refresh_token'))throw Error('Incomplete Google sign-in response.');
    cloudApplySession({access_token:fragment.get('access_token'),refresh_token:fragment.get('refresh_token'),expires_in:Number(fragment.get('expires_in')||3600),user:null});
-   history.replaceState(null,'',location.pathname+location.search);
-  }else {const saved=JSON.parse(localStorage.getItem(CLOUD_AUTH_STORE)||'null');if(saved?.access_token&&saved?.refresh_token){cloudSession=saved;cloudUser=saved.user||null;}}
-  if(cloudSession){const user=await cloudRequest('/auth/v1/user');cloudUser=user;cloudSession.user=user;cloudStoreSession(cloudSession);cloudRenderAuth();cloudInfo('Cloud account connected. Choose a cloud project or save a new copy to enable autosync.',true);await cloudRefreshList();await cloudListPhotos();}
- }catch(e){cloudSession=null;cloudUser=null;cloudStoreSession(null);cloudRenderAuth();cloudInfo('Cloud session expired. Please sign in again.');}
+  }else{
+   let saved=null;
+   try{saved=JSON.parse(localStorage.getItem(CLOUD_AUTH_STORE)||'null');}
+   catch{cloudStoreSession(null);}
+   if(saved?.access_token&&saved?.refresh_token){cloudSession=saved;cloudUser=null;}
+  }
+  if(!cloudSession)return;
+  let user;
+  try{user=await cloudRequest('/auth/v1/user');}
+  catch(error){
+   if(error.status===401||error.status===403){
+    // A saved JWT may have been revoked or expired before its reported deadline.
+    try{
+     const renewed=await cloudAuthRaw('token?grant_type=refresh_token',{refresh_token:cloudSession.refresh_token});
+     cloudApplySession(renewed);
+     user=await cloudRequest('/auth/v1/user');
+    }catch(refreshError){
+     if([400,401,403].includes(refreshError.status))throw refreshError;
+     cloudUser=null;cloudRenderAuth();
+     cloudInfo('Unable to check your cloud session right now. It remains saved; refresh the page or retry sign-in.');
+     return;
+    }
+   }else{
+    // Network / server failures must not erase valid locally stored credentials.
+    cloudUser=null;cloudRenderAuth();
+    cloudInfo('Unable to check your cloud session right now. It remains saved; refresh the page or retry sign-in.');
+    return;
+   }
+  }
+  if(!user?.id)throw Error('Cloud provider did not return an account.');
+  cloudUser=user;cloudSession.user=user;cloudStoreSession(cloudSession);cloudRenderAuth();
+  cloudInfo('Cloud account connected. Choose a cloud project or save a new copy to enable autosync.',true);
+ }catch(error){
+  cloudSession=null;cloudUser=null;cloudStoreSession(null);cloudRenderAuth();
+  cloudInfo('Cloud sign-in could not be completed: '+cloudErr(error));
+  return;
+ }
+ // Optional project/photo lists can fail independently without logging the user out.
+ await Promise.allSettled([cloudRefreshList(),cloudListPhotos()]);
 }
 function cloudBootstrap(){if($c('powerModal'))cloudMakeUI();else window.addEventListener('flyerstudio:ready',cloudMakeUI,{once:true});}
 window.addEventListener('DOMContentLoaded',cloudBootstrap,{once:true});
