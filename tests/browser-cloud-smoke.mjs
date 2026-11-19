@@ -7,8 +7,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-const index=readFileSync(join(dirname(fileURLToPath(import.meta.url)),'../site/index.html'));
+const siteDir=join(dirname(fileURLToPath(import.meta.url)),'../site');
+const index=readFileSync(join(siteDir,'index.html'));
+const officialTechzoneLogo=readFileSync(join(siteDir,'assets/techzone-official-logo.png'));
 const server=createServer((req,res)=>{
+ if(req.url?.split('?')[0]==='/assets/techzone-official-logo.png'){
+  res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'});
+  res.end(officialTechzoneLogo);return;
+ }
  if(req.url?.split('?')[0]!=='/'){res.writeHead(404);res.end();return;}
  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
  res.end(index);
@@ -120,6 +126,14 @@ try{
  // This fragment uses obvious fake credentials; the browser must scrub it before fetching the user.
  await page.goto(origin+'/#access_token=fixture-access&refresh_token=fixture-refresh&expires_in=3600',{waitUntil:'domcontentloaded'});
  await page.locator('#cloudToolbar').waitFor({timeout:20000});
+ await page.locator('#powerLauncher').click();
+ await page.locator('#powerButton-brands').click();
+ await page.locator('#powerTechzoneLogo').waitFor({state:'visible'});
+ await page.waitForFunction(()=>document.querySelector('#powerTechzoneLogo')?.naturalWidth===286);
+ const logo=await page.locator('#powerTechzoneLogo').evaluate(img=>({width:img.naturalWidth,height:img.naturalHeight,complete:img.complete}));
+ assert.deepEqual(logo,{width:286,height:102,complete:true},'Official TechZone logo must load at original dimensions');
+ assert.equal(await page.locator('#powerTechzoneDownload').getAttribute('href'),'assets/techzone-official-logo.png');
+ await page.locator('#powerButton-cloud').click();
  await page.locator('#cloudToolbar').click();
  await page.locator('#cloudSignedIn:not([hidden])').waitFor({timeout:10000});
  assert.equal(await page.locator('#cloudAccount').innerText(),user.email);
@@ -230,7 +244,7 @@ try{
  await page.locator('#cloudSignedOut:not([hidden])').waitFor();
  assert.equal(await page.evaluate(()=>localStorage.getItem('flyer-studio-cloud-auth-v1')),null);
  assert.deepEqual(errors,[],'Unexpected app JavaScript errors: '+errors.join('; '));
- console.log('PASS: Browser OAuth, second-device cloud/project/template/photo sync, session renewal, revision restore, PDF front/back, Drive backup/restore, sign-out');
+ console.log('PASS: Official TechZone logo, OAuth, two-device cloud/template/photo sync, session renewal, revision restore, PDFs, Drive backup/restore, sign-out');
 }finally{
  await browser?.close();
  await new Promise(resolve=>server.close(resolve));
