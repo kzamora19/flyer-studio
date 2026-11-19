@@ -24,7 +24,7 @@ GitHub Pages production publishes from `main`; this branch is `feature/shared-as
 ## Release blockers / tests to complete
 - [ ] Provision verified Flyer Auth UUID ↔ PTG Auth UUID mappings through a protected admin mechanism. Never link identities by display name, username, or email alone.
 - [ ] Configure `FLYER_PTG_PUBLISHABLE_KEY` in test backend secrets; do not expose any service role key in browser.
-- [ ] Create a **separate staging Supabase project** in the user-selected organization, after cost approval if quoted. Deploy schema and function only there, not in the live project.
+- [ ] **Free-plan rollout path (approved direction):** Use the existing Flyer Studio Supabase project at release time, with an additive migration and new private bucket only. Back up schemas, review all existing RLS policies, and require separate production-backend authorization before applying changes. No additional project is required.
 - [ ] Ensure `ptg-auth` allows the gateway's trusted allowlisted origin for server-to-server validation without introducing a bypass.
 - [ ] Verify Team Leader write access (two users), Branch Admin/System Admin, ordinary Branch User denied.
 - [ ] Verify disabled PTG user, expired PTG session, revoked session, branch OFF, wrong PTG+Flyer pairing, signed-out user: all denied.
@@ -36,7 +36,7 @@ GitHub Pages production publishes from `main`; this branch is `feature/shared-as
 
 ## Known limitations
 - This is a code-level integration. No real authenticated browser acceptance, isolated database migration, or cross-device test has run yet.
-- The original `site/shared-assets.js` proof-of-concept is no longer used by the UI. Do not import it; remove during cleanup.
+- The unused `site/shared-assets.js` prototype has been deleted on this branch; the UI uses only the verified Edge gateway.
 - No release or production deployment until all security and browser tests pass.
 
 ## Staging setup discovery (read-only, 2026-11-19)
@@ -53,3 +53,12 @@ GitHub Pages production publishes from `main`; this branch is `feature/shared-as
 - No project was created. Existing Flyer Studio and MegaFrame Studio projects remain unchanged.
 - Do NOT pause or delete existing projects without explicit user choice. A plan upgrade or freeing a slot is required before separate staging setup can continue.
 - As a result, live security checks, cross-account/device sharing, and flyer-output acceptance are still **NOT TESTED**.
+
+## Zero-cost release plan (added 2026-11-19)
+- User does not want a paid plan or an additional Supabase project. This is compatible with the feature: stage code in GitHub and use the existing Flyer Studio project only once rollout is separately approved.
+- Existing private Storage bucket policies were inspected read-only. Their rules are explicitly restricted to `flyer-studio-private`, so the proposed new `flyer-shared-assets` bucket does not match those pre-existing grants.
+- The new migration is additive (new identity links, shared asset metadata, private Storage bucket) and does not update existing Flyer tables or existing buckets. Verify against live schema again before applying.
+- Configure runtime for the existing Flyer Studio Supabase URL and its publishable key when release is approved; do not enable premature live calls on the development branch.
+- Configure `FLYER_PTG_PUBLISHABLE_KEY` only in Edge secrets. Both cloud and PTG accounts must be linked using immutable auth UUIDs through trusted administration.
+- Local tests have passed 29/29 simulated identity and asset scenarios; these are not live acceptance. Browser, PDF and cross-device integration tests still must be completed before final release declaration.
+- New UI target choices: product card, campaign logo, front and back sale artwork. All reuse existing image-upload handlers, preserving the original editing/export implementation.
