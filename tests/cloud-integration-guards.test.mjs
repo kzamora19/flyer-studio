@@ -113,7 +113,7 @@ function restoreHarness(overrides={}){
   "const cloudInfo=msg=>env.notices.push(msg);const driveStatus=msg=>env.notices.push(msg);",
   restoreCode,
   "return {restore:driveRestoreBackup,status:()=>({state,cloudProject,cloudSuspend})};"
- ].join('\\n');
+ ].join('\n');
  return {api:new Function('env',parts)(env),env};
 }
 test('Drive restore changes only the local editor and detaches cloud sync',async()=>{
