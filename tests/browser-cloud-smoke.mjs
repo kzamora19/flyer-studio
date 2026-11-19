@@ -134,7 +134,6 @@ try{
  assert.deepEqual(logo,{width:286,height:102,complete:true},'Official TechZone logo must load at original dimensions');
  assert.equal(await page.locator('#powerTechzoneDownload').getAttribute('href'),'assets/techzone-official-logo.png');
  await page.locator('#powerButton-cloud').click();
- await page.locator('#cloudToolbar').click();
  await page.locator('#cloudSignedIn:not([hidden])').waitFor({timeout:10000});
  assert.equal(await page.locator('#cloudAccount').innerText(),user.email);
  const hash=await page.evaluate(()=>location.hash);
