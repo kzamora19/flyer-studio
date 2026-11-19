@@ -6219,6 +6219,7 @@ const DRIVE_FOLDER='Flyer Studio Backups';
 const DRIVE_AUTO_INTERVAL=15*60*1000;
 let driveClientId='',driveAuto=true,driveToken='',driveTokenExpiry=0,driveFolderId='',driveUploading=false;
 let driveLastBackedRevision=0,driveLastBackupAt=0,driveLibraryPromise=null,driveTokenClient=null,driveLastProjectId='';
+let drivePendingBackup=null,drivePendingTimer=null;
 try{driveClientId=localStorage.getItem(DRIVE_CLIENT_STORE)||'';driveAuto=localStorage.getItem(DRIVE_AUTO_STORE)!=='false';}catch{}
 function driveStatus(message,good=false){const el=$c('driveStatus');if(el){el.textContent=message;el.dataset.ok=String(good);}}
 function driveRender(){
@@ -6299,29 +6300,61 @@ async function driveUploadFile(name,content,folderId){
   method:'POST',headers:{'Content-Type':'multipart/related; boundary='+boundary},body:payload
  });
 }
+function driveQueueBackup(input,delay=0){
+ if(!driveAuto||!input.project?.id||!Number.isInteger(input.revision))return;
+ // Preserve the latest successfully saved snapshot while a transfer or throttle is active.
+ if(!drivePendingBackup||drivePendingBackup.project.id!==input.project.id||
+    drivePendingBackup.revision<=input.revision)drivePendingBackup=input;
+ clearTimeout(drivePendingTimer);
+ drivePendingTimer=setTimeout(()=>{
+  drivePendingTimer=null;
+  const pending=drivePendingBackup;drivePendingBackup=null;
+  if(pending)void driveBackupNow(pending);
+ },Math.max(0,delay));
+}
 async function driveBackupNow({force=false,packed=null,project=null,revision=null}={}){
  if(!cloudUser||!cloudProject){if(force)driveStatus('Sign in and select a Supabase cloud project first.');return;}
  if(!force&&!driveAuto)return;
- if(driveUploading){if(force)driveStatus('A Drive backup is already running.');return;}
- if(!driveToken||Date.now()>driveTokenExpiry-60000){if(force)driveStatus('Connect Google Drive to back up this flyer.');else if(driveLastBackedRevision)driveStatus('Google Drive session expired. Supabase is still saving; reconnect Drive for more backups.');driveRender();return;}
- const target=project||cloudProject;const targetRevision=revision||cloudRevision;
+ if(force&&!packed){
+  if(cloudSaving){driveStatus('Finish the current Supabase save before backing up.');return;}
+  if(cloudDirty){
+   await cloudSaveNow(true);
+   if(cloudDirty||cloudConflict||!cloudUser){driveStatus('Supabase save is not complete. Your local flyer is safe; back it up after cloud saving succeeds.');return;}
+  }
+ }
+ const target=project||cloudProject,targetRevision=revision??cloudRevision;
  if(!target?.id||!Number.isInteger(targetRevision)||targetRevision<1)return;
+ const pending={packed:packed||cloudLastDocument,project:target,revision:targetRevision};
+ if(!pending.packed){if(force)driveStatus('Save the flyer to Supabase before making a Drive backup.');return;}
+ if(driveUploading){if(!force)driveQueueBackup(pending);else driveStatus('A Google Drive backup is already running.');return;}
+ if(!driveToken||Date.now()>driveTokenExpiry-60000){
+  if(force)driveStatus('Connect Google Drive to back up this flyer.');
+  else if(driveLastBackedRevision)driveStatus('Google Drive authorization expired. Supabase saves continue; reconnect Drive for backups.');
+  driveRender();return;
+ }
  if(!force&&driveLastProjectId===target.id&&driveLastBackedRevision>=targetRevision)return;
- if(!force&&driveLastBackupAt&&Date.now()-driveLastBackupAt<DRIVE_AUTO_INTERVAL)return;
+ const wait=DRIVE_AUTO_INTERVAL-(Date.now()-driveLastBackupAt);
+ if(!force&&driveLastBackupAt&&wait>0){driveQueueBackup(pending,wait);return;}
  driveUploading=true;driveStatus('Creating Google Drive backup…');driveRender();
  try{
-  const document=packed||await cloudPack(structuredClone(state));
   const backup={kind:'FlyerStudioGoogleDriveBackup',version:1,createdAt:new Date().toISOString(),
-   project:{id:target.id,name:target.name,revision:targetRevision},document};
+   project:{id:target.id,name:target.name,revision:targetRevision},document:pending.packed};
   const folder=await driveEnsureFolder();
   const safeName=(target.name||'Flyer').replace(/[\\/:*?"<>|]/g,'_').slice(0,65);
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
-  const file=await driveUploadFile('Flyer Studio - '+safeName+' - r'+targetRevision+' - '+stamp+'.json',backup,folder);
+  await driveUploadFile('Flyer Studio - '+safeName+' - r'+targetRevision+' - '+stamp+'.json',backup,folder);
   driveLastBackedRevision=targetRevision;driveLastProjectId=target.id;driveLastBackupAt=Date.now();
   driveStatus('Backup saved to Google Drive · '+safeName+' · revision '+targetRevision,true);
   if(force)await driveBrowseBackups();
  }catch(e){driveStatus('Google Drive backup failed: '+cloudErr(e)+'. Supabase cloud saving is unaffected.');}
- finally{driveUploading=false;driveRender();}
+ finally{
+  driveUploading=false;driveRender();
+  if(drivePendingBackup){
+   const next=drivePendingBackup;drivePendingBackup=null;
+   // Respect backup throttling while preserving the most recent committed revision.
+   driveQueueBackup(next,Math.max(0,DRIVE_AUTO_INTERVAL-(Date.now()-driveLastBackupAt)));
+  }
+ }
 }
 async function driveBrowseBackups(){
  const list=$c('driveBackupList');if(!list)return;
@@ -6330,12 +6363,19 @@ async function driveBrowseBackups(){
  try{
   const folder=await driveEnsureFolder();
   const q="'"+driveQuote(folder)+"' in parents and trashed = false and mimeType = 'application/json'";
-  const url='https://www.googleapis.com/drive/v3/files?'+new URLSearchParams({q,fields:'nextPageToken,files(id,name,createdTime,size)',orderBy:'createdTime desc',pageSize:'50'});
-  const response=await driveFetch(url);list.replaceChildren();
-  if(!response.files?.length){list.textContent='No Google Drive backups yet.';return;}
-  for(const item of response.files){
+  const all=[];let pageToken='';
+  do{
+   const args={q,fields:'nextPageToken,files(id,name,createdTime,size)',orderBy:'createdTime desc',pageSize:'100'};
+   if(pageToken)args.pageToken=pageToken;
+   const response=await driveFetch('https://www.googleapis.com/drive/v3/files?'+new URLSearchParams(args));
+   all.push(...(response.files||[]));pageToken=response.nextPageToken||'';
+  }while(pageToken&&all.length<300);
+  list.replaceChildren();
+  if(!all.length){list.textContent='No Google Drive backups yet.';return;}
+  for(const item of all.slice(0,300)){
    cloudItem(list,item.name,new Date(item.createdTime).toLocaleString(),[['Open a local copy',()=>driveRestoreBackup(item)]]);
   }
+  if(pageToken)list.append(document.createTextNode('Showing the most recent 300 backups.'));
  }catch(e){list.textContent='Could not read Google Drive backups: '+cloudErr(e);}
 }
 async function driveRestoreBackup(file){
@@ -6344,7 +6384,8 @@ async function driveRestoreBackup(file){
   const record=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
   if(record?.kind!=='FlyerStudioGoogleDriveBackup'||record.version!==1)throw Error('Unsupported Flyer Studio backup format.');
   const value=cloudCheckFlyer(await cloudUnpack(record.document));
-  if(cloudProject&&cloudDirty){await cloudSaveNow(true);if(cloudDirty)throw Error('Finish saving the current cloud project before restoring.');}
+  if(cloudSaving)throw Error('Finish the current cloud save before restoring.');
+   if(cloudProject&&cloudDirty){await cloudSaveNow(true);if(cloudDirty||cloudConflict)throw Error('Finish saving the current cloud project before restoring.');}
   cloudDetach();cloudSuspend=true;
   try{state=structuredClone(value);state.campaign={...defaultCampaign,...state.campaign,
    brandHeader:brandHeaderChoice(state.campaign),headlineDesign:headlineDesignChoice(state.campaign)};
@@ -6376,7 +6417,7 @@ function driveMakeUI(){
  $c('driveSaveClient').onclick=()=>{if(driveSetClientId())void driveLoadLibrary().catch(e=>driveStatus(e.message));};
  $c('driveConnect').onclick=driveConnect;$c('driveBackup').onclick=()=>driveBackupNow({force:true});
  $c('driveBrowse').onclick=driveBrowseBackups;
- $c('driveAuto').onchange=e=>{driveAuto=!!e.target.checked;try{localStorage.setItem(DRIVE_AUTO_STORE,String(driveAuto));}catch{}driveStatus('Automatic Drive backups '+(driveAuto?'enabled.':'disabled.'),true);driveRender();};
+ $c('driveAuto').onchange=e=>{driveAuto=!!e.target.checked;if(!driveAuto){clearTimeout(drivePendingTimer);drivePendingBackup=null;}try{localStorage.setItem(DRIVE_AUTO_STORE,String(driveAuto));}catch{}driveStatus('Automatic Drive backups '+(driveAuto?'enabled.':'disabled.'),true);driveRender();};
  driveRender();if(driveClientId)void driveLoadLibrary().catch(()=>{});
 }
 
@@ -6494,7 +6535,7 @@ async function cloudSignOut(){
  if(cloudSaving){cloudInfo('Finish the current cloud save before signing out.');return;}
  try{if(cloudSession?.access_token)await cloudRequest('/auth/v1/logout',{method:'POST'});}catch{}
  cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;cloudDirty=false;
- clearTimeout(cloudTimer);cloudStoreSession(null);cloudProjects=[];cloudVersions=[];driveToken='';driveTokenExpiry=0;driveFolderId='';driveRender();cloudRenderAuth();cloudDrawProjects();cloudDrawVersions();cloudInfo('Signed out. Your local browser project remains available.');
+ clearTimeout(cloudTimer);cloudStoreSession(null);cloudProjects=[];cloudVersions=[];driveToken='';driveTokenExpiry=0;driveFolderId='';clearTimeout(drivePendingTimer);drivePendingBackup=null;driveRender();cloudRenderAuth();cloudDrawProjects();cloudDrawVersions();cloudInfo('Signed out. Your local browser project remains available.');
 }
 function cloudBase64(bytes){let out='';for(let i=0;i<bytes.length;i+=16384)out+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(out);}
 function cloudBytes(b64){const str=atob(b64),out=new Uint8Array(str.length);for(let i=0;i<str.length;i++)out[i]=str.charCodeAt(i);return out;}
