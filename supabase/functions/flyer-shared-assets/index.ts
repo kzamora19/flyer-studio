@@ -1,4 +1,4 @@
-// Staging only. Do NOT deploy until identity-link provisioning and tests are approved.
+// Secure backend gateway. Public Flyer Studio frontend deployment remains separate.
 // All operations require TWO independently verified accounts (Flyer Cloud + PTG)
 // and a valid, currently active PTG app session. No role comes from the browser.
 import { createClient } from "npm:@supabase/supabase-js@2.49.8";
