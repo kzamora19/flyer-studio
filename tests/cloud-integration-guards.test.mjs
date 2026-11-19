@@ -95,3 +95,33 @@ test('rapid consecutive auto backups preserve the later revision for deferred up
  assert.equal(env.timers.length,1);
  assert.ok(env.timers[0].ms>0);
 });
+
+const restoreCode=slice('async function driveRestoreBackup(file){','function driveMakeUI(){');
+function restoreHarness(overrides={}){
+ const env={localSaveCalls:0,cloudSaveCalls:0,notices:[],...overrides};
+ const parts=[
+  "let state={campaign:{old:true},offers:[{sku:'OLD'}]},cloudProject={id:'existing'},cloudDirty=false,cloudSaving=false,cloudConflict=false,cloudSuspend=false;",
+  "let selected='',cloudRevision=1,cloudLastDocument={};",
+  "const confirm=()=>true;const cloudErr=e=>e.message;",
+  "const driveFetch=async()=>({kind:'FlyerStudioGoogleDriveBackup',version:1,document:{format:'json-v1',data:{campaign:{restored:true},offers:[{sku:'RESTORED'}]}}});",
+  "const cloudUnpack=async doc=>doc.data;const cloudCheckFlyer=x=>x;",
+  "const defaultCampaign={};const brandHeaderChoice=()=>'';const headlineDesignChoice=()=>'';",
+  "const registerCustomSections=()=>{};const sanitizeSectionLayout=x=>x;",
+  "const offerKey=x=>x?.sku;const save=()=>{env.localSaveCalls++;};const setup=()=>{};const refresh=()=>{};",
+  "const cloudSaveNow=async()=>{env.cloudSaveCalls++;cloudDirty=false;};",
+  "const cloudDetach=()=>{cloudProject=null;};",
+  "const cloudInfo=msg=>env.notices.push(msg);const driveStatus=msg=>env.notices.push(msg);",
+  restoreCode,
+  "return {restore:driveRestoreBackup,status:()=>({state,cloudProject,cloudSuspend})};"
+ ].join('\\n');
+ return {api:new Function('env',parts)(env),env};
+}
+test('Drive restore changes only the local editor and detaches cloud sync',async()=>{
+ const {api,env}=restoreHarness();
+ await api.restore({id:'backup-id',name:'sample.json'});
+ assert.equal(api.status().state.offers[0].sku,'RESTORED');
+ assert.equal(api.status().cloudProject,null);
+ assert.equal(env.localSaveCalls,1);
+ assert.equal(env.cloudSaveCalls,0);
+ assert.equal(api.status().cloudSuspend,false);
+});
