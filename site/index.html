@@ -2873,11 +2873,11 @@ async function lookupLive(barcode,session) {
   throw Error('PTG returned too many results. Enter the full barcode.');
 }
 function feedback(message) { $('feedback').textContent=message; }
-function history(action, person='', note='') {
+function recordFlyerHistory(action, person='', note='') {
   state.history.unshift({action,person,note,time:new Date().toISOString()});
 }
 function edited(message='Saved in this browser.') {
-  if(state.status!=='Draft') history('Returned to draft after editing');
+  if(state.status!=='Draft') recordFlyerHistory('Returned to draft after editing');
   state.status='Draft';
   save();
   refresh();
@@ -4643,7 +4643,7 @@ function transition(target) {
   if(!person) {feedback('Enter the reviewer’s name.');$('reviewer').focus();return;}
   if(target==='Changes requested'&&!note) {feedback('Enter the changes needed.');$('reviewNote').focus();return;}
   state.status=target;
-  history(target,person,note);
+  recordFlyerHistory(target,person,note);
   $('reviewNote').value='';
   save();refresh();
 }
