@@ -135,6 +135,45 @@ async function replace(asset){
   }catch(e){say('Replace failed: '+e.message);}
  };input.click();
 }
+// Optional backup: download an offline package, then save that file to Google Drive.
+// This requires no additional account login and never gives Google Drive access
+// to the Flyer Studio/ PTG backend. Import restores the assets for TL+ users.
+async function exportBackup(){
+ try{
+  const all=(await gateway('list')).assets||[];
+  if(all.length>25)throw Error('Back up in batches: maximum 25 assets per backup file.');
+  const files=[],maxBytes=40*1024*1024;
+  let total=0;
+  for(const asset of all){
+   const blob=await assetImage(asset);
+   total+=blob.size;if(total>maxBytes)throw Error('The backup exceeds 40 MB. Reduce the asset count.');
+   const base64=await fileData(blob);
+   files.push({name:asset.name,category:asset.category,mime:blob.type,base64});
+  }
+  const data={kind:'FlyerStudioSharedAssetBackup',version:1,exportedAt:new Date().toISOString(),assets:files};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download='flyer-shared-assets-backup.json';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  say('Backup file saved. Upload it to your Google Drive for safekeeping.',true);
+ }catch(e){say('Backup failed: '+e.message);}
+}
+async function restoreBackup(file){
+ if(!canManage)return say('PTG Team Leader or higher permission required.');
+ try{
+  if(!file||file.size>55*1024*1024)throw Error('Choose a valid backup up to 55 MB.');
+  const json=JSON.parse(await file.text());
+  if(json?.kind!=='FlyerStudioSharedAssetBackup'||json?.version!==1||!Array.isArray(json.assets)||json.assets.length>25)
+   throw Error('Not a supported Shared Asset Library backup.');
+  if(!confirm('Import '+json.assets.length+' assets into the shared library? Existing assets will not be deleted.'))return;
+  let count=0;
+  for(const a of json.assets){
+   if(!a||typeof a.name!=='string'||a.name.length>120||!CATEGORIES.includes(a.category)||!TYPES.has(a.mime)||typeof a.base64!=='string')
+    throw Error('Invalid backup asset at position '+(count+1));
+   await gateway('add',{name:a.name,category:a.category,mime:a.mime,base64:a.base64});count++;
+  }
+  await refresh();say('Restored '+count+' shared assets from backup.',true);
+ }catch(e){say('Restore failed: '+e.message);}
+}
 async function remove(asset){
  if(!canManage||!confirm('Permanently delete shared asset "'+asset.name+'"?'))return;
  try{await gateway('delete',{id:asset.id});await refresh();}
@@ -151,7 +190,7 @@ function init(){
  <div class="sa-row"><button type="button" id="sharedAssetConnectPTG">PTG sign-in</button></div>
  <div class="sa-row"><label>Search<input id="sharedAssetSearch" placeholder="Find asset"></label><label>Category<select id="sharedAssetFilter"><option value="">All categories</option>${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><button type="button" id="sharedAssetRefresh">Refresh</button></div>
  <div id="sharedAssetAdd" hidden><h3>ADD NEW ASSET</h3><div class="sa-row"><label>Name<input id="sharedAssetName" maxlength="120"></label><label>Category<select id="sharedAssetCategory">${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><label>Image<input type="file" id="sharedAssetFile" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="sharedAssetUpload">ADD</button></div></div>
- <div id="sharedAssetList"></div><img id="sharedAssetPreview" alt="Shared asset preview" hidden>
+ <div class="sa-row"><button type="button" id="sharedAssetExport">Export backup for Google Drive</button><label>Restore backup (TL+)<input type="file" id="sharedAssetRestore" accept=".json,application/json"></label></div>\n <p class="sa-hint">Google Drive backup is optional: download this file and upload it to Drive yourself. No Google login is required in Flyer Studio.</p>\n <div id="sharedAssetList"></div><img id="sharedAssetPreview" alt="Shared asset preview" hidden>
  <div class="sa-row"><label>Apply asset to<select id="sharedAssetTarget"><option value="card">Selected product card</option><option value="logo">Campaign logo</option><option value="front">Front sale headline artwork</option><option value="back">Back sale headline artwork</option></select></label><label>Selected asset<input id="sharedAssetSelected" readonly placeholder="None selected"></label></div>
  <p id="sharedAssetNotice" role="status">Open the library to load assets.</p>
  </div>`;
@@ -168,6 +207,8 @@ function init(){
   else say('Open PTG sign-in in the product lookup panel.');
  };
  el('sharedAssetRefresh').onclick=refresh;el('sharedAssetFilter').onchange=refresh;el('sharedAssetSearch').onchange=refresh;el('sharedAssetUpload').onclick=add;
+ el('sharedAssetExport').onclick=exportBackup;
+ el('sharedAssetRestore').onchange=e=>{const file=e.currentTarget.files[0];e.currentTarget.value='';restoreBackup(file);};
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden){overlay.hidden=true;launcher.focus();}});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
