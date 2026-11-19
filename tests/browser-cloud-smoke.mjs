@@ -18,7 +18,7 @@ const origin='http://127.0.0.1:'+server.address().port;
 let browser;
 const user={id:'00000000-0000-4000-8000-000000000001',email:'flyer-browser-test@example.invalid'};
 let project=null,folderCreated=false;
-const backups=[],uploads=[];
+const backups=[],uploads=[],versions=[];
 const cors={
  'access-control-allow-origin':'*',
  'access-control-allow-methods':'GET,POST,PATCH,DELETE,OPTIONS',
@@ -44,12 +44,17 @@ async function supabase(route){
   if(method==='PATCH'){
    const body=request.postDataJSON();
    if(!project||!url.searchParams.get('revision')?.includes('eq.'+project.revision))return reply(route,[]);
+   versions.push({id:'version-'+project.revision,project_id:project.id,revision:project.revision,
+    created_at:'2026-11-19T09:00:00Z',document:project.document});
    project={...project,...body,revision:body.revision};
    return reply(route,[project]);
   }
   if(method==='GET')return reply(route,project?[project]:[]);
  }
- if(url.pathname==='/rest/v1/flyer_cloud_versions')return reply(route,[]);
+ if(url.pathname==='/rest/v1/flyer_cloud_versions'){
+  const id=url.searchParams.get('id');
+  return reply(route,id?versions.filter(v=>id==='eq.'+v.id):versions);
+ }
  if(url.pathname==='/rest/v1/flyer_cloud_photos')return reply(route,[]);
  if(url.pathname==='/rest/v1/flyer_cloud_templates')return reply(route,[]);
  return reply(route,{message:'Unexpected Supabase mock request: '+method+' '+url.pathname},404);
@@ -60,9 +65,9 @@ async function googleDrive(route){
  if(url.pathname==='/upload/drive/v3/files'&&method==='POST'){
   const raw=request.postData()||'';
   assert.match(raw,/FlyerStudioGoogleDriveBackup/,'Uploaded backup must have expected kind');
-  assert.match(raw,/"revision":2/,'Backup must use committed revision 2');
+  assert.match(raw,/"revision":3/,'Backup must use committed revision 3');
   uploads.push(raw);
-  backups.push({id:'drive-backup-1',name:'Flyer Studio - CI Flyer - r2.json',
+  backups.push({id:'drive-backup-1',name:'Flyer Studio - CI Flyer - r3.json',
    createdTime:'2026-11-19T09:00:00Z'});
   return reply(route,{id:'drive-backup-1',name:backups[0].name});
  }
@@ -119,13 +124,42 @@ try{
  await page.waitForFunction(()=>window.flyerCloud.getStatus().revision===2,{timeout:10000});
  assert.equal(project.revision,2);
 
+ // Simulate a second authorized device, with its own browser storage and the same
+ // private cloud backend, opening the already-saved revision.
+ const otherContext=await browser.newContext();
+ const otherPage=await otherContext.newPage();
+ otherPage.on('dialog',d=>d.accept());
+ await otherPage.route('https://tzklsscoiwnmeantcefw.supabase.co/**',supabase);
+ await otherPage.goto(origin+'/#access_token=second-fixture&refresh_token=second-refresh&expires_in=3600',{waitUntil:'domcontentloaded'});
+ await otherPage.locator('#cloudToolbar').waitFor({timeout:20000});
+ await otherPage.locator('#cloudToolbar').click();
+ await otherPage.locator('#cloudSignedIn:not([hidden])').waitFor();
+ await otherPage.locator('#cloudProjects button').filter({hasText:'Open'}).first().click();
+ await otherPage.waitForFunction(()=>window.flyerCloud.getStatus().revision===2);
+ assert.equal(await otherPage.evaluate(()=>window.flyerCloud.getStatus().project),'CI Flyer');
+ await otherContext.close();
+
+ // Force an expired persisted access token so reload exercises real refresh logic
+ // against a deterministic fake Supabase token endpoint.
+ await page.evaluate(()=>{
+  const key='flyer-studio-cloud-auth-v1',saved=JSON.parse(localStorage.getItem(key));
+  saved.expires_at=1;localStorage.setItem(key,JSON.stringify(saved));
+ });
+
  // Persistent authentication and project reopen after reload.
  await page.reload({waitUntil:'domcontentloaded'});
  await page.locator('#cloudToolbar').waitFor({timeout:20000});
  await page.locator('#cloudToolbar').click();
  await page.locator('#cloudSignedIn:not([hidden])').waitFor();
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('flyer-studio-cloud-auth-v1')).access_token),'fixture-new-access');
  await page.locator('#cloudProjects button').filter({hasText:'Open'}).first().click();
  await page.waitForFunction(()=>window.flyerCloud.getStatus().project==='CI Flyer',{timeout:10000});
+
+ // Restore an archived revision through the actual Cloud Workspace UI.
+ await page.locator('#cloudLoadVersions').click();
+ await page.locator('#cloudVersions button').filter({hasText:'Restore'}).first().click();
+ await page.waitForFunction(()=>window.flyerCloud.getStatus().revision===3);
+ assert.equal(project.revision,3);
 
  // Run real Canvas/PDF rendering on both sides; inspect actual downloaded filenames.
  await page.locator('#powerButton-quality').click();
@@ -142,7 +176,7 @@ try{
  await page.locator('#driveConnect').click();
  await page.waitForFunction(()=>window.flyerCloud.getStatus().driveAuthorized===true,{timeout:10000});
  await page.locator('#driveBackup').click();
- await page.waitForFunction(()=>window.flyerCloud.getStatus().driveLastBackupRevision===2,{timeout:10000});
+ await page.waitForFunction(()=>window.flyerCloud.getStatus().driveLastBackupRevision===3,{timeout:10000});
  assert.equal(uploads.length,1,'Google Drive should receive exactly one manual backup');
 
  await page.locator('#driveBrowse').click();
@@ -153,7 +187,7 @@ try{
  await page.locator('#cloudSignedOut:not([hidden])').waitFor();
  assert.equal(await page.evaluate(()=>localStorage.getItem('flyer-studio-cloud-auth-v1')),null);
  assert.deepEqual(errors,[],'Unexpected app JavaScript errors: '+errors.join('; '));
- console.log('PASS: Browser OAuth callback, cloud save/reopen/revision, front/back PDF, Drive backup/restore, sign-out');
+ console.log('PASS: Browser OAuth cleanup, session renewal, second device, cloud revision restore, front/back PDF, Drive backup/restore, sign-out');
 }finally{
  await browser?.close();
  await new Promise(resolve=>server.close(resolve));
