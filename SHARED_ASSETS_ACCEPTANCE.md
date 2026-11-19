@@ -45,3 +45,11 @@ GitHub Pages production publishes from `main`; this branch is `feature/shared-as
 - New Supabase project creation requires user selection of organization and platform cost approval if nonzero.
 - No test identity link records have been created and no live schema was altered.
 - No browser or device tests can be claimed without a configured isolated test backend and two authenticated test accounts.
+
+## 2026-11-19 staging provisioning attempt
+- User selected Flyer Studio organization `yqsswksbxyuvjkpwadjq`.
+- Supabase quoted **$0/month** additional project cost and returned a valid $0 cost confirmation.
+- Creating `Flyer Studio Shared Assets Staging` failed: the organization's owner has reached the limit of **2 active free projects**.
+- No project was created. Existing Flyer Studio and MegaFrame Studio projects remain unchanged.
+- Do NOT pause or delete existing projects without explicit user choice. A plan upgrade or freeing a slot is required before separate staging setup can continue.
+- As a result, live security checks, cross-account/device sharing, and flyer-output acceptance are still **NOT TESTED**.
