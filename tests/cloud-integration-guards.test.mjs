@@ -1,0 +1,97 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const source=readFileSync(join(dirname(fileURLToPath(import.meta.url)),'../site/index.html'),'utf8');
+function slice(start,end){
+ const a=source.indexOf(start),b=source.indexOf(end,a);
+ assert.ok(a>=0&&b>a,'Missing production functions: '+start);
+ return source.slice(a,b);
+}
+const authCode=slice('async function cloudRefreshToken(){','function cloudTable(');
+function authHarness(overrides={}){
+ const env={refreshCalls:0,fetchCalls:0,storageCleared:0,...overrides};
+ const code=[
+  "let cloudSession={access_token:'old',refresh_token:'valid',expires_at:1,user:{id:'owner'}};",
+  "let cloudUser=cloudSession.user,cloudProject={id:'p'},cloudRevision=3,cloudLastDocument={},cloudConflict=false,cloudTimer=null,cloudRefreshPromise=null;",
+  "let driveToken='old-drive',driveTokenExpiry=1,driveFolderId='';",
+  "const CLOUD_ROOT='https://test.invalid';",
+  "const cloudCreds=()=>({apikey:'publishable'});",
+  "const cloudRenderAuth=()=>{};const driveRender=()=>{};const cloudStoreSession=value=>{if(!value)env.storageCleared++;};",
+  "const clearTimeout=()=>{};",
+  "const cloudAuthRaw=async()=>{env.refreshCalls++;if(env.refreshError)throw env.refreshError;await Promise.resolve();return {access_token:'new',refresh_token:'new-refresh',expires_in:3600,user:{id:'owner'}};};",
+  "const cloudApplySession=next=>{cloudSession={...next,expires_at:Math.floor(Date.now()/1000)+3600};cloudUser=next.user;};",
+  "const fetch=async(...args)=>{env.fetchCalls++;return env.onFetch?env.onFetch(...args):{ok:true,status:200,text:async()=>'{\\\"ok\\\":true}'};};",
+  authCode,
+  "return {token:cloudToken,request:cloudRequest,status:()=>({cloudSession,cloudUser,cloudProject})};"
+ ].join('\n');
+ return {api:new Function('env',code)(env),env};
+}
+test('concurrent token requests use only one rotating refresh token',async()=>{
+ const {api,env}=authHarness();
+ const tokens=await Promise.all(Array.from({length:7},()=>api.token()));
+ assert.equal(env.refreshCalls,1);
+ assert.deepEqual(tokens,Array(7).fill('new'));
+});
+test('invalid refresh revokes cloud credentials without modifying local flyer state',async()=>{
+ const {api,env}=authHarness({refreshError:Object.assign(Error('revoked'),{status:400})});
+ await assert.rejects(api.token(),e=>e.isRefreshFailure===true);
+ assert.equal(api.status().cloudSession,null);
+ assert.equal(env.storageCleared,1);
+});
+test('401 retries exactly once after token refresh',async()=>{
+ let calls=0;
+ const {api,env}=authHarness({onFetch:async()=>{
+  calls++;return calls===1?{ok:false,status:401,json:async()=>({message:'expired'})}:{ok:true,status:200,text:async()=>'{\"ok\":true}'};
+ }});
+ // Start with an expired token: a single proactive refresh; the 401 needs a separate retry.
+ const value=await api.request('/rest/v1/example');
+ assert.deepEqual(value,{ok:true});
+ assert.equal(env.fetchCalls,2);
+ assert.equal(env.refreshCalls,2);
+});
+const driveCode=slice('function driveQueueBackup(','async function driveBrowseBackups(){');
+function driveHarness(overrides={}){
+ const env={uploads:[],statuses:[],timers:[],saveCalls:0,...overrides};
+ const code=[
+  "let cloudUser={id:'owner'},cloudProject={id:'project',name:'Flyer'},cloudRevision=2,cloudDirty=false,cloudSaving=false,cloudConflict=false;",
+  "let cloudLastDocument={format:'json-v1',data:{saved:true}};",
+  "let driveAuto=true,driveUploading=false,driveToken='test',driveTokenExpiry=Date.now()+3600000;",
+  "let driveLastProjectId='',driveLastBackedRevision=0,driveLastBackupAt=0,drivePendingBackup=null,drivePendingTimer=null;",
+  "const DRIVE_AUTO_INTERVAL=900000;",
+  "const clearTimeout=()=>{};const setTimeout=(f,ms)=>{env.timers.push({f,ms});return env.timers.length;};",
+  "const driveStatus=(msg)=>env.statuses.push(msg);const driveRender=()=>{};const cloudErr=e=>e.message;",
+  "const cloudSaveNow=async()=>{env.saveCalls++;cloudDirty=false;};",
+  "const driveEnsureFolder=async()=> 'folder';",
+  "const driveUploadFile=async(name,record)=>{env.uploads.push({name,record});return {id:'file'};};",
+  "const driveBrowseBackups=async()=>{};",
+  driveCode,
+  "return {backup:driveBackupNow,markDirty:()=>{cloudDirty=true;},status:()=>({cloudDirty,drivePendingBackup,driveLastBackedRevision})};"
+ ].join('\n');
+ return {api:new Function('env',code)(env),env};
+}
+test('manual Drive backup uses the committed Supabase snapshot and revision',async()=>{
+ const {api,env}=driveHarness();
+ await api.backup({force:true});
+ assert.equal(env.uploads.length,1);
+ assert.equal(env.uploads[0].record.project.revision,2);
+ assert.deepEqual(env.uploads[0].record.document,{format:'json-v1',data:{saved:true}});
+});
+test('manual Drive backup saves pending cloud edits before snapshot',async()=>{
+ const {api,env}=driveHarness();
+ api.markDirty();
+ await api.backup({force:true});
+ assert.equal(env.saveCalls,1);
+ assert.equal(env.uploads.length,1);
+});
+test('rapid consecutive auto backups preserve the later revision for deferred upload',async()=>{
+ const {api,env}=driveHarness();
+ await api.backup({project:{id:'project',name:'Flyer'},revision:2,packed:{format:'json-v1',data:{r:2}}});
+ await api.backup({project:{id:'project',name:'Flyer'},revision:3,packed:{format:'json-v1',data:{r:3}}});
+ assert.equal(env.uploads.length,1);
+ assert.equal(api.status().drivePendingBackup.revision,3);
+ assert.equal(env.timers.length,1);
+ assert.ok(env.timers[0].ms>0);
+});
