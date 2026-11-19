@@ -6438,28 +6438,54 @@ async function cloudAuthRaw(path,body,method='POST'){
  if(!response.ok){const error=Error(data.msg||data.message||data.error_description||data.error||'Authentication error ('+response.status+').');error.status=response.status;throw error;}
  return data;
 }
+function cloudReadRotatedSession(current){
+ if(typeof localStorage==='undefined')return null;
+ let saved;
+ try{saved=JSON.parse(localStorage.getItem(CLOUD_AUTH_STORE)||'null');}catch{return null;}
+ if(!saved?.access_token||!saved?.refresh_token||saved.refresh_token===current.refresh_token)return null;
+ if(current.user?.id&&saved.user?.id&&current.user.id!==saved.user.id)return null;
+ cloudSession=saved;cloudUser=saved.user||current.user||null;cloudRenderAuth();
+ return saved.access_token;
+}
 async function cloudRefreshToken(){
  if(!cloudSession?.refresh_token)throw Error('Sign in to the Flyer Studio cloud account first.');
  if(cloudRefreshPromise)return cloudRefreshPromise;
- const currentSession=cloudSession;
  cloudRefreshPromise=(async()=>{
-  try{
-   const next=await cloudAuthRaw('token?grant_type=refresh_token',{refresh_token:currentSession.refresh_token});
-   if(cloudSession!==currentSession)throw Error('Cloud account changed during session renewal.');
-   cloudApplySession(next);
-   return cloudSession.access_token;
-  }catch(error){
-   if([400,401,403].includes(error.status)){
-    error.isRefreshFailure=true;
-    if(cloudSession===currentSession){
-     // Revoke only invalid sessions. Keep unsaved browser flyer data untouched.
-     cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;
-     cloudRevision=0;cloudConflict=false;clearTimeout(cloudTimer);cloudStoreSession(null);
-     driveToken='';driveTokenExpiry=0;driveFolderId='';driveRender();cloudRenderAuth();
+  const renew=async()=>{
+   if(!cloudSession?.refresh_token)throw Error('Cloud account changed during session renewal.');
+   let current=cloudSession;
+   const newest=cloudReadRotatedSession(current);
+   if(newest&&(cloudSession.expires_at||0)*1000>Date.now()+60000)return newest;
+   current=cloudSession;
+   try{
+    const next=await cloudAuthRaw('token?grant_type=refresh_token',{refresh_token:current.refresh_token});
+    if(cloudSession!==current){
+     // Another tab or sign-in action has already changed the active account.
+     if(cloudSession?.access_token)return cloudSession.access_token;
+     throw Error('Cloud account changed during session renewal.');
     }
+    cloudApplySession(next);
+    return cloudSession.access_token;
+   }catch(error){
+    if([400,401,403].includes(error.status)){
+     // A different browser tab may have rotated this single-use refresh token.
+     const updated=cloudReadRotatedSession(current);
+     if(updated)return updated;
+     error.isRefreshFailure=true;
+     if(cloudSession===current){
+      // Only revoke demonstrably invalid credentials; leave browser flyer data intact.
+      cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;
+      cloudRevision=0;cloudConflict=false;clearTimeout(cloudTimer);cloudStoreSession(null);
+      driveToken='';driveTokenExpiry=0;driveFolderId='';driveRender();cloudRenderAuth();
+     }
+    }
+    throw error;
    }
-   throw error;
-  }
+  };
+  // Browser Web Locks serialize refresh-token rotation between tabs on the same origin.
+  if(typeof navigator!=='undefined'&&navigator.locks?.request)
+   return navigator.locks.request('flyer-studio-cloud-session-refresh',renew);
+  return renew();
  })();
  try{return await cloudRefreshPromise;}finally{cloudRefreshPromise=null;}
 }
@@ -6469,8 +6495,9 @@ async function cloudToken(){
  return cloudSession.access_token;
 }
 async function cloudRequest(path,{method='GET',data,headers={},binary=false,raw=false}={}){
+ let requestToken='';
  const send=async()=>{
-  const token=await cloudToken();
+  const token=await cloudToken();requestToken=token;
   const h={...cloudCreds(),Authorization:'Bearer '+token,...headers};
   if(data!==undefined&&!binary&&!('Content-Type'in h))h['Content-Type']='application/json';
   const response=await fetch(CLOUD_ROOT+path,{method,headers:h,body:data===undefined?undefined:binary?data:JSON.stringify(data),cache:'no-store'});
@@ -6481,7 +6508,9 @@ async function cloudRequest(path,{method='GET',data,headers={},binary=false,raw=
  try{return await send();}
  catch(error){
   if(error.status!==401||error.isRefreshFailure)throw error;
-  await cloudRefreshToken();
+  // Another tab may already have rotated the token while this request was in flight.
+  if(cloudSession?.access_token===requestToken)await cloudRefreshToken();
+  else if(!cloudSession?.access_token)throw error;
   try{return await send();}catch(retryError){retryError.authRetried=true;throw retryError;}
  }
 }
@@ -6748,6 +6777,23 @@ function cloudMakeUI(){
  const oldPowerLoad=powerLoad;powerLoad=async function(...args){const result=await oldPowerLoad(...args);cloudUpdateLocalPhotoOptions();return result;};
  const oldPowerRefresh=powerRefreshControls;powerRefreshControls=function(...args){const result=oldPowerRefresh(...args);cloudUpdateLocalPhotoOptions();return result;};
  window.addEventListener('online',()=>{if(cloudDirty&&cloudUser&&cloudProject&&!cloudSaving&&!cloudConflict){cloudRetryDelay=3500;cloudQueue();}});
+ window.addEventListener('storage',event=>{
+  if(event.key!==CLOUD_AUTH_STORE)return;
+  let next=null;try{next=event.newValue?JSON.parse(event.newValue):null;}catch{return;}
+  if(!next?.access_token||!next?.refresh_token){
+   cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;
+   cloudRevision=0;cloudConflict=false;cloudDirty=false;
+   clearTimeout(cloudTimer);driveToken='';driveTokenExpiry=0;driveFolderId='';
+   cloudRenderAuth();cloudInfo('Cloud session ended in another tab. Your local flyer is safe.');
+   return;
+  }
+  if(cloudSession?.user?.id&&next.user?.id&&cloudSession.user.id!==next.user.id){
+   cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;
+   cloudDirty=false;clearTimeout(cloudTimer);
+   cloudInfo('Cloud account changed in another tab. This browser flyer is now local-only.');
+  }
+  cloudSession=next;cloudUser=next.user||null;cloudRenderAuth();
+ });
  cloudRenderAuth();cloudRecoverSession();
 }
 async function cloudRecoverSession(){
