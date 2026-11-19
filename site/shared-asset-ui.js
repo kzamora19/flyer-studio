@@ -159,6 +159,7 @@ function init(){
  overlay.innerHTML=`<div id="sharedAssetDialog" role="dialog" aria-modal="true" aria-labelledby="sharedAssetTitle">
  <div class="sa-row" style="justify-content:space-between"><h2 id="sharedAssetTitle">Shared Asset Library</h2><button type="button" id="sharedAssetClose">Close</button></div>
  <p id="sharedAssetManagerHint">Connect to PTG and Flyer Studio Cloud to access shared assets.</p>
+ <div class="sa-row"><button type="button" id="sharedAssetConnectPTG">PTG sign-in</button><button type="button" id="sharedAssetConnectCloud">Cloud sign-in</button></div>
  <div class="sa-row"><label>Search<input id="sharedAssetSearch" placeholder="Find asset"></label><label>Category<select id="sharedAssetFilter"><option value="">All categories</option>${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><button type="button" id="sharedAssetRefresh">Refresh</button></div>
  <div id="sharedAssetAdd" hidden><h3>ADD NEW ASSET</h3><div class="sa-row"><label>Name<input id="sharedAssetName" maxlength="120"></label><label>Category<select id="sharedAssetCategory">${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><label>Image<input type="file" id="sharedAssetFile" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="sharedAssetUpload">ADD</button></div></div>
  <div id="sharedAssetList"></div><img id="sharedAssetPreview" alt="Shared asset preview" hidden>
@@ -171,6 +172,17 @@ function init(){
  (document.querySelector('.stage .toolbar')||document.querySelector('main')||document.body).append(launcher);
  el('sharedAssetClose').onclick=()=>{overlay.hidden=true;launcher.focus();};
  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.hidden=true;});
+ el('sharedAssetConnectPTG').onclick=()=>{
+  overlay.hidden=true;
+  const user=el('ptgUsername');
+  if(user){user.scrollIntoView({block:'center',behavior:'smooth'});user.focus();}
+  else say('Open PTG sign-in in the product lookup panel.');
+ };
+ el('sharedAssetConnectCloud').onclick=()=>{
+  overlay.hidden=true;
+  if(window.flyerCloud?.open)window.flyerCloud.open();
+  else say('Open Cloud Workspace under Studio+ Tools.');
+ };
  el('sharedAssetRefresh').onclick=refresh;el('sharedAssetFilter').onchange=refresh;el('sharedAssetSearch').onchange=refresh;el('sharedAssetUpload').onclick=add;
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden){overlay.hidden=true;launcher.focus();}});
 }
