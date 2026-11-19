@@ -125,3 +125,59 @@ test('Drive restore changes only the local editor and detaches cloud sync',async
  assert.equal(env.cloudSaveCalls,0);
  assert.equal(api.status().cloudSuspend,false);
 });
+
+const saveCode=slice('async function cloudSaveNow(interactive=true){','async function cloudNewCopy(){');
+function saveHarness(options={}){
+ const env={calls:[],notices:[],backups:[],queued:0,...options};
+ const parts=[
+  "let cloudUser={id:'owner'},cloudProject={id:'project',name:'Sample'},cloudRevision=1,cloudLastDocument={format:'json-v1',data:{old:true}},cloudDirty=true,cloudConflict=false,cloudSaving=false,cloudTimer=null,cloudRetryDelay=3500;",
+  "const state={campaign:{name:'Test'},offers:[],status:'Draft'};",
+  "const cloudStatus=msg=>env.notices.push(msg);const cloudInfo=msg=>env.notices.push(msg);const cloudErr=e=>e.message;const cloudRenderAuth=()=>{};",
+  "const clearTimeout=()=>{};const cloudQueue=()=>{env.queued++;};",
+  "const cloudPack=async value=>({format:'json-v1',data:value});",
+  "const cloudTable=(name,params='')=>name+'?'+params;",
+  "const cloudRequest=async(path,options)=>{env.calls.push({path,...options});if(env.fail)throw Error('offline');if(env.conflict)return [];return [{id:'project',name:'Sample',revision:options.data.revision,updated_at:'2026-11-19'}];};",
+  "const driveBackupNow=async arg=>{env.backups.push(arg);};",
+  saveCode,
+  "return {save:cloudSaveNow,status:()=>({cloudRevision,cloudConflict,cloudDirty,cloudRetryDelay})};"
+ ].join('\n');
+ return {api:new Function('env',parts)(env),env};
+}
+test('successful cloud save uses one atomic database update without client-side archive race',async()=>{
+ const {api,env}=saveHarness();
+ await api.save();
+ assert.equal(env.calls.length,1);
+ assert.equal(env.calls[0].method,'PATCH');
+ assert.match(env.calls[0].path,/flyer_cloud_projects/);
+ assert.equal(env.calls[0].data.revision,2);
+ assert.equal(api.status().cloudRevision,2);
+ assert.equal(env.backups[0].revision,2);
+});
+test('failed network save retains dirty flyer and schedules backoff',async()=>{
+ const {api,env}=saveHarness({fail:true});
+ await api.save();
+ assert.equal(api.status().cloudDirty,true);
+ assert.equal(api.status().cloudRetryDelay,15000);
+ assert.equal(env.queued,1);
+});
+test('revision conflict never silently overwrites remote changes',async()=>{
+ const {api,env}=saveHarness({conflict:true});
+ await api.save();
+ assert.equal(api.status().cloudConflict,true);
+ assert.equal(api.status().cloudRevision,1);
+ assert.equal(env.queued,0);
+});
+test('opening a different project refuses unsaved edits before any API operation',async()=>{
+ const sourceOpen=slice('async function cloudOpenProject(id){','async function cloudDeleteProject(p){');
+ const env={status:[],queries:0};
+ const run=new Function('env',[
+  "let cloudUser={id:'owner'},cloudSaving=false,cloudDirty=true;",
+  "const confirm=()=>true;const cloudInfo=message=>env.status.push(message);",
+  "const cloudRequest=()=>{env.queries++;throw Error('unexpected');};",
+  sourceOpen,
+  "return cloudOpenProject;"
+ ].join('\n'))(env);
+ await run('other-project');
+ assert.equal(env.queries,0);
+ assert.match(env.status[0],/Unsaved cloud changes/);
+});
