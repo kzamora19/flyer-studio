@@ -6208,6 +6208,7 @@ const CLOUD_BUCKET='flyer-studio-private';
 const CLOUD_AUTH_STORE='flyer-studio-cloud-auth-v1';
 let cloudSession=null,cloudUser=null,cloudProject=null,cloudRevision=0,cloudLastDocument=null;
 let cloudSaving=false,cloudDirty=false,cloudConflict=false,cloudTimer=null,cloudInitialized=false,cloudSuspend=false;
+let cloudRefreshPromise=null;
 let cloudProjects=[],cloudVersions=[];
 
 /* Google Drive backups: users explicitly authorize drive.file; access tokens live in memory only. */
@@ -6396,22 +6397,52 @@ async function cloudAuthRaw(path,body,method='POST'){
  if(!response.ok){const error=Error(data.msg||data.message||data.error_description||data.error||'Authentication error ('+response.status+').');error.status=response.status;throw error;}
  return data;
 }
+async function cloudRefreshToken(){
+ if(!cloudSession?.refresh_token)throw Error('Sign in to the Flyer Studio cloud account first.');
+ if(cloudRefreshPromise)return cloudRefreshPromise;
+ const currentSession=cloudSession;
+ cloudRefreshPromise=(async()=>{
+  try{
+   const next=await cloudAuthRaw('token?grant_type=refresh_token',{refresh_token:currentSession.refresh_token});
+   if(cloudSession!==currentSession)throw Error('Cloud account changed during session renewal.');
+   cloudApplySession(next);
+   return cloudSession.access_token;
+  }catch(error){
+   if([400,401,403].includes(error.status)){
+    error.isRefreshFailure=true;
+    if(cloudSession===currentSession){
+     // Revoke only invalid sessions. Keep unsaved browser flyer data untouched.
+     cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;
+     cloudRevision=0;cloudConflict=false;clearTimeout(cloudTimer);cloudStoreSession(null);
+     driveToken='';driveTokenExpiry=0;driveFolderId='';driveRender();cloudRenderAuth();
+    }
+   }
+   throw error;
+  }
+ })();
+ try{return await cloudRefreshPromise;}finally{cloudRefreshPromise=null;}
+}
 async function cloudToken(){
  if(!cloudSession?.access_token)throw Error('Sign in to the Flyer Studio cloud account first.');
- if((cloudSession.expires_at||0)*1000<Date.now()+60000){
-   const next=await cloudAuthRaw('token?grant_type=refresh_token',{refresh_token:cloudSession.refresh_token});
-   cloudApplySession(next);
- }
+ if((cloudSession.expires_at||0)*1000<Date.now()+60000)await cloudRefreshToken();
  return cloudSession.access_token;
 }
 async function cloudRequest(path,{method='GET',data,headers={},binary=false,raw=false}={}){
- const token=await cloudToken();
- const h={...cloudCreds(),Authorization:'Bearer '+token,...headers};
- if(data!==undefined&&!binary&&!('Content-Type'in h))h['Content-Type']='application/json';
- const response=await fetch(CLOUD_ROOT+path,{method,headers:h,body:data===undefined?undefined:binary?data:JSON.stringify(data),cache:'no-store'});
- if(!response.ok){let detail='Request failed ('+response.status+').';try{const j=await response.json();detail=j.message||j.error||j.msg||detail;}catch{}const error=Error(detail);error.status=response.status;throw error;}
- if(raw)return response;
- const txt=await response.text();return txt?JSON.parse(txt):null;
+ const send=async()=>{
+  const token=await cloudToken();
+  const h={...cloudCreds(),Authorization:'Bearer '+token,...headers};
+  if(data!==undefined&&!binary&&!('Content-Type'in h))h['Content-Type']='application/json';
+  const response=await fetch(CLOUD_ROOT+path,{method,headers:h,body:data===undefined?undefined:binary?data:JSON.stringify(data),cache:'no-store'});
+  if(!response.ok){let detail='Request failed ('+response.status+').';try{const j=await response.json();detail=j.message||j.error||j.msg||detail;}catch{}const error=Error(detail);error.status=response.status;throw error;}
+  if(raw)return response;
+  const txt=await response.text();return txt?JSON.parse(txt):null;
+ };
+ try{return await send();}
+ catch(error){
+  if(error.status!==401||error.isRefreshFailure)throw error;
+  await cloudRefreshToken();
+  try{return await send();}catch(retryError){retryError.authRetried=true;throw retryError;}
+ }
 }
 function cloudTable(name,params=''){return '/rest/v1/'+encodeURIComponent(name)+(params?'?'+params:'');}
 function cloudEncoded(value){return encodeURIComponent(value);}
@@ -6699,14 +6730,14 @@ async function cloudRecoverSession(){
   let user;
   try{user=await cloudRequest('/auth/v1/user');}
   catch(error){
+   if(error.isRefreshFailure||error.authRetried)throw error;
    if(error.status===401||error.status===403){
     // A saved JWT may have been revoked or expired before its reported deadline.
     try{
-     const renewed=await cloudAuthRaw('token?grant_type=refresh_token',{refresh_token:cloudSession.refresh_token});
-     cloudApplySession(renewed);
+     await cloudRefreshToken();
      user=await cloudRequest('/auth/v1/user');
     }catch(refreshError){
-     if([400,401,403].includes(refreshError.status))throw refreshError;
+     if(refreshError.isRefreshFailure||[400,401,403].includes(refreshError.status))throw refreshError;
      cloudUser=null;cloudRenderAuth();
      cloudInfo('Unable to check your cloud session right now. It remains saved; refresh the page or retry sign-in.');
      return;
