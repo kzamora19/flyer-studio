@@ -1,8 +1,11 @@
 /* Staged Shared Asset UI: calls dual-auth Edge gateway; NOT deployed. */
 (()=>{
 'use strict';
-const ROOT='https://tzklsscoiwnmeantcefw.supabase.co';
-const KEY='sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK';
+// Explicit opt-in staging configuration: never direct this unreleased feature
+// at production Supabase merely because the main app is configured for it.
+const CONFIG=window.FLYER_SHARED_ASSET_CONFIG||null;
+const ROOT=CONFIG?.supabaseUrl||'';
+const KEY=CONFIG?.publishableKey||'';
 const AUTH_STORE='flyer-studio-cloud-auth-v1';
 const CATEGORIES=['logos','banners','backgrounds','templates','decorations','other'];
 const MAX=10*1024*1024;
@@ -24,6 +27,7 @@ async function cloudAccessToken(){
  return session.access_token;
 }
 async function gateway(action,fields={}){
+ if(!/^https:\/\/[^/]+\.supabase\.co$/.test(ROOT)||!KEY)throw Error('Shared Asset Library is not configured for an isolated test environment.');
  const ptg=typeof ptgSession!=='undefined'?ptgSession:null;
  if(!ptg?.token||!ptg?.id)throw Error('Connect to PTG with an active account first.');
  const cloud=await cloudAccessToken();
