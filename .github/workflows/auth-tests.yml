@@ -21,4 +21,4 @@ jobs:
         with:
           node-version: "22"
       - name: Test authentication recovery and JavaScript syntax
-        run: node --test tests/cloud-auth-recovery.test.mjs
+        run: node --test tests/*.test.mjs
