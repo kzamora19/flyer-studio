@@ -1,36 +1,40 @@
-# Shared Asset Library — staging acceptance / release gate
+# Shared Assets — PTG identity / permissions / device acceptance
 
-Status: **NOT DEPLOYED**. Work on `feature/shared-asset-library` only.
-The live GitHub Pages site is deployed exclusively from `main`.
+**STATUS: STAGING ONLY. NOT DEPLOYED. NOT RELEASE READY.**
+No changes applied to the live Flyer Studio or PTG Supabase database.
+GitHub Pages production publishes from `main`; this branch is `feature/shared-asset-library`.
 
-## Implemented in staging source
-- [x] Shared-library launcher / modal, search, category filter, preview
-- [x] Add PNG/JPEG/WebP (10 MB limit); rename, replace, delete
-- [x] Select asset and apply image to existing product-card photo uploader
-- [x] Authenticated Flyer Studio Cloud bearer token; refresh token handling
-- [x] Supabase SQL proposal for RLS and private storage (not applied)
-- [x] Client write affordances hidden when no `can_manage`
-- [x] Server policies specify protected SELECT/INSERT/UPDATE/DELETE and storage access
+## Architecture now staged
+1. Browser requires valid Flyer Cloud login and a currently connected PTG app session.
+2. Browser calls `flyer-shared-assets` gateway with both bearer tokens and PTG session ID.
+3. Gateway checks Flyer Supabase `auth.getUser()` and invokes live PTG `ptg-auth` with `action=session` on EVERY operation. PTG checks inactive accounts, revocations, expiration, branch state, and session version.
+4. Trusted administrator links Flyer user ID to PTG `username + branchCode` in private `flyer_ptg_identity_links`. No user may self-register links.
+5. Role verified from PTG response. Manager: `SYSTEM_ADMIN`, `BRANCH_ADMIN`, or `BRANCH_USER` with `legacyRole=TEAM LEADER`. Others read-only if `BRANCH_USER`; other roles denied.
+6. Database metadata and Storage are service-only with RLS enabled and private bucket. Clients cannot bypass the gateway with REST.
+7. Image files limited to PNG/JPEG/WebP, 10 MB; signatures checked server side. Signed previews expire after 60 seconds. Existing issued signed URLs may remain usable until expiry even after access is revoked.
 
-## Release blockers
-- [ ] **Server verified PTG-to-Flyer identity mapping.** PTG and Flyer Cloud live in different Supabase projects and PTG role cannot be trusted from UI or user-editable claims. Provision `flyer_asset_memberships` ONLY from trusted backend validation of PTG active user, role and current session. Roles observed in the PTG schema: BRANCH_USER, BRANCH_ADMIN, SYSTEM_ADMIN; confirm how Team Leader is represented before enabling edit rights.
-- [ ] **Inactive account / revoked session denial.** Recheck PTG activity and session validity for every sensitive asset write, not just once at sign-in; do not rely on stale membership rows.
-- [ ] Apply migration only to an isolated TEST environment before production. Current live Flyer Studio project does **not** have shared asset tables; leave unchanged pending approval.
-- [ ] Run SQL/RLS checks as authenticated test users and anonymous user.
-- [ ] Browser tests (at least two distinct users and two devices or isolated browser profiles).
-- [ ] Check add, duplicate names, different MIME types, images >10MB, empty name, unauthorized upload, replace, delete, signed URL expiry, cross-user visibility and actual apply-to-card output.
-- [ ] Confirm no unauthorized action through REST directly even with hidden management buttons.
-- [ ] Check CSP, offline experience, cloud session expiry/refresh, mobile viewport.
-- [ ] Check all existing flyer editing, cloud autosave and PDF/PNG exports for regressions.
-- [ ] Review current Supabase security advisor warning: leaked password protection disabled; this was pre-existing.
+## Verification completed
+- [x] Inspected actual PTG profile role schema and PTG auth session handling (read-only).
+- [x] Confirmed PTG Team Leaders are BRANCH_USER with legacyRole TEAM LEADER.
+- [x] Confirmed Flyer and PTG use separate Supabase projects / identities.
+- [x] Confirmed shared-assets tables are NOT installed in live Flyer project.
+- [x] Inspected current Flyer site and routed staged ADD panel through the dual-auth gateway.
+- [x] Confirmed new code is only on feature branch (not production).
 
-## Expected permission matrix
-| Account | List/preview/select | Add/rename/replace/delete |
-|---|---|---|
-| Verified active Team Leader and above | yes | yes |
-| Active ordinary branch user | business decision: yes when shared-view authorized | no |
-| Inactive/suspended/revoked | no | no |
-| Anonymous/unsigned cloud user | no | no |
+## Release blockers / tests to complete
+- [ ] Provision verified PTG-to-Flyer mappings through a protected admin mechanism. Never link identities by email alone.
+- [ ] Configure `FLYER_PTG_PUBLISHABLE_KEY` in test backend secrets; do not expose any service role key in browser.
+- [ ] Deploy schema and function to a **separate staging Supabase project**, not the live project, for integration tests.
+- [ ] Ensure `ptg-auth` allows the gateway's trusted allowlisted origin for server-to-server validation without introducing a bypass.
+- [ ] Verify Team Leader write access (two users), Branch Admin/System Admin, ordinary Branch User read-only.
+- [ ] Verify disabled PTG user, expired PTG session, revoked session, branch OFF, wrong PTG+Flyer pairing, signed-out user: all denied.
+- [ ] Attempt direct REST and Storage access with Cloud token and with anon key: denied.
+- [ ] Check asset upload, rename, replace, delete, search, categories, preview, duplicate names, invalid MIME, invalid signatures, max upload size.
+- [ ] On different devices/profiles, verify assets added by authorized user A are visible for authorized user B and updates synchronize after refresh.
+- [ ] Validate card photo application, flyer autosave and print/export unaffected.
+- [ ] Verify server endpoint request limits/rate limiting, error handling, audit logging and other Supabase security advisories.
 
-## Important
-No live account permission validation, multi-device verification, SQL migration execution, or end-to-end test has been completed. Do not merge, deploy, or claim release-ready status until the blockers are resolved.
+## Known limitations
+- This is a code-level integration. No real authenticated browser acceptance, isolated database migration, or cross-device test has run yet.
+- The original `site/shared-assets.js` proof-of-concept is no longer used by the UI. Do not import it; remove during cleanup.
+- No release or production deployment until all security and browser tests pass.
