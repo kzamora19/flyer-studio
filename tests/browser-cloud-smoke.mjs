@@ -18,7 +18,8 @@ const origin='http://127.0.0.1:'+server.address().port;
 let browser;
 const user={id:'00000000-0000-4000-8000-000000000001',email:'flyer-browser-test@example.invalid'};
 let project=null,folderCreated=false;
-const backups=[],uploads=[],versions=[];
+const backups=[],uploads=[],versions=[],templates=[],photos=[];
+let uploadedPhotoBytes=null;
 const cors={
  'access-control-allow-origin':'*',
  'access-control-allow-methods':'GET,POST,PATCH,DELETE,OPTIONS',
@@ -55,8 +56,23 @@ async function supabase(route){
   const id=url.searchParams.get('id');
   return reply(route,id?versions.filter(v=>id==='eq.'+v.id):versions);
  }
- if(url.pathname==='/rest/v1/flyer_cloud_photos')return reply(route,[]);
- if(url.pathname==='/rest/v1/flyer_cloud_templates')return reply(route,[]);
+ if(url.pathname==='/rest/v1/flyer_cloud_photos'){
+  if(method==='POST'){photos.push({...request.postDataJSON(),created_at:'2026-11-19T09:00:00Z'});return reply(route,{},201);}
+  if(method==='GET')return reply(route,photos);
+ }
+ if(url.pathname==='/rest/v1/flyer_cloud_templates'){
+  if(method==='POST'){
+   const item=request.postDataJSON(),index=templates.findIndex(t=>t.id===item.id);
+   if(index>=0)templates[index]=item;else templates.push(item);
+   return reply(route,{},201);
+  }
+  if(method==='GET')return reply(route,templates);
+ }
+ if(url.pathname.startsWith('/storage/v1/object/')){
+  if(method==='POST'){uploadedPhotoBytes=request.postDataBuffer();return reply(route,{Key:'smoke-photo'},201);}
+  if(method==='GET'&&uploadedPhotoBytes)
+   return route.fulfill({status:200,headers:{...cors,'content-type':'image/png'},body:uploadedPhotoBytes});
+ }
  return reply(route,{message:'Unexpected Supabase mock request: '+method+' '+url.pathname},404);
 }
 async function googleDrive(route){
@@ -124,6 +140,29 @@ try{
  await page.waitForFunction(()=>window.flyerCloud.getStatus().revision===2,{timeout:10000});
  assert.equal(project.revision,2);
 
+ // Save a real local template and synthetic 1px product photo, then use
+ // the application's cloud upload UI. Never send private user files.
+ await page.locator('#powerButton-templates').click();
+ await page.locator('#powerTemplateName').fill('CI Shared Template');
+ await page.locator('#powerSaveTemplate').click();
+ await page.waitForFunction(()=>powerTemplates.some(t=>t.name==='CI Shared Template'));
+ await page.locator('#powerButton-photos').click();
+ await page.evaluate(()=>{
+  const tinyPng='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/8XUAAAAASUVORK5CYII=';
+  for(const offer of state.offers)offer.photo=tinyPng;
+ });
+ await page.locator('#powerPhotoSave').click();
+ await page.waitForFunction(()=>powerPhotos.length>0);
+ await page.locator('#powerButton-cloud').click();
+ await page.evaluate(()=>powerRefreshControls());
+ await page.locator('#cloudCloudTemplates').click();
+ await page.waitForFunction(()=>document.getElementById('cloudNotice').textContent.includes('Uploaded 1 template'));
+ assert.equal(templates.length,1);
+ await page.locator('#cloudCloudPhoto').click();
+ await page.waitForFunction(()=>document.getElementById('cloudPhotoCount').textContent.includes('1 private photo'));
+ assert.equal(photos.length,1);
+ assert.ok(uploadedPhotoBytes?.length>0);
+
  // Simulate a second authorized device, with its own browser storage and the same
  // private cloud backend, opening the already-saved revision.
  const otherContext=await browser.newContext();
@@ -134,6 +173,10 @@ try{
  await otherPage.locator('#cloudToolbar').waitFor({timeout:20000});
  await otherPage.locator('#cloudToolbar').click();
  await otherPage.locator('#cloudSignedIn:not([hidden])').waitFor();
+ await otherPage.locator('#cloudLocalTemplates').click();
+ await otherPage.waitForFunction(()=>powerTemplates.some(t=>t.name==='CI Shared Template'));
+ await otherPage.locator('#cloudLocalPhotos').click();
+ await otherPage.waitForFunction(()=>powerPhotos.some(p=>p.cloudId));
  await otherPage.locator('#cloudProjects button').filter({hasText:'Open'}).first().click();
  await otherPage.waitForFunction(()=>window.flyerCloud.getStatus().revision===2);
  assert.equal(await otherPage.evaluate(()=>window.flyerCloud.getStatus().project),'CI Flyer');
@@ -187,7 +230,7 @@ try{
  await page.locator('#cloudSignedOut:not([hidden])').waitFor();
  assert.equal(await page.evaluate(()=>localStorage.getItem('flyer-studio-cloud-auth-v1')),null);
  assert.deepEqual(errors,[],'Unexpected app JavaScript errors: '+errors.join('; '));
- console.log('PASS: Browser OAuth cleanup, session renewal, second device, cloud revision restore, front/back PDF, Drive backup/restore, sign-out');
+ console.log('PASS: Browser OAuth, second-device cloud/project/template/photo sync, session renewal, revision restore, PDF front/back, Drive backup/restore, sign-out');
 }finally{
  await browser?.close();
  await new Promise(resolve=>server.close(resolve));
