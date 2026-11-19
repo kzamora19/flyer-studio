@@ -129,9 +129,9 @@ try{
  await page.locator('#powerLauncher').click();
  await page.locator('#powerButton-brands').click();
  await page.locator('#powerTechzoneLogo').waitFor({state:'visible'});
- await page.waitForFunction(()=>document.querySelector('#powerTechzoneLogo')?.naturalWidth===286);
+ await page.waitForFunction(()=>document.querySelector('#powerTechzoneLogo')?.naturalWidth===2172);
  const logo=await page.locator('#powerTechzoneLogo').evaluate(img=>({width:img.naturalWidth,height:img.naturalHeight,complete:img.complete}));
- assert.deepEqual(logo,{width:286,height:102,complete:true},'Official TechZone logo must load at original dimensions');
+ assert.deepEqual(logo,{width:2172,height:724,complete:true},'Official TechZone logo must load at original dimensions');
  assert.equal(await page.locator('#powerTechzoneDownload').getAttribute('href'),'assets/techzone-official-logo.png');
  await page.locator('#powerButton-cloud').click();
  await page.locator('#cloudSignedIn:not([hidden])').waitFor({timeout:10000});
