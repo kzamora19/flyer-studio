@@ -6208,7 +6208,7 @@ const CLOUD_BUCKET='flyer-studio-private';
 const CLOUD_AUTH_STORE='flyer-studio-cloud-auth-v1';
 let cloudSession=null,cloudUser=null,cloudProject=null,cloudRevision=0,cloudLastDocument=null;
 let cloudSaving=false,cloudDirty=false,cloudConflict=false,cloudTimer=null,cloudInitialized=false,cloudSuspend=false;
-let cloudRefreshPromise=null;
+let cloudRefreshPromise=null,cloudRetryDelay=3500;
 let cloudProjects=[],cloudVersions=[];
 
 /* Google Drive backups: users explicitly authorize drive.file; access tokens live in memory only. */
@@ -6557,7 +6557,7 @@ async function cloudUnpack(document){
 function cloudCheckFlyer(value){if(!value||typeof value!=='object'||!value.campaign||typeof value.campaign!=='object'||!Array.isArray(value.offers)||value.offers.length>500)throw Error('This cloud file is not a supported Flyer Studio project.');return value;}
 function cloudQueue(){
  if(!cloudUser||!cloudProject||cloudSuspend||cloudConflict)return;
- cloudDirty=true;clearTimeout(cloudTimer);cloudStatus('Unsaved changes · syncing shortly');cloudTimer=setTimeout(()=>cloudSaveNow(false),3500);
+ cloudDirty=true;clearTimeout(cloudTimer);cloudStatus(cloudRetryDelay>3500?'Unsaved changes · retrying cloud sync':'Unsaved changes · syncing shortly');cloudTimer=setTimeout(()=>cloudSaveNow(false),cloudRetryDelay);
 }
 async function cloudSaveNow(interactive=true){
  if(!cloudUser||!cloudProject){if(interactive)cloudInfo('Select or create a cloud project first.');return;}
@@ -6571,14 +6571,15 @@ async function cloudSaveNow(interactive=true){
   const records=await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+savingProject+'&revision=eq.'+oldRevision+'&select=id,name,revision,updated_at'),{method:'PATCH',data:body,headers:{Prefer:'return=representation'}});
   if(!records?.length){cloudConflict=true;cloudInfo('Cloud conflict: this project was updated elsewhere. Your browser copy is safe. Open the latest cloud project, or save a separate cloud copy.');return;}
   if(oldDocument){try{await cloudRequest(cloudTable('flyer_cloud_versions'),{method:'POST',data:{project_id:savingProject,owner_id:cloudUser.id,revision:oldRevision,document:oldDocument},headers:{Prefer:'resolution=ignore-duplicates,return=minimal'}});}catch(err){console.warn('Could not retain prior cloud revision:',err.message);}}
-  cloudRevision=records[0].revision;cloudProject={...cloudProject,...records[0]};cloudLastDocument=document;cloudRenderAuth();
+  cloudRevision=records[0].revision;cloudProject={...cloudProject,...records[0]};cloudLastDocument=document;cloudRetryDelay=3500;cloudRenderAuth();
   cloudStatus('Saved to cloud · revision '+cloudRevision,true);
   void driveBackupNow({packed:document,project:cloudProject,revision:cloudRevision});
   if(interactive)cloudInfo('Cloud save complete. Open this project from another device after signing in.',true);
- }catch(e){cloudDirty=true;cloudInfo('Cloud save failed: '+cloudErr(e)+'. The local browser flyer remains intact.');}
+ }catch(e){cloudDirty=true;cloudRetryDelay=Math.min(120000,Math.max(15000,cloudRetryDelay*2));cloudInfo('Cloud save failed: '+cloudErr(e)+'. Your browser flyer remains intact; cloud sync will retry.');}
  finally{cloudSaving=false;if(cloudDirty&&!cloudConflict&&cloudProject)cloudQueue();}
 }
 async function cloudNewCopy(){
+ if(cloudSaving)return cloudInfo('Finish the current cloud save before creating another project.');
  if(!cloudUser)return cloudInfo('Sign in first.');
  const name=($c('cloudProjectName').value||'').trim().slice(0,120);
  if(!name){cloudInfo('Enter a name for the cloud project.');return;}
@@ -6621,6 +6622,7 @@ async function cloudOpenProject(id){
  }catch(e){cloudInfo('Could not open cloud project: '+cloudErr(e));}finally{cloudBusy(false)}
 }
 async function cloudDeleteProject(p){
+ if(cloudSaving)return cloudInfo('Finish the current cloud save before deleting a project.');
  if(!confirm('Permanently delete cloud project "'+p.name+'" and its saved revisions? The current browser flyer will remain intact.'))return;
  try{
   await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+p.id),{method:'DELETE'});
@@ -6628,7 +6630,7 @@ async function cloudDeleteProject(p){
   cloudInfo('Deleted cloud project: '+p.name+'.',true);await cloudRefreshList();
  }catch(e){cloudInfo('Delete failed: '+cloudErr(e));}
 }
-function cloudDetach(){clearTimeout(cloudTimer);cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;cloudDirty=false;cloudRenderAuth();cloudInfo('Disconnected this browser flyer from automatic cloud saves. Your saved cloud project is still available.');}
+function cloudDetach(){if(cloudSaving)return cloudInfo('Finish the current cloud save before working locally.');clearTimeout(cloudTimer);cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;cloudDirty=false;cloudRenderAuth();cloudInfo('Disconnected this browser flyer from automatic cloud saves. Your saved cloud project is still available.');}
 async function cloudLoadVersions(){
  if(!cloudProject)return;
  try{cloudVersions=await cloudRequest(cloudTable('flyer_cloud_versions','project_id=eq.'+cloudProject.id+'&select=id,revision,created_at&order=revision.desc&limit=30'))||[];cloudDrawVersions();}
@@ -6638,6 +6640,7 @@ function cloudDrawVersions(){const list=$c('cloudVersions');if(!list)return;list
  for(const item of cloudVersions){cloudItem(list,'Revision '+item.revision,new Date(item.created_at).toLocaleString(),[['Restore',()=>cloudRestoreVersion(item)]]);}
 }
 async function cloudRestoreVersion(version){
+ if(cloudSaving)return cloudInfo('Finish the current cloud save before restoring a revision.');
  if(!cloudProject)return;
  if(!confirm('Restore revision '+version.revision+' into the browser and save it as a new cloud revision?'))return;
  try{
@@ -6742,6 +6745,7 @@ function cloudMakeUI(){
  const oldSave=save;save=function(...args){const result=oldSave(...args);cloudQueue();return result;};
  const oldPowerLoad=powerLoad;powerLoad=async function(...args){const result=await oldPowerLoad(...args);cloudUpdateLocalPhotoOptions();return result;};
  const oldPowerRefresh=powerRefreshControls;powerRefreshControls=function(...args){const result=oldPowerRefresh(...args);cloudUpdateLocalPhotoOptions();return result;};
+ window.addEventListener('online',()=>{if(cloudDirty&&cloudUser&&cloudProject&&!cloudSaving&&!cloudConflict){cloudRetryDelay=3500;cloudQueue();}});
  cloudRenderAuth();cloudRecoverSession();
 }
 async function cloudRecoverSession(){
