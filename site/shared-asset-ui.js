@@ -92,15 +92,32 @@ async function preview(asset){
 }
 async function apply(asset){
  try{
+  const target=el('sharedAssetTarget').value;
+  const inputIds={
+   card:'cardPhotoUpload',
+   logo:'logo',
+   front:'frontArtworkUpload',
+   back:'backArtworkUpload'
+  };
+  const input=el(inputIds[target]);
+  if(!input)throw Error('The selected image destination is unavailable.');
+  if(target==='card'){
+   // Existing cardPhotoUpload handler writes to cardPhotoOffer, not merely
+   // the visually selected card. Prevent silently applying to the wrong card.
+   if(typeof cardPhotoOffer==='undefined'||!cardPhotoOffer)throw Error('Open a product card photo editor and select a filled card first.');
+  }
   const blob=await assetImage(asset);
-  const input=el('cardPhotoUpload');
-  if(!input)throw Error('Card photo upload field is unavailable.');
-  const file=new File([blob],asset.name+({'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[blob.type]||'.png'),{type:blob.type});
-  const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;
+  if(!TYPES.has(blob.type))throw Error('Unsupported stored image type.');
+  const suffix={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[blob.type];
+  const file=new File([blob],asset.name+suffix,{type:blob.type});
+  const transfer=new DataTransfer();transfer.items.add(file);
+  input.files=transfer.files;
+  // This triggers Flyer's existing readPhoto/edited pipeline, preserving
+  // autosave, photo cropping and export logic.
   input.dispatchEvent(new Event('change',{bubbles:true}));
   selected=asset;el('sharedAssetSelected').value=asset.name;
-  say('Image submitted to the current product card. Verify its appearance in preview.',true);
- }catch(e){say(e.message);}
+  say('Sent '+asset.name+' to '+el('sharedAssetTarget').selectedOptions[0].textContent+'. Check the flyer preview.',true);
+ }catch(e){say('Could not apply asset: '+e.message);}
 }
 async function add(){
  if(!canManage)return say('Unauthorized.');
@@ -145,7 +162,7 @@ function init(){
  <div class="sa-row"><label>Search<input id="sharedAssetSearch" placeholder="Find asset"></label><label>Category<select id="sharedAssetFilter"><option value="">All categories</option>${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><button type="button" id="sharedAssetRefresh">Refresh</button></div>
  <div id="sharedAssetAdd" hidden><h3>ADD NEW ASSET</h3><div class="sa-row"><label>Name<input id="sharedAssetName" maxlength="120"></label><label>Category<select id="sharedAssetCategory">${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><label>Image<input type="file" id="sharedAssetFile" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="sharedAssetUpload">ADD</button></div></div>
  <div id="sharedAssetList"></div><img id="sharedAssetPreview" alt="Shared asset preview" hidden>
- <label>Selected asset<input id="sharedAssetSelected" readonly placeholder="None selected"></label>
+ <div class="sa-row"><label>Apply asset to<select id="sharedAssetTarget"><option value="card">Selected product card</option><option value="logo">Campaign logo</option><option value="front">Front sale headline artwork</option><option value="back">Back sale headline artwork</option></select></label><label>Selected asset<input id="sharedAssetSelected" readonly placeholder="None selected"></label></div>
  <p id="sharedAssetNotice" role="status">Open the library to load assets.</p>
  </div>`;
  document.body.append(overlay);
@@ -155,6 +172,7 @@ function init(){
  el('sharedAssetClose').onclick=()=>{overlay.hidden=true;launcher.focus();};
  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.hidden=true;});
  el('sharedAssetRefresh').onclick=refresh;el('sharedAssetFilter').onchange=refresh;el('sharedAssetSearch').onchange=refresh;el('sharedAssetUpload').onclick=add;
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden){overlay.hidden=true;launcher.focus();}});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
