@@ -40,7 +40,7 @@ async function identity(req:Request){
  if(linkError||!link)throw new Denied("Flyer Cloud user is not linked to this PTG identity.");
  const role=String(account.role||"").toUpperCase(),legacy=String(account.legacyRole||"").toUpperCase();
  const manager=role==="SYSTEM_ADMIN"||role==="BRANCH_ADMIN"||(role==="BRANCH_USER"&&legacy==="TEAM LEADER");
- const viewer=manager||role==="BRANCH_USER";
+ const viewer=manager; // Flyer Studio integration is TL-and-above only.
  if(!viewer)throw new Denied("PTG role is not authorized.");
  return {userId:user.id,manager};
 }
