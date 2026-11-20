@@ -84,40 +84,38 @@ try{
  await page.evaluate(()=>ptgConnected(null,'Signed out'));
  await page.waitForFunction(()=>document.querySelector('#sharedAssetNotice')?.textContent.includes('Connect to PTG'),{timeout:15000});
  assert.equal(await page.locator('.sa-item').count(),0);
+ // Close the non-blocking asset panel before clicking the print toolbar.
+ await page.locator('#sharedAssetClose').click();
+ assert.equal(await page.locator('#sharedAssetModal').isHidden(),true);
  await page.screenshot({path:join(evidence,'megaflyer-front-preview.png'),animations:'disabled'});
- // Isolated CI smoke: the complete application renderer is used, but capped
- // to a smaller canvas to avoid OOM in resource-limited headless Chromium.
- // This does NOT certify full 300-ppi print resolution.
- const capSmokeCanvas=async()=>page.evaluate(()=>{
-   const original=render;
-   render=async(project,face,width,target)=>original(project,face,Math.min(width,1100),target);
- });
- await capSmokeCanvas();
- const pdfEvent=page.waitForEvent('download',{timeout:90000});
- await page.locator('#pdf').click();
- const pdfDownload=await pdfEvent;
+ const [pdfDownload]=await Promise.all([
+  page.waitForEvent('download',{timeout:90000}),
+  page.locator('#pdf').click({timeout:15000})
+ ]);
  const pdf=readFileSync(await pdfDownload.path());
  const text=pdf.toString('latin1');
  assert.ok(text.startsWith('%PDF-1.4'));
  assert.match(text,/\/Count 2\b/);
  assert.equal((text.match(/\/Subtype \/Image/g)||[]).length,2);
+ const pdfImages=[...text.matchAll(/\/Subtype \/Image \/Width (\d+) \/Height (\d+)/g)];
+ assert.equal(pdfImages.length,2,'Two full-size page images');
+ for(const image of pdfImages){assert.ok(Number(image[1])>=2000&&Number(image[2])>=2800,'PDF includes 300-ppi-sized A4 artwork');}
  assert.ok(pdf.length>20000,'PDF contains rendered pages');
  writeFileSync(join(evidence,'megaflyer-two-page-draft.pdf'),pdf);
  console.log('PDF render completed:',pdf.length,'bytes.');
- // A fresh document releases high-resolution preview canvases and avoids
- // pressure from holding PDF and PNG canvases in a single headless tab.
+ // Reload between heavyweight exports to release temporary canvases in CI.
  await page.reload({waitUntil:'domcontentloaded'});
  await page.locator('#png').waitFor({timeout:20000});
- await capSmokeCanvas();
- const pngEvent=page.waitForEvent('download',{timeout:90000});
- await page.locator('#png').click();
- const pngDownload=await pngEvent;
+ const [pngDownload]=await Promise.all([
+  page.waitForEvent('download',{timeout:90000}),
+  page.locator('#png').click({timeout:15000})
+ ]);
  const printed=readFileSync(await pngDownload.path());
  assert.equal(printed.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
- assert.ok(printed.readUInt32BE(16)>=1000&&printed.readUInt32BE(20)>=1400,'PNG smoke output has expected capped dimensions');
+ assert.ok(printed.readUInt32BE(16)>=2000&&printed.readUInt32BE(20)>=2800,'PNG is 300-ppi-sized A4 image');
  writeFileSync(join(evidence,'megaflyer-front-print.png'),printed);
  assert.equal(failures.length,0,'No uncaught browser errors: '+failures.join('; '));
- console.log('PASS: mock PTG allowed/denied/sign-out, preview, logo/front/back placement, browser PDF+PNG at reduced CI-only canvas resolution');
+ console.log('PASS: mocked PTG roles, preview, logo/front/back image placement, actual 300-ppi-sized PDF and PNG exports');
  console.log('Browser render sizes:',{pdfBytes:pdf.length,pngWidth:printed.readUInt32BE(16),pngHeight:printed.readUInt32BE(20),apiCalls:actions.length});
 } finally {
  await browser?.close();
