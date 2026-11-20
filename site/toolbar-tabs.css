@@ -49,3 +49,12 @@
   .stage .flyer-tab-shell > .toolbar > button{padding:7px 10px;min-height:40px}
   .stage .flyer-tab-shell > .flyer-tab-scroll{flex-basis:25px;min-width:25px}
 }
+
+/* Section-level editing belongs on its own row, below the horizontal tabs. */
+.stage > #selectedSectionControls{
+  width:min(100%,800px);max-width:100%;margin:10px auto;
+}
+.stage > #arrangeHelp{
+  max-width:100%;margin:7px auto 12px;padding:0 8px;
+  white-space:normal;overflow-wrap:break-word;line-height:1.4;
+}

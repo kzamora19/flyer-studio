@@ -5846,7 +5846,9 @@ function initDirectSectionControls(arrange){
   const selected=document.createElement('div');selected.id='selectedSectionControls';selected.hidden=true;
   selected.setAttribute('role','group');selected.setAttribute('aria-label','Selected section actions');
   selected.innerHTML='<strong id="chosenSectionName">Selected section</strong><span class="sectionStatus" id="chosenSectionMeta"></span><button type="button" id="addBelowSelected">+ Add section below</button><button type="button" id="hideSelectedSection">Remove from flyer</button><button type="button" class="danger" id="deleteSelectedSection">Delete empty custom section</button><button type="button" id="restoreHiddenSections">Restore hidden…</button>';
-  toolbar.after(selected);
+  // The horizontal tab strip wraps the toolbar; selection actions belong below that strip.
+  // This works both before and after toolbar-tabs.js initializes.
+  (toolbar.closest('.flyer-tab-shell') || toolbar).after(selected);
   $('addBelowSelected').onclick=()=>addSectionBelow(selectedLayoutSection);
   $('hideSelectedSection').onclick=()=>removeSectionFromFlyer(selectedLayoutSection);
   $('deleteSelectedSection').onclick=()=>askDeleteSection(selectedLayoutSection);

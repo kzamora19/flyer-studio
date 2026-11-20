@@ -44,6 +44,27 @@ try{
  assert.equal(await page.locator('#back').getAttribute('aria-pressed'),'true');
  await page.locator('#front').click();
  assert.equal(await page.locator('#front').getAttribute('aria-pressed'),'true');
+ // Regression: changing section layout must not put the selection toolbar inside the tab strip.
+ await page.locator('#arrangeSections').click();
+ await page.locator('#selectedSectionControls:visible').waitFor();
+ assert.equal(await page.locator('.flyer-tab-shell #selectedSectionControls').count(),0,
+   'Section actions must not become a child of the horizontal tab bar');
+ assert.equal(await page.locator('.stage > #selectedSectionControls').count(),1,
+   'Section actions occupy their own row underneath the tabs');
+ const placement=await page.evaluate(()=>{
+   const bar=document.querySelector('.flyer-tab-shell').getBoundingClientRect();
+   const panel=document.querySelector('#selectedSectionControls').getBoundingClientRect();
+   const help=document.querySelector('#arrangeHelp').getBoundingClientRect();
+   return {tabHeight:bar.height,tabBottom:bar.bottom,panelTop:panel.top,panelBottom:panel.bottom,helpTop:help.top};
+ });
+ assert.ok(placement.tabHeight<65,
+   'Toolbar must remain compact even when section arrangement is active: '+JSON.stringify(placement));
+ assert.ok(placement.panelTop>=placement.tabBottom,
+   'Selection actions appear below the tab strip: '+JSON.stringify(placement));
+ assert.ok(placement.helpTop>=placement.panelBottom,
+   'Arrangement guidance appears below selection actions: '+JSON.stringify(placement));
+ await page.locator('#arrangeSections').click();
+ assert.equal(await page.locator('#selectedSectionControls').isVisible(),false);
  assert.equal(await page.locator('#studioNav [data-sub="front"], #studioNav [data-sub="back"]').count(),0);
  const navLabels=await page.locator('#studioNav>[data-nav]').allTextContents();
  assert.deepEqual(navLabels.map(x=>x.trim()),[
