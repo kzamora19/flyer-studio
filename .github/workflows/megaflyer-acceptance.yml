@@ -1,0 +1,58 @@
+name: MegaFlyer development acceptance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "tests/**"
+      - ".github/workflows/megaflyer-acceptance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Existing and new isolated regressions
+        run: |
+          node tests/shared-assets-authorization.test.cjs
+          node tests/shared-assets-placement.test.cjs
+          node tests/shared-banner-fit.test.cjs
+          node tests/shared-flyer-pdf.test.cjs
+          node tests/flyer-editor-menu.test.cjs
+          node tests/flyer-icons-floating-panels.test.cjs
+          node tests/shared-assets-backup.test.cjs
+          node tests/shared-assets-session-cleanup.test.cjs
+          node tests/shared-assets-session-race.test.cjs
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Chromium testing tools
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.65.1
+          npx playwright install chromium --with-deps
+      - name: Render real PNG and two-page PDF with mocked PTG roles
+        run: node tests/megaflyer-browser-smoke.mjs
+      - name: Verify isolated second-account asset sync and JSON backup restore
+        run: node tests/megaflyer-two-device-smoke.mjs
+      - name: Save render evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: megaflyer-browser-preview
+          path: acceptance-evidence/
+          if-no-files-found: ignore
+          retention-days: 7

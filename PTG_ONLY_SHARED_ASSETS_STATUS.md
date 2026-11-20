@@ -70,3 +70,46 @@ These are test-only commands; they do not write to Supabase or publish GitHub Pa
 - Private Supabase shared library currently has **1 actual uploaded test asset**; RLS and storage privacy were checked read-only. No Supabase writes or Edge deployments occurred in this continuation.
 - Still cannot verify updated actual PDF print sharpness/alignment without the exported PDF file. Browser screenshots establish earlier PDF generation and front-banner placement, but **not** the appearance after the latest banner-fit update. Real Admin/Branch User/revoked login, second-device sync, image use on each alternate destination and Google Drive restore remain manual acceptance gates.
 - For repeatability, run the four no-dependency test files on the current development ZIP with Node.js; no paid service or Work mode is required.
+
+## November 20 — Editor navigation, branding icon and floating panels (STAGED; not public yet)
+- Removed duplicated pinned **Front Side / Back Side** submenus; retained the original live Front / Back preview controls.
+- Main editor navigation now stays in **one column on all widths**. Added an accessible **Show menu / Hide menu** collapse toggle and persisted its state using localStorage; section-specific submenus now appear in the scrollable editor region, not the pinned area; Layout & Appearance is a regular menu entry.
+- Branded icon concept for First Megasaver Flyer Studio: blue square with a white folded flyer, red promotion stripe and gold accent. Added `site/icons/flyer-studio.svg`, PNG fallback `site/icons/flyer-studio-192.png`, `site/manifest.webmanifest`, browser favicon, touch icon and header symbol. Official First Megasaver text branding is retained. Installed operating-system shortcuts may need uninstall/reinstall to refresh a formerly generic `F` icon.
+- Converted normal editor, Layout & Appearance, section/header and Studio+ panels to **non-blocking floating dialogs**. Root overlays are transparent and pointer-events:none; panels remain interactive, can be dragged by headings using `site/floating-panels.js`, and mobile panels are constrained to a bottom-sheet height. Shared Asset Library follows the same non-blocking pattern. `aria-modal=false` reflects actual behavior. Existing confirmation dialogs remain blocking when a destructive action needs explicit approval.
+- Regression checks against current branch: **78/78 existing identity/placement/banner/PDF assertions**, **22/22 menu assertions**, **25/25 icon and floating-dialog assertions** = **125/125 assertions pass**. Checks use mocked DOM, browser events, image data and PDF internals, not a physical browser screen or deployed acceptance.
+- **Release status:** These changes are on `feature/shared-asset-library`, not `main`. Do not describe them as live until a deployment is requested/performed and checked. Supabase remains unchanged.
+
+## November 20, 2026 — Shared Asset Library release hardening (development branch only)
+
+- Verified **read-only**: Flyer Studio Supabase project is active; private `flyer-shared-assets` bucket contains 1 Storage object; `flyer_shared_assets` has 1 metadata row with RLS enabled; `flyer-shared-assets` Edge Function is ACTIVE version 2. No database, storage, Auth, or Edge Function writes were made.
+- Fixed shared-asset **backup restore preflight** in `site/shared-asset-ui.js`: validates all files, categories, names, MIME signatures, encoded lengths, per-asset 10 MB and aggregate 40 MB limits before any `add` request. If a later network request fails after successful imports, the UI reports the partial count and warns against blind retry. Restore is still a series of non-transactional server calls; it is not deduplicated.
+- Fixed cached **shared preview visibility** on PTG account switch or authorization failure: revokes the browser object URL, hides the previous preview, clears selection and reverts the manager hint. New server requests still depend on PTG authorization.
+- Added `tests/shared-assets-backup.test.cjs` and `tests/shared-assets-session-cleanup.test.cjs`. **18 backup checks + 4 session-cleanup checks passed in isolated JavaScript runs against the exact newly committed source**, without network or Supabase writes. The native Node command-line suite and real UI acceptance still need running in the development checkout.
+- Added `SHARED_ASSET_RELEASE_CHECKLIST.md`: explicit real-account authorization matrix, multi-device tests, all image-placement destinations, actual front PNG / two-page PDF inspection, manual Google Drive JSON backup/restore and regression sign-off.
+- Supabase Security Advisor still reports informational `rls_enabled_no_policy` for the two backend-only tables (deliberately no direct browser policies), plus the pre-existing `auth_leaked_password_protection` warning; no security settings were changed.
+- Live `main` has only previously approved icon/name/PWA updates. **The Shared Asset Library frontend hardening is not deployed.** Keep the live application, PTG production and Supabase data unchanged until acceptance and explicit release approval.
+
+## November 20, 2026 — PTG account-change event race protection (staged)
+
+- Audited the actual `ptgConnected()` transition point in the development editor and found a race where in-flight asset-list or signed-preview responses could complete after an account change.
+- Added a browser-only `megaflyer:ptg-session-changed` event (no account identifiers or tokens in event detail). The Shared Asset Library immediately clears cached rows, selection and preview upon receiving the event.
+- Added session-ID guards after awaited permissions/list calls and before/after fetching signed image downloads. A stale response is rejected rather than used.
+- Added `tests/shared-assets-session-race.test.cjs` and ran **5 no-network assertions** against the exact edited development sources: event signaling, stale-permissions, stale-asset-list, stale-preview before image fetch, and stale-preview after download begins all passed.
+- Also checked the earlier identity, placement, banner, editor-menu, icon, backup and session-cleanup suites and structural two-page PDF checks in an isolated JavaScript runtime. This is *not* a substitute for native Node full-suite results or interactive browser acceptance.
+- Production `main` and Supabase have not been modified for this change. Real PTG Team Leader/Admin/ordinary/revoked account checks, second device and physical PDF/PNG visual review remain open.
+
+## November 20, 2026 — Native GitHub and full-resolution Chromium acceptance
+
+- GitHub Actions [run 44701946885](https://github.com/kzamora19/flyer-studio/actions/runs/44701946885) passed **nine native Node regression suites** plus Chromium simulated PTG sign-in/authorization/asset placement and actual 300-ppi-sized PNG + two-page A4 PDF output; [UI regression run 44701947106](https://github.com/kzamora19/flyer-studio/actions/runs/44701947106) also passed.
+- Artifact 14613106869 contains the exact mocked-fixture screenshot, PNG and PDF. Rendered PDF pages and 2480 × 3507 PNG were inspected; there was no obvious clipping of demo prices/cards, but mock images are intentionally blank/white and do not replace a real-campaign visual/print sign-off.
+- An early smoke-test click timed out because the Shared Asset Library panel covered the export toolbar; the test was corrected to close the panel before clicking. No production export resolution was lowered, and the full-resolution re-run passed.
+- A separately published UI release on `main` included the approved toolbar and editor changes during this work. This review branch is **draft** and contains automated-test/acceptance documentation; the live branch has continued to evolve. Avoid overwriting those current live changes.
+- Real TL/Admin/ordinary/revoked PTG account tests, cross-device sync and Google Drive backup/restore remain unverified. **No Supabase writes or PTG production changes were made by this acceptance run.**
+
+
+## November 20, 2026 — status correction after cross-chat production updates
+
+- Another chat already published the Shared Asset Library frontend and related MegaFlyer toolbar, centered asset popup, and all-editor popup centering on GitHub Pages `main`. Earlier entries describing the library as 'development-only' are historical and **not the current production status**.
+- Acceptance PR #5 remains **draft**. Its current Git diff consists of the dedicated GitHub Actions acceptance workflow, browser QA scripts, and documentation; no application runtime files differ from the synchronized live `main` baseline at this point.
+- The latest development-only CI run [44704485864](https://github.com/kzamora19/flyer-studio/actions/runs/44704485864) passed native Node regression, full-resolution Chromium export, and second-browser mock account asset export/restore/rename. No account secrets or production asset mutations were used.
+- The latest separately deployed popup change from `main` was preserved in the review branch before reporting this stage. Real PTG accounts, two physical devices, Google Drive upload/download and real flyer print signoff remain outstanding.
