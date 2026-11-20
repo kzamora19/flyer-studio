@@ -10,7 +10,7 @@ const shared=fs.readFileSync(path.join(site,'shared-asset-ui.js'),'utf8');
 assert.match(html,/<link rel="stylesheet" href="\.\/toolbar-tabs\.css">/,'Tab CSS must load');
 assert.match(html,/<script src="\.\/toolbar-tabs\.js" defer><\/script>/,'Tab JS must load');
 assert.match(html,/<script src="\.\/floating-panels\.js" defer><\/script>/,'Floating editor behavior must load');
-assert.ok(html.indexOf('toolbar-tabs.js')>html.indexOf('shared-asset-ui.js'),'Tab strip initialized after appendable asset controls');
+assert.ok(html.indexOf('<script src="./toolbar-tabs.js" defer></script>')>html.indexOf('<script src="./shared-asset-ui.js" defer></script>'),'Tab strip script loads after appendable asset controls');
 assert.match(html,/\['cards','Edit Flyer Cards',\[\]\]/,'No duplicate pinned side controls');
 assert.match(html,/<button id="front" aria-pressed="true">Front<\/button>/,'Front preserved');
 assert.match(html,/<button id="back" aria-pressed="false">Back<\/button>/,'Back preserved');
