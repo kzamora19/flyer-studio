@@ -89,8 +89,8 @@ try{
  const pdf=readFileSync(await pdfDownload.path());
  const text=pdf.toString('latin1');
  assert.ok(text.startsWith('%PDF-1.4'));
- assert.match(text,/\\/Count 2\\b/);
- assert.equal((text.match(/\\/Subtype \\/Image/g)||[]).length,2);
+ assert.match(text,/\/Count 2\b/);
+ assert.equal((text.match(/\/Subtype \/Image/g)||[]).length,2);
  assert.ok(pdf.length>20000,'PDF contains rendered pages');
  const pngEvent=page.waitForEvent('download',{timeout:90000});
  await page.locator('#png').click();
