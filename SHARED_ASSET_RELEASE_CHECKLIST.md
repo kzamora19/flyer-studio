@@ -96,3 +96,12 @@ The development branch has isolated, no-network regression tests for backup vali
 - The shared asset frontend, PTG authorization wiring, icon, horizontal toolbar, and popup fixes are **already in the live `main` source**. PR #5 is now only a draft acceptance/testing/documentation contribution, not a new deployment of the existing library.
 - The acceptance workflow now contains the isolated two-context asset sync, JSON offline transfer/restore and full-resolution flyer export tests. These are safe mocks and do not attest to live real-user behavior.
 - Real account permissions, actual cross-device sync, real Google Drive file transfer/restore, and physical print approval remain open. The live service must not be mutated for test purposes without a controlled authorized fixture.
+
+
+## November 20, 2026 — Cross-app studio access integration review
+
+- Existing coordinated **draft/hold** pull requests are [PTG authorization gateway #38](https://github.com/kzamora19/first-megasaver-ptg/pull/38), [Branchline studio launcher #39](https://github.com/kzamora19/branchline/pull/39), [MegaFlyer protected gateway #2](https://github.com/kzamora19/flyer-studio/pull/2) and [MegaFrame protected gateway #16](https://github.com/kzamora19/megaframe-studio/pull/16). They form one release dependency; never deploy only one.
+- The PTG/Studio gateway drafts assume Vercel routing and app hosting, which is **not aligned with the current owner-preferred GitHub Pages + Supabase arrangement**. These URLs must be re-designed and verified before merging.
+- The public GitHub Pages editor is **not** secured by restricting the Branchline launch button. The private Shared Asset Library gateway is already PTG role-checked, but app-wide TL+ access requires a protected delivery layer for the editor HTML/JS.
+- Updated the staged Branchline and PTG launcher labels to the official **MegaFlyer Studio** name. Relevant draft CI checks passed; production links were not modified.
+- Real end-to-end tests, an approved server-enforced hosting approach, revoked/expired-account behavior and physical-device/Google Drive acceptance remain unresolved. Do not mark app-wide PTG gate released without these proofs.
