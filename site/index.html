@@ -2877,11 +2877,11 @@ async function lookupLive(barcode,session) {
   throw Error('PTG returned too many results. Enter the full barcode.');
 }
 function feedback(message) { $('feedback').textContent=message; }
-function history(action, person='', note='') {
+function recordFlyerHistory(action, person='', note='') {
   state.history.unshift({action,person,note,time:new Date().toISOString()});
 }
 function edited(message='Saved in this browser.') {
-  if(state.status!=='Draft') history('Returned to draft after editing');
+  if(state.status!=='Draft') recordFlyerHistory('Returned to draft after editing');
   state.status='Draft';
   save();
   refresh();
@@ -4679,7 +4679,7 @@ function transition(target) {
   if(!person) {feedback('Enter the reviewer’s name.');$('reviewer').focus();return;}
   if(target==='Changes requested'&&!note) {feedback('Enter the changes needed.');$('reviewNote').focus();return;}
   state.status=target;
-  history(target,person,note);
+  recordFlyerHistory(target,person,note);
   $('reviewNote').value='';
   save();refresh();
 }
@@ -6253,6 +6253,7 @@ const CLOUD_BUCKET='flyer-studio-private';
 const CLOUD_AUTH_STORE='flyer-studio-cloud-auth-v1';
 let cloudSession=null,cloudUser=null,cloudProject=null,cloudRevision=0,cloudLastDocument=null;
 let cloudSaving=false,cloudDirty=false,cloudConflict=false,cloudTimer=null,cloudInitialized=false,cloudSuspend=false;
+let cloudRefreshPromise=null,cloudRetryDelay=3500;
 let cloudProjects=[],cloudVersions=[];
 
 /* Google Drive backups: users explicitly authorize drive.file; access tokens live in memory only. */
@@ -6263,6 +6264,7 @@ const DRIVE_FOLDER='Flyer Studio Backups';
 const DRIVE_AUTO_INTERVAL=15*60*1000;
 let driveClientId='',driveAuto=true,driveToken='',driveTokenExpiry=0,driveFolderId='',driveUploading=false;
 let driveLastBackedRevision=0,driveLastBackupAt=0,driveLibraryPromise=null,driveTokenClient=null,driveLastProjectId='';
+let drivePendingBackup=null,drivePendingTimer=null;
 try{driveClientId=localStorage.getItem(DRIVE_CLIENT_STORE)||'';driveAuto=localStorage.getItem(DRIVE_AUTO_STORE)!=='false';}catch{}
 function driveStatus(message,good=false){const el=$c('driveStatus');if(el){el.textContent=message;el.dataset.ok=String(good);}}
 function driveRender(){
@@ -6343,29 +6345,61 @@ async function driveUploadFile(name,content,folderId){
   method:'POST',headers:{'Content-Type':'multipart/related; boundary='+boundary},body:payload
  });
 }
+function driveQueueBackup(input,delay=0){
+ if(!driveAuto||!input.project?.id||!Number.isInteger(input.revision))return;
+ // Preserve the latest successfully saved snapshot while a transfer or throttle is active.
+ if(!drivePendingBackup||drivePendingBackup.project.id!==input.project.id||
+    drivePendingBackup.revision<=input.revision)drivePendingBackup=input;
+ clearTimeout(drivePendingTimer);
+ drivePendingTimer=setTimeout(()=>{
+  drivePendingTimer=null;
+  const pending=drivePendingBackup;drivePendingBackup=null;
+  if(pending)void driveBackupNow(pending);
+ },Math.max(0,delay));
+}
 async function driveBackupNow({force=false,packed=null,project=null,revision=null}={}){
  if(!cloudUser||!cloudProject){if(force)driveStatus('Sign in and select a Supabase cloud project first.');return;}
  if(!force&&!driveAuto)return;
- if(driveUploading){if(force)driveStatus('A Drive backup is already running.');return;}
- if(!driveToken||Date.now()>driveTokenExpiry-60000){if(force)driveStatus('Connect Google Drive to back up this flyer.');else if(driveLastBackedRevision)driveStatus('Google Drive session expired. Supabase is still saving; reconnect Drive for more backups.');driveRender();return;}
- const target=project||cloudProject;const targetRevision=revision||cloudRevision;
+ if(force&&!packed){
+  if(cloudSaving){driveStatus('Finish the current Supabase save before backing up.');return;}
+  if(cloudDirty){
+   await cloudSaveNow(true);
+   if(cloudDirty||cloudConflict||!cloudUser){driveStatus('Supabase save is not complete. Your local flyer is safe; back it up after cloud saving succeeds.');return;}
+  }
+ }
+ const target=project||cloudProject,targetRevision=revision??cloudRevision;
  if(!target?.id||!Number.isInteger(targetRevision)||targetRevision<1)return;
+ const pending={packed:packed||cloudLastDocument,project:target,revision:targetRevision};
+ if(!pending.packed){if(force)driveStatus('Save the flyer to Supabase before making a Drive backup.');return;}
+ if(driveUploading){if(!force)driveQueueBackup(pending);else driveStatus('A Google Drive backup is already running.');return;}
+ if(!driveToken||Date.now()>driveTokenExpiry-60000){
+  if(force)driveStatus('Connect Google Drive to back up this flyer.');
+  else if(driveLastBackedRevision)driveStatus('Google Drive authorization expired. Supabase saves continue; reconnect Drive for backups.');
+  driveRender();return;
+ }
  if(!force&&driveLastProjectId===target.id&&driveLastBackedRevision>=targetRevision)return;
- if(!force&&driveLastBackupAt&&Date.now()-driveLastBackupAt<DRIVE_AUTO_INTERVAL)return;
+ const wait=DRIVE_AUTO_INTERVAL-(Date.now()-driveLastBackupAt);
+ if(!force&&driveLastBackupAt&&wait>0){driveQueueBackup(pending,wait);return;}
  driveUploading=true;driveStatus('Creating Google Drive backup…');driveRender();
  try{
-  const document=packed||await cloudPack(structuredClone(state));
   const backup={kind:'FlyerStudioGoogleDriveBackup',version:1,createdAt:new Date().toISOString(),
-   project:{id:target.id,name:target.name,revision:targetRevision},document};
+   project:{id:target.id,name:target.name,revision:targetRevision},document:pending.packed};
   const folder=await driveEnsureFolder();
   const safeName=(target.name||'Flyer').replace(/[\\/:*?"<>|]/g,'_').slice(0,65);
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
-  const file=await driveUploadFile('Flyer Studio - '+safeName+' - r'+targetRevision+' - '+stamp+'.json',backup,folder);
+  await driveUploadFile('Flyer Studio - '+safeName+' - r'+targetRevision+' - '+stamp+'.json',backup,folder);
   driveLastBackedRevision=targetRevision;driveLastProjectId=target.id;driveLastBackupAt=Date.now();
   driveStatus('Backup saved to Google Drive · '+safeName+' · revision '+targetRevision,true);
   if(force)await driveBrowseBackups();
  }catch(e){driveStatus('Google Drive backup failed: '+cloudErr(e)+'. Supabase cloud saving is unaffected.');}
- finally{driveUploading=false;driveRender();}
+ finally{
+  driveUploading=false;driveRender();
+  if(drivePendingBackup){
+   const next=drivePendingBackup;drivePendingBackup=null;
+   // Respect backup throttling while preserving the most recent committed revision.
+   driveQueueBackup(next,Math.max(0,DRIVE_AUTO_INTERVAL-(Date.now()-driveLastBackupAt)));
+  }
+ }
 }
 async function driveBrowseBackups(){
  const list=$c('driveBackupList');if(!list)return;
@@ -6374,12 +6408,19 @@ async function driveBrowseBackups(){
  try{
   const folder=await driveEnsureFolder();
   const q="'"+driveQuote(folder)+"' in parents and trashed = false and mimeType = 'application/json'";
-  const url='https://www.googleapis.com/drive/v3/files?'+new URLSearchParams({q,fields:'nextPageToken,files(id,name,createdTime,size)',orderBy:'createdTime desc',pageSize:'50'});
-  const response=await driveFetch(url);list.replaceChildren();
-  if(!response.files?.length){list.textContent='No Google Drive backups yet.';return;}
-  for(const item of response.files){
+  const all=[];let pageToken='';
+  do{
+   const args={q,fields:'nextPageToken,files(id,name,createdTime,size)',orderBy:'createdTime desc',pageSize:'100'};
+   if(pageToken)args.pageToken=pageToken;
+   const response=await driveFetch('https://www.googleapis.com/drive/v3/files?'+new URLSearchParams(args));
+   all.push(...(response.files||[]));pageToken=response.nextPageToken||'';
+  }while(pageToken&&all.length<300);
+  list.replaceChildren();
+  if(!all.length){list.textContent='No Google Drive backups yet.';return;}
+  for(const item of all.slice(0,300)){
    cloudItem(list,item.name,new Date(item.createdTime).toLocaleString(),[['Open a local copy',()=>driveRestoreBackup(item)]]);
   }
+  if(pageToken)list.append(document.createTextNode('Showing the most recent 300 backups.'));
  }catch(e){list.textContent='Could not read Google Drive backups: '+cloudErr(e);}
 }
 async function driveRestoreBackup(file){
@@ -6388,7 +6429,8 @@ async function driveRestoreBackup(file){
   const record=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media');
   if(record?.kind!=='FlyerStudioGoogleDriveBackup'||record.version!==1)throw Error('Unsupported Flyer Studio backup format.');
   const value=cloudCheckFlyer(await cloudUnpack(record.document));
-  if(cloudProject&&cloudDirty){await cloudSaveNow(true);if(cloudDirty)throw Error('Finish saving the current cloud project before restoring.');}
+  if(cloudSaving)throw Error('Finish the current cloud save before restoring.');
+   if(cloudProject&&cloudDirty){await cloudSaveNow(true);if(cloudDirty||cloudConflict)throw Error('Finish saving the current cloud project before restoring.');}
   cloudDetach();cloudSuspend=true;
   try{state=structuredClone(value);state.campaign={...defaultCampaign,...state.campaign,
    brandHeader:brandHeaderChoice(state.campaign),headlineDesign:headlineDesignChoice(state.campaign)};
@@ -6420,7 +6462,7 @@ function driveMakeUI(){
  $c('driveSaveClient').onclick=()=>{if(driveSetClientId())void driveLoadLibrary().catch(e=>driveStatus(e.message));};
  $c('driveConnect').onclick=driveConnect;$c('driveBackup').onclick=()=>driveBackupNow({force:true});
  $c('driveBrowse').onclick=driveBrowseBackups;
- $c('driveAuto').onchange=e=>{driveAuto=!!e.target.checked;try{localStorage.setItem(DRIVE_AUTO_STORE,String(driveAuto));}catch{}driveStatus('Automatic Drive backups '+(driveAuto?'enabled.':'disabled.'),true);driveRender();};
+ $c('driveAuto').onchange=e=>{driveAuto=!!e.target.checked;if(!driveAuto){clearTimeout(drivePendingTimer);drivePendingBackup=null;}try{localStorage.setItem(DRIVE_AUTO_STORE,String(driveAuto));}catch{}driveStatus('Automatic Drive backups '+(driveAuto?'enabled.':'disabled.'),true);driveRender();};
  driveRender();if(driveClientId)void driveLoadLibrary().catch(()=>{});
 }
 
@@ -6432,31 +6474,90 @@ function cloudCreds(){return {apikey:CLOUD_KEY,Accept:'application/json'};}
 function cloudStoreSession(value){try{if(value)localStorage.setItem(CLOUD_AUTH_STORE,JSON.stringify(value));else localStorage.removeItem(CLOUD_AUTH_STORE);}catch{}}
 function cloudApplySession(result){
   if(!result?.access_token||!result?.refresh_token)throw Error('Authentication response missing a session.');
-  cloudSession={access_token:result.access_token,refresh_token:result.refresh_token,expires_at:result.expires_at||Math.floor(Date.now()/1000)+(result.expires_in||3600),user:result.user||cloudSession?.user};
+  cloudSession={access_token:result.access_token,refresh_token:result.refresh_token,expires_at:result.expires_at||Math.floor(Date.now()/1000)+(result.expires_in||3600),user:result.user===undefined?(cloudSession?.user||null):result.user};
   cloudUser=cloudSession.user||null;cloudStoreSession(cloudSession);cloudRenderAuth();
 }
 async function cloudAuthRaw(path,body,method='POST'){
  const response=await fetch(CLOUD_ROOT+'/auth/v1/'+path,{method,headers:{...cloudCreds(),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
  const data=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(data.msg||data.message||data.error_description||data.error||'Authentication error ('+response.status+').');
+ if(!response.ok){const error=Error(data.msg||data.message||data.error_description||data.error||'Authentication error ('+response.status+').');error.status=response.status;throw error;}
  return data;
+}
+function cloudReadRotatedSession(current){
+ if(typeof localStorage==='undefined')return null;
+ let saved;
+ try{saved=JSON.parse(localStorage.getItem(CLOUD_AUTH_STORE)||'null');}catch{return null;}
+ if(!saved?.access_token||!saved?.refresh_token||saved.refresh_token===current.refresh_token)return null;
+ if(current.user?.id&&saved.user?.id&&current.user.id!==saved.user.id)return null;
+ cloudSession=saved;cloudUser=saved.user||current.user||null;cloudRenderAuth();
+ return saved.access_token;
+}
+async function cloudRefreshToken(){
+ if(!cloudSession?.refresh_token)throw Error('Sign in to the Flyer Studio cloud account first.');
+ if(cloudRefreshPromise)return cloudRefreshPromise;
+ cloudRefreshPromise=(async()=>{
+  const renew=async()=>{
+   if(!cloudSession?.refresh_token)throw Error('Cloud account changed during session renewal.');
+   let current=cloudSession;
+   const newest=cloudReadRotatedSession(current);
+   if(newest&&(cloudSession.expires_at||0)*1000>Date.now()+60000)return newest;
+   current=cloudSession;
+   try{
+    const next=await cloudAuthRaw('token?grant_type=refresh_token',{refresh_token:current.refresh_token});
+    if(cloudSession!==current){
+     // Another tab or sign-in action has already changed the active account.
+     if(cloudSession?.access_token)return cloudSession.access_token;
+     throw Error('Cloud account changed during session renewal.');
+    }
+    cloudApplySession(next);
+    return cloudSession.access_token;
+   }catch(error){
+    if([400,401,403].includes(error.status)){
+     // A different browser tab may have rotated this single-use refresh token.
+     const updated=cloudReadRotatedSession(current);
+     if(updated)return updated;
+     error.isRefreshFailure=true;
+     if(cloudSession===current){
+      // Only revoke demonstrably invalid credentials; leave browser flyer data intact.
+      cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;
+      cloudRevision=0;cloudConflict=false;clearTimeout(cloudTimer);cloudStoreSession(null);
+      driveToken='';driveTokenExpiry=0;driveFolderId='';driveRender();cloudRenderAuth();
+     }
+    }
+    throw error;
+   }
+  };
+  // Browser Web Locks serialize refresh-token rotation between tabs on the same origin.
+  if(typeof navigator!=='undefined'&&navigator.locks?.request)
+   return navigator.locks.request('flyer-studio-cloud-session-refresh',renew);
+  return renew();
+ })();
+ try{return await cloudRefreshPromise;}finally{cloudRefreshPromise=null;}
 }
 async function cloudToken(){
  if(!cloudSession?.access_token)throw Error('Sign in to the Flyer Studio cloud account first.');
- if((cloudSession.expires_at||0)*1000<Date.now()+60000){
-   const next=await cloudAuthRaw('token?grant_type=refresh_token',{refresh_token:cloudSession.refresh_token});
-   cloudApplySession(next);
- }
+ if((cloudSession.expires_at||0)*1000<Date.now()+60000)await cloudRefreshToken();
  return cloudSession.access_token;
 }
 async function cloudRequest(path,{method='GET',data,headers={},binary=false,raw=false}={}){
- const token=await cloudToken();
- const h={...cloudCreds(),Authorization:'Bearer '+token,...headers};
- if(data!==undefined&&!binary&&!('Content-Type'in h))h['Content-Type']='application/json';
- const response=await fetch(CLOUD_ROOT+path,{method,headers:h,body:data===undefined?undefined:binary?data:JSON.stringify(data),cache:'no-store'});
- if(!response.ok){let detail='Request failed ('+response.status+').';try{const j=await response.json();detail=j.message||j.error||j.msg||detail;}catch{}throw Error(detail);}
- if(raw)return response;
- const txt=await response.text();return txt?JSON.parse(txt):null;
+ let requestToken='';
+ const send=async()=>{
+  const token=await cloudToken();requestToken=token;
+  const h={...cloudCreds(),Authorization:'Bearer '+token,...headers};
+  if(data!==undefined&&!binary&&!('Content-Type'in h))h['Content-Type']='application/json';
+  const response=await fetch(CLOUD_ROOT+path,{method,headers:h,body:data===undefined?undefined:binary?data:JSON.stringify(data),cache:'no-store'});
+  if(!response.ok){let detail='Request failed ('+response.status+').';try{const j=await response.json();detail=j.message||j.error||j.msg||detail;}catch{}const error=Error(detail);error.status=response.status;throw error;}
+  if(raw)return response;
+  const txt=await response.text();return txt?JSON.parse(txt):null;
+ };
+ try{return await send();}
+ catch(error){
+  if(error.status!==401||error.isRefreshFailure)throw error;
+  // Another tab may already have rotated the token while this request was in flight.
+  if(cloudSession?.access_token===requestToken)await cloudRefreshToken();
+  else if(!cloudSession?.access_token)throw error;
+  try{return await send();}catch(retryError){retryError.authRetried=true;throw retryError;}
+ }
 }
 function cloudTable(name,params=''){return '/rest/v1/'+encodeURIComponent(name)+(params?'?'+params:'');}
 function cloudEncoded(value){return encodeURIComponent(value);}
@@ -6506,9 +6607,10 @@ async function cloudSignUp(){
 }
 async function cloudSignOut(){
  if(cloudSaving){cloudInfo('Finish the current cloud save before signing out.');return;}
+ if(cloudDirty&&!confirm('The latest edits are not saved to Supabase. Sign out anyway? They will remain in this browser only.'))return;
  try{if(cloudSession?.access_token)await cloudRequest('/auth/v1/logout',{method:'POST'});}catch{}
  cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;cloudDirty=false;
- clearTimeout(cloudTimer);cloudStoreSession(null);cloudProjects=[];cloudVersions=[];driveToken='';driveTokenExpiry=0;driveFolderId='';driveRender();cloudRenderAuth();cloudDrawProjects();cloudDrawVersions();cloudInfo('Signed out. Your local browser project remains available.');
+ clearTimeout(cloudTimer);cloudStoreSession(null);cloudProjects=[];cloudVersions=[];driveToken='';driveTokenExpiry=0;driveFolderId='';clearTimeout(drivePendingTimer);drivePendingBackup=null;driveRender();cloudRenderAuth();cloudDrawProjects();cloudDrawVersions();cloudInfo('Signed out. Your local browser project remains available.');
 }
 function cloudBase64(bytes){let out='';for(let i=0;i<bytes.length;i+=16384)out+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(out);}
 function cloudBytes(b64){const str=atob(b64),out=new Uint8Array(str.length);for(let i=0;i<str.length;i++)out[i]=str.charCodeAt(i);return out;}
@@ -6530,28 +6632,28 @@ async function cloudUnpack(document){
 function cloudCheckFlyer(value){if(!value||typeof value!=='object'||!value.campaign||typeof value.campaign!=='object'||!Array.isArray(value.offers)||value.offers.length>500)throw Error('This cloud file is not a supported Flyer Studio project.');return value;}
 function cloudQueue(){
  if(!cloudUser||!cloudProject||cloudSuspend||cloudConflict)return;
- cloudDirty=true;clearTimeout(cloudTimer);cloudStatus('Unsaved changes · syncing shortly');cloudTimer=setTimeout(()=>cloudSaveNow(false),3500);
+ cloudDirty=true;clearTimeout(cloudTimer);cloudStatus(cloudRetryDelay>3500?'Unsaved changes · retrying cloud sync':'Unsaved changes · syncing shortly');cloudTimer=setTimeout(()=>cloudSaveNow(false),cloudRetryDelay);
 }
 async function cloudSaveNow(interactive=true){
  if(!cloudUser||!cloudProject){if(interactive)cloudInfo('Select or create a cloud project first.');return;}
  if(cloudConflict){cloudInfo('A newer cloud version exists. Open the latest cloud copy or save a new copy to prevent overwriting it.');return;}
  if(cloudSaving){cloudDirty=true;return;}
- cloudSaving=true;const savingProject=cloudProject.id,oldRevision=cloudRevision,oldDocument=cloudLastDocument;
+ cloudSaving=true;const savingProject=cloudProject.id,oldRevision=cloudRevision;
  clearTimeout(cloudTimer);cloudDirty=false;cloudStatus('Saving cloud project…');cloudRenderAuth();
  try{
   const snapshot=structuredClone(state),document=await cloudPack(snapshot);
   const body={document,revision:oldRevision+1,updated_at:new Date().toISOString(),status:['Draft','In review','Changes requested','Approved'].includes(snapshot.status)?snapshot.status:'Draft'};
   const records=await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+savingProject+'&revision=eq.'+oldRevision+'&select=id,name,revision,updated_at'),{method:'PATCH',data:body,headers:{Prefer:'return=representation'}});
   if(!records?.length){cloudConflict=true;cloudInfo('Cloud conflict: this project was updated elsewhere. Your browser copy is safe. Open the latest cloud project, or save a separate cloud copy.');return;}
-  if(oldDocument){try{await cloudRequest(cloudTable('flyer_cloud_versions'),{method:'POST',data:{project_id:savingProject,owner_id:cloudUser.id,revision:oldRevision,document:oldDocument},headers:{Prefer:'resolution=ignore-duplicates,return=minimal'}});}catch(err){console.warn('Could not retain prior cloud revision:',err.message);}}
-  cloudRevision=records[0].revision;cloudProject={...cloudProject,...records[0]};cloudLastDocument=document;cloudRenderAuth();
+  cloudRevision=records[0].revision;cloudProject={...cloudProject,...records[0]};cloudLastDocument=document;cloudRetryDelay=3500;cloudRenderAuth();
   cloudStatus('Saved to cloud · revision '+cloudRevision,true);
   void driveBackupNow({packed:document,project:cloudProject,revision:cloudRevision});
   if(interactive)cloudInfo('Cloud save complete. Open this project from another device after signing in.',true);
- }catch(e){cloudDirty=true;cloudInfo('Cloud save failed: '+cloudErr(e)+'. The local browser flyer remains intact.');}
+ }catch(e){cloudDirty=true;cloudRetryDelay=Math.min(120000,Math.max(15000,cloudRetryDelay*2));cloudInfo('Cloud save failed: '+cloudErr(e)+'. Your browser flyer remains intact; cloud sync will retry.');}
  finally{cloudSaving=false;if(cloudDirty&&!cloudConflict&&cloudProject)cloudQueue();}
 }
 async function cloudNewCopy(){
+ if(cloudSaving)return cloudInfo('Finish the current cloud save before creating another project.');
  if(!cloudUser)return cloudInfo('Sign in first.');
  const name=($c('cloudProjectName').value||'').trim().slice(0,120);
  if(!name){cloudInfo('Enter a name for the cloud project.');return;}
@@ -6579,6 +6681,7 @@ async function cloudOpenProject(id){
  if(!cloudUser)return;
  if(!confirm('Open this cloud project? The current browser flyer will be replaced. Download a local project backup first if you need it.'))return;
  if(cloudSaving)return cloudInfo('Finish the pending save first.');
+ if(cloudDirty)return cloudInfo('Unsaved cloud changes are pending. Save the current cloud project before opening another flyer.');
  cloudBusy(true);try{
   const rows=await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+id+'&select=id,name,revision,status,updated_at,document&limit=1'));
   const p=rows?.[0];if(!p)throw Error('Project not found or no longer accessible.');
@@ -6594,6 +6697,7 @@ async function cloudOpenProject(id){
  }catch(e){cloudInfo('Could not open cloud project: '+cloudErr(e));}finally{cloudBusy(false)}
 }
 async function cloudDeleteProject(p){
+ if(cloudSaving)return cloudInfo('Finish the current cloud save before deleting a project.');
  if(!confirm('Permanently delete cloud project "'+p.name+'" and its saved revisions? The current browser flyer will remain intact.'))return;
  try{
   await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+p.id),{method:'DELETE'});
@@ -6601,7 +6705,7 @@ async function cloudDeleteProject(p){
   cloudInfo('Deleted cloud project: '+p.name+'.',true);await cloudRefreshList();
  }catch(e){cloudInfo('Delete failed: '+cloudErr(e));}
 }
-function cloudDetach(){clearTimeout(cloudTimer);cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;cloudDirty=false;cloudRenderAuth();cloudInfo('Disconnected this browser flyer from automatic cloud saves. Your saved cloud project is still available.');}
+function cloudDetach(){if(cloudSaving)return cloudInfo('Finish the current cloud save before working locally.');clearTimeout(cloudTimer);cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;cloudDirty=false;cloudRenderAuth();cloudInfo('Disconnected this browser flyer from automatic cloud saves. Your saved cloud project is still available.');}
 async function cloudLoadVersions(){
  if(!cloudProject)return;
  try{cloudVersions=await cloudRequest(cloudTable('flyer_cloud_versions','project_id=eq.'+cloudProject.id+'&select=id,revision,created_at&order=revision.desc&limit=30'))||[];cloudDrawVersions();}
@@ -6611,7 +6715,9 @@ function cloudDrawVersions(){const list=$c('cloudVersions');if(!list)return;list
  for(const item of cloudVersions){cloudItem(list,'Revision '+item.revision,new Date(item.created_at).toLocaleString(),[['Restore',()=>cloudRestoreVersion(item)]]);}
 }
 async function cloudRestoreVersion(version){
+ if(cloudSaving)return cloudInfo('Finish the current cloud save before restoring a revision.');
  if(!cloudProject)return;
+ if(cloudDirty)return cloudInfo('Unsaved changes are pending. Save your cloud project before restoring a revision.');
  if(!confirm('Restore revision '+version.revision+' into the browser and save it as a new cloud revision?'))return;
  try{
   const rows=await cloudRequest(cloudTable('flyer_cloud_versions','id=eq.'+version.id+'&select=document&limit=1'));
@@ -6715,17 +6821,82 @@ function cloudMakeUI(){
  const oldSave=save;save=function(...args){const result=oldSave(...args);cloudQueue();return result;};
  const oldPowerLoad=powerLoad;powerLoad=async function(...args){const result=await oldPowerLoad(...args);cloudUpdateLocalPhotoOptions();return result;};
  const oldPowerRefresh=powerRefreshControls;powerRefreshControls=function(...args){const result=oldPowerRefresh(...args);cloudUpdateLocalPhotoOptions();return result;};
+ window.addEventListener('online',()=>{if(cloudDirty&&cloudUser&&cloudProject&&!cloudSaving&&!cloudConflict){cloudRetryDelay=3500;cloudQueue();}});
+ window.addEventListener('storage',event=>{
+  if(event.key!==CLOUD_AUTH_STORE)return;
+  let next=null;try{next=event.newValue?JSON.parse(event.newValue):null;}catch{return;}
+  if(!next?.access_token||!next?.refresh_token){
+   cloudSession=null;cloudUser=null;cloudProject=null;cloudLastDocument=null;
+   cloudRevision=0;cloudConflict=false;cloudDirty=false;
+   clearTimeout(cloudTimer);driveToken='';driveTokenExpiry=0;driveFolderId='';
+   cloudRenderAuth();cloudInfo('Cloud session ended in another tab. Your local flyer is safe.');
+   return;
+  }
+  if(cloudSession?.user?.id&&next.user?.id&&cloudSession.user.id!==next.user.id){
+   cloudProject=null;cloudLastDocument=null;cloudRevision=0;cloudConflict=false;
+   cloudDirty=false;clearTimeout(cloudTimer);
+   cloudInfo('Cloud account changed in another tab. This browser flyer is now local-only.');
+  }
+  cloudSession=next;cloudUser=next.user||null;cloudRenderAuth();
+ });
  cloudRenderAuth();cloudRecoverSession();
 }
 async function cloudRecoverSession(){
+ // A Google OAuth redirect carries short-lived credentials in the URL fragment.
+ // Read them once, then clear the fragment before rendering UI or doing network work.
+ const fragment=new URLSearchParams(location.hash.replace(/^#/,''));
+ const hasCallback=['access_token','refresh_token','error','error_description'].some(key=>fragment.has(key));
+ if(hasCallback){
+  try{window.history.replaceState(window.history.state,'',location.pathname+location.search);}
+  catch(e){console.warn('Could not clear the OAuth callback URL:',cloudErr(e));}
+ }
+ if(fragment.has('error')){
+  cloudInfo('Google sign-in was not completed. Please try again.');
+  return;
+ }
  try{
-  const fragment=new URLSearchParams(location.hash.replace(/^#/,''));
-  if(fragment.has('access_token')&&fragment.has('refresh_token')){
+  if(hasCallback){
+   if(!fragment.get('access_token')||!fragment.get('refresh_token'))throw Error('Incomplete Google sign-in response.');
    cloudApplySession({access_token:fragment.get('access_token'),refresh_token:fragment.get('refresh_token'),expires_in:Number(fragment.get('expires_in')||3600),user:null});
-   history.replaceState(null,'',location.pathname+location.search);
-  }else {const saved=JSON.parse(localStorage.getItem(CLOUD_AUTH_STORE)||'null');if(saved?.access_token&&saved?.refresh_token){cloudSession=saved;cloudUser=saved.user||null;}}
-  if(cloudSession){const user=await cloudRequest('/auth/v1/user');cloudUser=user;cloudSession.user=user;cloudStoreSession(cloudSession);cloudRenderAuth();cloudInfo('Cloud account connected. Choose a cloud project or save a new copy to enable autosync.',true);await cloudRefreshList();await cloudListPhotos();}
- }catch(e){cloudSession=null;cloudUser=null;cloudStoreSession(null);cloudRenderAuth();cloudInfo('Cloud session expired. Please sign in again.');}
+  }else{
+   let saved=null;
+   try{saved=JSON.parse(localStorage.getItem(CLOUD_AUTH_STORE)||'null');}
+   catch{cloudStoreSession(null);}
+   if(saved?.access_token&&saved?.refresh_token){cloudSession=saved;cloudUser=null;}
+  }
+  if(!cloudSession)return;
+  let user;
+  try{user=await cloudRequest('/auth/v1/user');}
+  catch(error){
+   if(error.isRefreshFailure||error.authRetried)throw error;
+   if(error.status===401||error.status===403){
+    // A saved JWT may have been revoked or expired before its reported deadline.
+    try{
+     await cloudRefreshToken();
+     user=await cloudRequest('/auth/v1/user');
+    }catch(refreshError){
+     if(refreshError.isRefreshFailure||[400,401,403].includes(refreshError.status))throw refreshError;
+     cloudUser=null;cloudRenderAuth();
+     cloudInfo('Unable to check your cloud session right now. It remains saved; refresh the page or retry sign-in.');
+     return;
+    }
+   }else{
+    // Network / server failures must not erase valid locally stored credentials.
+    cloudUser=null;cloudRenderAuth();
+    cloudInfo('Unable to check your cloud session right now. It remains saved; refresh the page or retry sign-in.');
+    return;
+   }
+  }
+  if(!user?.id)throw Error('Cloud provider did not return an account.');
+  cloudUser=user;cloudSession.user=user;cloudStoreSession(cloudSession);cloudRenderAuth();
+  cloudInfo('Cloud account connected. Choose a cloud project or save a new copy to enable autosync.',true);
+ }catch(error){
+  cloudSession=null;cloudUser=null;cloudStoreSession(null);cloudRenderAuth();
+  cloudInfo('Cloud sign-in could not be completed: '+cloudErr(error));
+  return;
+ }
+ // Optional project/photo lists can fail independently without logging the user out.
+ await Promise.allSettled([cloudRefreshList(),cloudListPhotos()]);
 }
 function cloudBootstrap(){if($c('powerModal'))cloudMakeUI();else window.addEventListener('flyerstudio:ready',cloudMakeUI,{once:true});}
 window.addEventListener('DOMContentLoaded',cloudBootstrap,{once:true});

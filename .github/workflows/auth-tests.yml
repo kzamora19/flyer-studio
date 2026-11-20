@@ -1,0 +1,42 @@
+name: Flyer Studio authentication checks
+on:
+  pull_request:
+    paths:
+      - "site/index.html"
+      - "tests/**"
+      - ".github/workflows/auth-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test authentication recovery and JavaScript syntax
+        run: node --test tests/*.test.mjs
+
+  browser-smoke:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Playwright test browser
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.65.1
+          npx playwright install chromium --with-deps
+      - name: Test actual flyer browser using fake cloud and Google Drive accounts
+        run: node tests/browser-cloud-smoke.mjs
