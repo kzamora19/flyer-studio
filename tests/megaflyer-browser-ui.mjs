@@ -75,7 +75,35 @@ try{
  await page.locator('#editorMenuToggle').click();
  assert.equal(await page.locator('#studioNav').isVisible(),true);
  assert.equal(await page.locator('#studioNav #layoutSettings').count(),1,'Settings belongs in menu');
-
+ // Every editor dialog should open centered, without blocking pointer input behind it.
+ async function checkEditorCentered(wrapper,content,label){
+  const result=await page.locator(content).evaluate(el=>{
+   const rect=el.getBoundingClientRect(),wrapper=el.parentElement;
+   return {
+    centerX:rect.left+rect.width/2,centerY:rect.top+rect.height/2,
+    viewportX:innerWidth/2,viewportY:innerHeight/2,
+    outerPointer:getComputedStyle(wrapper).pointerEvents,
+    innerPointer:getComputedStyle(el).pointerEvents
+   };
+  });
+  assert.ok(Math.abs(result.centerX-result.viewportX)<=3
+      &&Math.abs(result.centerY-result.viewportY)<=3,
+      label+' should open centered in the viewport: '+JSON.stringify(result));
+  assert.equal(result.outerPointer,'none',label+' must leave the underlying flyer interactive');
+  assert.equal(result.innerPointer,'auto',label+' contents must remain interactive');
+ }
+ const editorCases=[
+  ['#layoutSettings','#settingsDialog','#settingsDialog .uiModalBox','#settingsClose','Appearance settings'],
+  ['#slotFields .numberGrid button:first-child','#editCardDialog','#editCardDialog .uiModalBox','#cardDialogClose','Product card editor'],
+  ['#manageSectionsQuick','#sectionDialog','#sectionDialog .uiModalBox','#closeSectionDialog','Section manager'],
+  ['#addHeaderQuick','#headerDialog','#headerDialog .uiModalBox','#closeHeaderDialog','Header editor']
+ ];
+ for(const [trigger,wrapper,content,close,label] of editorCases){
+  await page.locator(trigger).first().click();
+  await page.locator(wrapper+':visible').waitFor();
+  await checkEditorCentered(wrapper,content,label);
+  await page.locator(close).click();
+ }
  await page.locator('#powerLauncher').click();
  assert.equal(await page.locator('#powerModal').isVisible(),true);
  assert.equal(await page.locator('#powerModal .powerDialog').getAttribute('aria-modal'),'false');
@@ -84,6 +112,7 @@ try{
    inner:getComputedStyle(el.querySelector('.powerDialog')).pointerEvents
  }));
  assert.deepEqual(powerPointers,{outer:'none',inner:'auto'});
+ await checkEditorCentered('#powerModal','#powerModal .powerDialog','Studio+ Tools');
  // Toolbar remains usable behind the nonblocking Studio+ panel.
  await page.locator('#back').click();
  assert.equal(await page.locator('#back').getAttribute('aria-pressed'),'true');
@@ -117,6 +146,16 @@ try{
    'Shared Asset Library should initially open centered on mobile: '+JSON.stringify(mobilePopup));
  await page.locator('#sharedAssetClose').click();
  await page.setViewportSize({width:600,height:800});
+ // Mobile panels must be centered as well, not pinned to the bottom/right.
+ for(const [trigger,wrapper,content,close,label] of [
+  editorCases[0],editorCases[1],editorCases[2],editorCases[3],
+  ['#powerLauncher','#powerModal','#powerModal .powerDialog','#powerClose','Studio+ Tools']
+ ]){
+  await page.locator(trigger).first().click();
+  await page.locator(wrapper+':visible').waitFor();
+  await checkEditorCentered(wrapper,content,label+' on mobile');
+  await page.locator(close).click();
+ }
  const mobile=await page.locator('.flyer-tab-shell>.toolbar').evaluate(el=>({
    wrap:getComputedStyle(el).flexWrap,
    scrollWidth:el.scrollWidth,clientWidth:el.clientWidth
