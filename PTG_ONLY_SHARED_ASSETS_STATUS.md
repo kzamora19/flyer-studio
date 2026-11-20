@@ -88,3 +88,12 @@ These are test-only commands; they do not write to Supabase or publish GitHub Pa
 - Added `SHARED_ASSET_RELEASE_CHECKLIST.md`: explicit real-account authorization matrix, multi-device tests, all image-placement destinations, actual front PNG / two-page PDF inspection, manual Google Drive JSON backup/restore and regression sign-off.
 - Supabase Security Advisor still reports informational `rls_enabled_no_policy` for the two backend-only tables (deliberately no direct browser policies), plus the pre-existing `auth_leaked_password_protection` warning; no security settings were changed.
 - Live `main` has only previously approved icon/name/PWA updates. **The Shared Asset Library frontend hardening is not deployed.** Keep the live application, PTG production and Supabase data unchanged until acceptance and explicit release approval.
+
+## November 20, 2026 — PTG account-change event race protection (staged)
+
+- Audited the actual `ptgConnected()` transition point in the development editor and found a race where in-flight asset-list or signed-preview responses could complete after an account change.
+- Added a browser-only `megaflyer:ptg-session-changed` event (no account identifiers or tokens in event detail). The Shared Asset Library immediately clears cached rows, selection and preview upon receiving the event.
+- Added session-ID guards after awaited permissions/list calls and before/after fetching signed image downloads. A stale response is rejected rather than used.
+- Added `tests/shared-assets-session-race.test.cjs` and ran **5 no-network assertions** against the exact edited development sources: event signaling, stale-permissions, stale-asset-list, stale-preview before image fetch, and stale-preview after download begins all passed.
+- Also checked the earlier identity, placement, banner, editor-menu, icon, backup and session-cleanup suites and structural two-page PDF checks in an isolated JavaScript runtime. This is *not* a substitute for native Node full-suite results or interactive browser acceptance.
+- Production `main` and Supabase have not been modified for this change. Real PTG Team Leader/Admin/ordinary/revoked account checks, second device and physical PDF/PNG visual review remain open.

@@ -45,11 +45,18 @@ This checklist applies to `feature/shared-asset-library`. GitHub Pages `main` is
 - [ ] Corrupt a **later** item in a backup and confirm the entire preflight is rejected **before any asset is created**.
 - [ ] Simulate a network failure after the first successful import and confirm the UI clearly reports the partial count.
 
+## Account-switch race acceptance
+
+- [ ] Sign out of PTG while the Shared Asset Library is open. Verify its list, selection and preview clear immediately, without refreshing the page.
+- [ ] Switch from a Team Leader to an ordinary Branch User while a shared-asset **list** or **preview** is loading. Confirm that the old response never repopulates the library or applies an asset.
+- [ ] After a new authorized PTG session, explicitly refresh and verify that only current permissions are used.
+
 ## Regression and release decision
 
 - [ ] Run existing identity, image placement, banner/PDF, menu, and icon regression tests on the **latest checkout**.
 - [ ] Run `node tests/shared-assets-backup.test.cjs`.
 - [ ] Run `node tests/shared-assets-session-cleanup.test.cjs`.
+- [ ] Run `node tests/shared-assets-session-race.test.cjs`.
 - [ ] Verify existing Cloud Workspace, PTG lookups, flyer card editing, and installed app branding still work.
 - [ ] Check privacy and RLS with no new direct public table grants or public Storage access.
 - [ ] Record tester, device/browser, date, actual PDF/PNG evidence, and any failures. Obtain explicit release approval before changing `main`.
