@@ -40,3 +40,25 @@
 - Updated action label `Use on card` to `Use asset` to match product-card, logo and banner destinations.
 - Added `tests/shared-banner-fit.test.cjs` and executed its exact source against the current development `site/index.html`: **20/20 assertions passed** for dimensions, threshold behavior, background clipping, original foreground preservation, canvas state reset and shared PNG/PDF renderer references. These are **code-level and mock-canvas tests**, not a visual print sign-off.
 - Outstanding: update the user's downloaded local development ZIP (it does not auto-sync with GitHub), inspect the revised front banner in Chrome, obtain the actual exported PDF and inspect both rendered pages; test card/logo/back-banner uses and unauthorized/revoked account access. Public Flyer Studio GitHub Pages `main` remains untouched.
+
+## November 20, 2026 — Continued acceptance / quality verification (development branch only)
+- User-supplied Chrome screenshots from the local port-3000 preview establish **real authorized PTG sign-in**, `Authorized asset manager` UI, shared image upload/list/preview, front-headline placement and generation of a **two-page PDF visible in Acrobat**. This is evidence of an actual authorized-account flow, *not* a full Admin/ordinary-user/revocation acceptance.
+- Read-only Supabase checks confirm **one shared asset record** in the existing project, private `flyer-shared-assets` Storage bucket, RLS on `flyer_shared_assets`, and no direct SELECT grants to `anon` or `authenticated`. The PTG-only gateway remains ACTIVE version 2. No new Supabase migration, credentials or changes were made in this round.
+- Improved `site/shared-asset-ui.js` on the feature branch:
+  - **Product-card target** now uses `targetedOffer()` and `attachUploadedPhoto()` for the current filled flyer position, avoiding stale card-modal photo targets.
+  - **Campaign-logo target** uses `readPhoto()`, switches `brandHeader` to `custom`, and calls `edited()` so a custom logo actually becomes visible. Decode failures do not change the header.
+  - **Front/back target** reuses the existing artwork upload controls and correctly differentiates its asynchronous 'sent to editor' message from a completed saved change.
+  - **PTG sign-in shortcut** now opens the actual card lookup/login interface, indicates already-connected status, and advises using local port 3000 instead of 5500 when required.
+- Added repeatable tests: `tests/shared-assets-placement.test.cjs` (**23 passing assertions**) and `tests/shared-flyer-pdf.test.cjs` (**15 passing assertions**). Re-ran the existing `tests/shared-banner-fit.test.cjs` (**20 passing assertions**). **Total 58/58 passed** by executing the current exact feature-branch JavaScript with simulated DOM/canvas/Blob inputs.
+- The PDF tests assert embedded JPEG streams, two page objects, xref and media-box structure; they are **structural tests**, not a human review of the actual flyer artwork. No actual `megasaver-flyer-draft (2).pdf` was attached in the conversation or located in the user's available Library.
+- **Still pending before release:** visually inspect the updated soft-backdrop front banner, upload/review a *fresh actual PDF* from the latest development branch, manually test real product photo / campaign logo / back-banner destinations in browser, verify role denials with real ordinary/inactive/revoked PTG sessions, test a second authorized account/device, and test Google Drive backup export/restore. Avoid changing production data for these tests unless separately approved.
+- Public GitHub Pages `main` remains unchanged: **do not merge or deploy without explicit approval**. User's earlier local ZIP does **not** update automatically when the remote branch changes.
+
+## Repeatable no-Work-credit checks
+In the updated development ZIP, where Node.js is available:
+```powershell
+node tests/shared-assets-placement.test.cjs
+node tests/shared-flyer-pdf.test.cjs
+node tests/shared-banner-fit.test.cjs
+```
+These are test-only commands; they do not write to Supabase or publish GitHub Pages.
