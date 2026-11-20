@@ -53,12 +53,12 @@ This checklist applies to `feature/shared-asset-library`. GitHub Pages `main` is
 
 ## Regression and release decision
 
-- [ ] Run existing identity, image placement, banner/PDF, menu, and icon regression tests on the **latest checkout**.
-- [ ] Run `node tests/shared-assets-backup.test.cjs`.
-- [ ] Run `node tests/shared-assets-session-cleanup.test.cjs`.
-- [ ] Run `node tests/shared-assets-session-race.test.cjs`.
+- [x] Run existing identity, image placement, banner/PDF, menu, and icon regression tests on the **latest checkout**. *(Native Node CI, latest synchronized branch.)*
+- [x] Run `node tests/shared-assets-backup.test.cjs`. *(GitHub Actions.)*
+- [x] Run `node tests/shared-assets-session-cleanup.test.cjs`. *(GitHub Actions.)*
+- [x] Run `node tests/shared-assets-session-race.test.cjs`. *(GitHub Actions.)*
 - [ ] Verify existing Cloud Workspace, PTG lookups, flyer card editing, and installed app branding still work.
-- [ ] Check privacy and RLS with no new direct public table grants or public Storage access.
+- [x] Check privacy and RLS with no new direct public table grants or public Storage access. *(Read-only Supabase metadata; private bucket, RLS enabled, no direct grants for asset table.)*
 - [ ] Record tester, device/browser, date, actual PDF/PNG evidence, and any failures. Obtain explicit release approval before changing `main`.
 
 ## Evidence and limitations
@@ -78,3 +78,13 @@ The development branch has isolated, no-network regression tests for backup vali
 - No real PTG credentials, production asset mutations, backup restore to Supabase, or Google Drive write were used in these checks.
 
 **Still NOT verified (must not silently mark complete):** real active Team Leader/Branch Admin/ordinary/revoked account permission behavior, second-device synchronization, manual Google Drive backup/restore, real customer/product images, and physical print approval. Leave this PR in draft until those acceptance gates are satisfied.
+
+
+## November 20, 2026 — Re-synchronization and dual-browser QA
+
+- Updated the development branch to the latest `main` commit `3aab032532`, keeping the approved desktop/mobile centered Shared Asset Library dialog, horizontal action tabs and Arrange Sections fixes. **Production was not changed by this synchronization.**
+- Re-ran the entire [GitHub Actions development acceptance workflow](https://github.com/kzamora19/flyer-studio/actions/runs/44704485864): native Node regressions **passed** and the existing 300-ppi A4 browser PDF/PNG export smoke **passed** against the synchronized branch.
+- Added `tests/megaflyer-two-device-smoke.mjs`, run inside the same accepted workflow. **Passed:** two isolated Chromium contexts with mocked Team Leader and Admin PTG sessions saw the same central mock assets, exported JSON on browser A, imported it through the real UI on B, then propagated a rename back from A to B after refresh.
+- This **does not** prove genuine Supabase cross-device behavior, role enforcement with real PTG identities, nor real Google Drive upload/download/restore. The JSON was transferred entirely within the test runner (no Google account or production data touched).
+- Read-only security snapshot: Flyer Studio Supabase project ACTIVE_HEALTHY, one metadata record, one object, private `flyer-shared-assets` bucket, RLS enabled, and no direct table privileges for `anon` or `authenticated` on `flyer_shared_assets`. The PTG-gated Edge Function is ACTIVE version 2.
+- Outstanding live acceptance: authorized Team Leader **and** Admin, ordinary/disabled/revoked roles on real PTG; cross-device synchronization with distinct real accounts; one non-destructive test file exported to and restored from real Google Drive; and a printed **real** promotional flyer. Do not claim release completion from mock acceptance alone.
