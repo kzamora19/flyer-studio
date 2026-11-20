@@ -33,3 +33,10 @@
 - [ ] Obtain explicit approval before merging to `main` or deploying the public GitHub Pages site.
 
 **Do not interpret completed backend or simulated tests as full production acceptance.**
+
+## Front banner fit improvement (2026-11-20; not deployed)
+- Diagnosed wide campaign artwork letterboxing: the classic and modern split front layouts use a tall hero panel (330 layout units) while extremely wide artwork is fitted without cropping, producing excessive plain-color bands.
+- Fixed the **shared `banner()` renderer** on the development branch only. When more than 18% of the hero panel would be empty, a softly blurred, cropped copy of the *same* artwork fills the background, while the **unblurred original image** is still contained in full at its natural aspect ratio. This does not change the TechZone area, product-card positions, page size or PDF/PNG rendering paths.
+- Updated action label `Use on card` to `Use asset` to match product-card, logo and banner destinations.
+- Added `tests/shared-banner-fit.test.cjs` and executed its exact source against the current development `site/index.html`: **20/20 assertions passed** for dimensions, threshold behavior, background clipping, original foreground preservation, canvas state reset and shared PNG/PDF renderer references. These are **code-level and mock-canvas tests**, not a visual print sign-off.
+- Outstanding: update the user's downloaded local development ZIP (it does not auto-sync with GitHub), inspect the revised front banner in Chrome, obtain the actual exported PDF and inspect both rendered pages; test card/logo/back-banner uses and unauthorized/revoked account access. Public Flyer Studio GitHub Pages `main` remains untouched.
