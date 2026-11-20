@@ -10,6 +10,10 @@ const float=fs.readFileSync(path.join(root,'floating-panels.js'),'utf8');
 const manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.webmanifest'),'utf8'));
 const svg=fs.readFileSync(path.join(root,'icons','flyer-studio.svg'),'utf8');
 const png=fs.readFileSync(path.join(root,'icons','flyer-studio-192.png'));
+const png512=fs.readFileSync(path.join(root,'icons','flyer-studio-512.png'));
+assert.ok(png512.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),'512 PNG fallback has valid signature');
+assert.equal(png512.readUInt32BE(16),512,'PNG width 512');
+assert.equal(png512.readUInt32BE(20),512,'PNG height 512');
 assert.ok(png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),'PNG fallback has valid signature');
 assert.equal(png.readUInt32BE(16),192,'PNG width 192');
 assert.equal(png.readUInt32BE(20),192,'PNG height 192');
@@ -24,6 +28,7 @@ assert.match(html,/<link rel="icon" type="image\/svg\+xml" href="\.\/icons\/flye
 assert.match(html,/<link rel="apple-touch-icon" sizes="192x192"/,'Apple shortcut fallback set');
 assert.match(html,/<link rel="manifest" href="\.\/manifest\.webmanifest">/,'Web-app manifest linked');
 assert.ok(manifest.icons.some(i=>i.sizes==='192x192'&&i.type==='image/png'),'Install icon PNG fallback');
+assert.ok(manifest.icons.some(i=>i.sizes==='512x512'&&i.type==='image/png'),'Install icon 512 PNG fallback');
 assert.ok(manifest.icons.some(i=>i.sizes==='any'&&i.type==='image/svg+xml'),'Install icon SVG');
 assert.match(html,/<img src="\.\/icons\/flyer-studio\.svg" class="brandAppIcon"/,'Header shows new app symbol');
 assert.match(html,/\.uiModalBackdrop\{background:transparent!important;pointer-events:none!important/,'Editor backdrops do not block application');
