@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">First Megasaver Flyer Studio</title>
+  <desc id="desc">A white folded flyer with a red promotion banner and golden accent on a blue square</desc>
+  <rect width="256" height="256" rx="52" fill="#113a84"/>
+  <rect x="27" y="26" width="202" height="204" rx="36" fill="#0b56cf" opacity=".64"/>
+  <path d="M70 36h87l41 42v134a15 15 0 0 1-15 15H70a15 15 0 0 1-15-15V51a15 15 0 0 1 15-15Z" fill="#fff"/>
+  <path d="M156 36v34a10 10 0 0 0 10 10h32Z" fill="#c9e0ff"/>
+  <path d="M156 36v34a10 10 0 0 0 10 10h32" fill="none" stroke="#9dbbe2" stroke-width="3"/>
+  <rect x="77" y="97" width="98" height="43" rx="9" fill="#e92c32"/>
+  <rect x="88" y="108" width="39" height="8" rx="4" fill="#fff"/>
+  <rect x="88" y="122" width="73" height="6" rx="3" fill="#fff" opacity=".89"/>
+  <rect x="77" y="156" width="98" height="9" rx="4.5" fill="#1453ad"/>
+  <rect x="77" y="176" width="79" height="9" rx="4.5" fill="#1453ad" opacity=".76"/>
+  <rect x="77" y="196" width="58" height="9" rx="4.5" fill="#1453ad" opacity=".51"/>
+  <circle cx="193" cy="188" r="35" fill="#ffcb39" stroke="#fff" stroke-width="7"/>
+  <path d="m193 166 5.7 14.2L214 186l-15.3 5.8L193 206l-5.8-14.2L172 186l15.2-5.8Z" fill="#9f4700"/>
+</svg>
