@@ -21,10 +21,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure Pages
         uses: actions/configure-pages@v5
-      - name: Upload static app
+      - name: Prepare PTG-only public redirect
+        run: python3 scripts/prepare_pages_redirect.py
+      - name: Upload protected-access redirect
         uses: actions/upload-pages-artifact@v4
         with:
-          path: ./site
+          path: ./_pages_redirect
       - name: Publish
         id: deployment
         uses: actions/deploy-pages@v4
