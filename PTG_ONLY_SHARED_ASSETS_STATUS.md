@@ -62,3 +62,11 @@ node tests/shared-flyer-pdf.test.cjs
 node tests/shared-banner-fit.test.cjs
 ```
 These are test-only commands; they do not write to Supabase or publish GitHub Pages.
+
+## Final code-check continuation — November 20, 2026
+- Added `tests/shared-assets-authorization.test.cjs` and executed its actual PTG-only gateway `identity()` function through a mocked network adapter: **20/20 assertions passed**, covering 17 active/unauthorized/revoked/expired/missing-credential scenarios, including early rejection before network calls. **These do not substitute for real revoked-account acceptance.**
+- **Cumulative repeatable regression result: 78/78 assertions passed** (20 PTG auth; 23 image placement; 20 banner-fit; 15 two-page PDF structure).
+- GitHub feature branch includes product-card placement repair, custom logo visibility fix, PTG sign-in shortcut correction and more accurate asynchronous banner-import messaging. Public `main` is unchanged.
+- Private Supabase shared library currently has **1 actual uploaded test asset**; RLS and storage privacy were checked read-only. No Supabase writes or Edge deployments occurred in this continuation.
+- Still cannot verify updated actual PDF print sharpness/alignment without the exported PDF file. Browser screenshots establish earlier PDF generation and front-banner placement, but **not** the appearance after the latest banner-fit update. Real Admin/Branch User/revoked login, second-device sync, image use on each alternate destination and Google Drive restore remain manual acceptance gates.
+- For repeatability, run the four no-dependency test files on the current development ZIP with Node.js; no paid service or Work mode is required.
