@@ -98,6 +98,23 @@ try{
    inner:getComputedStyle(el.querySelector('#sharedAssetDialog')).pointerEvents
  }));
  assert.deepEqual(assetPointers,{outer:'none',inner:'auto'});
+ const desktopPopup=await page.locator('#sharedAssetDialog').evaluate(el=>{
+   const r=el.getBoundingClientRect();
+   return {x:r.left+r.width/2,y:r.top+r.height/2,viewportX:innerWidth/2,viewportY:innerHeight/2};
+ });
+ assert.ok(Math.abs(desktopPopup.x-desktopPopup.viewportX)<=3
+   &&Math.abs(desktopPopup.y-desktopPopup.viewportY)<=3,
+   'Shared Asset Library should initially open centered on desktop: '+JSON.stringify(desktopPopup));
+ await page.locator('#sharedAssetClose').click();
+ await page.setViewportSize({width:600,height:800});
+ await page.locator('#sharedAssetLauncher').click();
+ const mobilePopup=await page.locator('#sharedAssetDialog').evaluate(el=>{
+   const r=el.getBoundingClientRect();
+   return {x:r.left+r.width/2,y:r.top+r.height/2,viewportX:innerWidth/2,viewportY:innerHeight/2};
+ });
+ assert.ok(Math.abs(mobilePopup.x-mobilePopup.viewportX)<=3
+   &&Math.abs(mobilePopup.y-mobilePopup.viewportY)<=3,
+   'Shared Asset Library should initially open centered on mobile: '+JSON.stringify(mobilePopup));
  await page.locator('#sharedAssetClose').click();
  await page.setViewportSize({width:600,height:800});
  const mobile=await page.locator('.flyer-tab-shell>.toolbar').evaluate(el=>({

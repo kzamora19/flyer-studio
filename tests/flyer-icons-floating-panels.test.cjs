@@ -37,6 +37,7 @@ assert.match(html,/#powerModal\{background:transparent!important;pointer-events:
 assert.match(html,/#powerModal \.powerDialog\{pointer-events:auto!important/,'Studio+ controls interactive');
 assert.match(shared,/#sharedAssetModal\{position:fixed;inset:0;z-index:99999;background:transparent;pointer-events:none/,'Shared Asset Library backdrop is pass-through');
 assert.match(shared,/#sharedAssetDialog\{[^}]*pointer-events:auto/,'Shared Asset controls interactive');
+assert.match(shared,/#sharedAssetModal\{[^}]*display:flex;align-items:center;justify-content:center/,'Shared Asset Library opens centered by default');
 assert.equal((shared.match(/aria-modal="false"/g)||[]).length,1,'Shared Asset dialog is nonmodal to assistive tech');
 assert.ok((html.match(/aria-modal="false"/g)||[]).length>=5,'Flyer editor dialogs are nonmodal');
 assert.ok(!html.includes("document.body.classList.add('modalOpen')"),'Editor no longer locks page scrolling');
