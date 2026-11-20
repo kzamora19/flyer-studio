@@ -57,7 +57,7 @@ function render(){
   const info=document.createElement('small');info.textContent=asset.category+' · '+Math.ceil(asset.byte_size/1024)+' KB';
   detail.append(name,info);item.append(detail);
   button(item,'Preview',()=>preview(asset));
-  button(item,'Use on card',()=>apply(asset));
+  button(item,'Use asset',()=>apply(asset));
   if(canManage){button(item,'Rename',()=>rename(asset));button(item,'Replace',()=>replace(asset));button(item,'Delete',()=>remove(asset));}
   list.append(item);
  }
