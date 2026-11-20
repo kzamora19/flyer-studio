@@ -2,7 +2,7 @@
 // This does not authenticate real users or modify any production data.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {readFileSync,existsSync,mkdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,mkdirSync} from 'node:fs';
 import {join,resolve,extname,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright';
@@ -32,6 +32,8 @@ try{
  const ctx=await browser.newContext({acceptDownloads:true,viewport:{width:1440,height:1000}});
  const page=await ctx.newPage();
  page.on('pageerror',error=>failures.push(String(error.message)));
+ page.on('crash',()=>failures.push('Chromium page crashed'));
+ browser.on('disconnected',()=>failures.push('Chromium browser disconnected'));
  await page.route('**/*', async route=>{
   const url=new URL(route.request().url());
   if(url.origin===origin){await route.continue();return;}
@@ -92,12 +94,19 @@ try{
  assert.match(text,/\/Count 2\b/);
  assert.equal((text.match(/\/Subtype \/Image/g)||[]).length,2);
  assert.ok(pdf.length>20000,'PDF contains rendered pages');
+ writeFileSync(join(evidence,'megaflyer-two-page-draft.pdf'),pdf);
+ console.log('PDF render completed:',pdf.length,'bytes.');
+ // A fresh document releases high-resolution preview canvases and avoids
+ // pressure from holding PDF and PNG canvases in a single headless tab.
+ await page.reload({waitUntil:'domcontentloaded'});
+ await page.locator('#png').waitFor({timeout:20000});
  const pngEvent=page.waitForEvent('download',{timeout:90000});
  await page.locator('#png').click();
  const pngDownload=await pngEvent;
  const printed=readFileSync(await pngDownload.path());
  assert.equal(printed.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
  assert.ok(printed.readUInt32BE(16)>=2000&&printed.readUInt32BE(20)>=2800,'PNG export is high resolution');
+ writeFileSync(join(evidence,'megaflyer-front-print.png'),printed);
  assert.equal(failures.length,0,'No uncaught browser errors: '+failures.join('; '));
  console.log('PASS: mock PTG allowed/denied/sign-out, asset preview, logo/front/back placement, real Chromium PDF+PNG exports');
  console.log('Browser render sizes:',{pdfBytes:pdf.length,pngWidth:printed.readUInt32BE(16),pngHeight:printed.readUInt32BE(20),apiCalls:actions.length});
