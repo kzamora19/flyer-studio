@@ -116,7 +116,8 @@ async function apply(asset){
    throw Error('Select a valid asset destination.');
   }
   selected=asset;el('sharedAssetSelected').value=asset.name;
-  say('Applied '+asset.name+' to '+el('sharedAssetTarget').selectedOptions[0].textContent+
+  const destination=el('sharedAssetTarget').selectedOptions[0].textContent;
+  say((target==='card'||target==='logo'?'Applied ':'Sent ')+asset.name+' to '+destination+
    '. Check the flyer preview and PDF.',true);
  }catch(e){say('Could not apply asset: '+e.message);}
 }
