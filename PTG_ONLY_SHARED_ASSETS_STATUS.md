@@ -97,3 +97,11 @@ These are test-only commands; they do not write to Supabase or publish GitHub Pa
 - Added `tests/shared-assets-session-race.test.cjs` and ran **5 no-network assertions** against the exact edited development sources: event signaling, stale-permissions, stale-asset-list, stale-preview before image fetch, and stale-preview after download begins all passed.
 - Also checked the earlier identity, placement, banner, editor-menu, icon, backup and session-cleanup suites and structural two-page PDF checks in an isolated JavaScript runtime. This is *not* a substitute for native Node full-suite results or interactive browser acceptance.
 - Production `main` and Supabase have not been modified for this change. Real PTG Team Leader/Admin/ordinary/revoked account checks, second device and physical PDF/PNG visual review remain open.
+
+## November 20, 2026 — Native GitHub and full-resolution Chromium acceptance
+
+- GitHub Actions [run 44701946885](https://github.com/kzamora19/flyer-studio/actions/runs/44701946885) passed **nine native Node regression suites** plus Chromium simulated PTG sign-in/authorization/asset placement and actual 300-ppi-sized PNG + two-page A4 PDF output; [UI regression run 44701947106](https://github.com/kzamora19/flyer-studio/actions/runs/44701947106) also passed.
+- Artifact 14613106869 contains the exact mocked-fixture screenshot, PNG and PDF. Rendered PDF pages and 2480 × 3507 PNG were inspected; there was no obvious clipping of demo prices/cards, but mock images are intentionally blank/white and do not replace a real-campaign visual/print sign-off.
+- An early smoke-test click timed out because the Shared Asset Library panel covered the export toolbar; the test was corrected to close the panel before clicking. No production export resolution was lowered, and the full-resolution re-run passed.
+- A separately published UI release on `main` included the approved toolbar and editor changes during this work. This review branch is **draft** and contains automated-test/acceptance documentation; the live branch has continued to evolve. Avoid overwriting those current live changes.
+- Real TL/Admin/ordinary/revoked PTG account tests, cross-device sync and Google Drive backup/restore remain unverified. **No Supabase writes or PTG production changes were made by this acceptance run.**
