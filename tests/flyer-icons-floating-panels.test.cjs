@@ -14,7 +14,7 @@ assert.ok(png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),'PNG
 assert.equal(png.readUInt32BE(16),192,'PNG width 192');
 assert.equal(png.readUInt32BE(20),192,'PNG height 192');
 assert.match(svg,/<svg[^>]*viewBox="0 0 256 256"/,'Vector icon valid');
-assert.match(svg,/<clipPath id="megasaver-badge"><circle cx="193" cy="188" r="31"\/><\/clipPath>/,'Megasaver logo clipped to circular badge');
+assert.match(svg,/<clipPath id="badgeClip"><circle cx="192" cy="188" r="30"\/><\/clipPath>/,'Megasaver logo clipped to circular badge');
 assert.doesNotMatch(svg,/data:image\/png;base64,/,"Vector logo has no low-resolution raster");
 assert.match(svg,/>MEGA<\/text>/,"Vector Mega wordmark");
 assert.match(svg,/>SAVER<\/text>/,"Vector Saver wordmark");
