@@ -170,22 +170,53 @@ async function exportBackup(){
   say('Backup file saved. Upload it to your Google Drive for safekeeping.',true);
  }catch(e){say('Backup failed: '+e.message);}
 }
+// Preflight the entire backup before creating remote assets, so later invalid
+// entries cannot cause partially imported libraries.
+function validateBackup(data){
+ if(data?.kind!=='FlyerStudioSharedAssetBackup'||data?.version!==1||!Array.isArray(data.assets)||data.assets.length>25)
+  throw Error('Not a supported Shared Asset Library backup.');
+ let total=0;
+ for(let i=0;i<data.assets.length;i++){
+  const a=data.assets[i];
+  if(!a||typeof a.name!=='string'||!a.name.trim()||a.name.trim().length>120||!CATEGORIES.includes(a.category)||!TYPES.has(a.mime)||typeof a.base64!=='string')
+   throw Error('Invalid backup asset at position '+(i+1)+'.');
+  const value=a.base64;
+  if(value.length<12||value.length>Math.ceil(MAX*4/3)+8||value.length%4!==0||!/^[A-Za-z0-9+/]+={0,2}$/.test(value))
+   throw Error('Invalid encoded image at position '+(i+1)+'.');
+  const pad=value.endsWith('==')?2:value.endsWith('=')?1:0;
+  const size=value.length/4*3-pad;
+  if(size<=0||size>MAX)throw Error('Image at position '+(i+1)+' exceeds the 10 MB limit.');
+  total+=size;
+  if(total>40*1024*1024)throw Error('Backup exceeds the 40 MB image limit.');
+  let signature;
+  try{signature=atob(value.slice(0,16));}catch{throw Error('Invalid encoded image at position '+(i+1)+'.');}
+  const png=a.mime==='image/png'&&signature.length>=8&&[137,80,78,71,13,10,26,10].every((b,j)=>signature.charCodeAt(j)===b);
+  const jpg=a.mime==='image/jpeg'&&signature.length>=3&&signature.charCodeAt(0)===255&&signature.charCodeAt(1)===216&&signature.charCodeAt(2)===255;
+  const webp=a.mime==='image/webp'&&signature.startsWith('RIFF')&&signature.slice(8,12)==='WEBP';
+  if(!(png||jpg||webp))throw Error('Image signature mismatch at position '+(i+1)+'.');
+ }
+ return data.assets;
+}
 async function restoreBackup(file){
  if(!canManage)return say('PTG Team Leader or higher permission required.');
+ let imported=0,planned=0;
  try{
   if(!file||file.size>55*1024*1024)throw Error('Choose a valid backup up to 55 MB.');
-  const json=JSON.parse(await file.text());
-  if(json?.kind!=='FlyerStudioSharedAssetBackup'||json?.version!==1||!Array.isArray(json.assets)||json.assets.length>25)
-   throw Error('Not a supported Shared Asset Library backup.');
-  if(!confirm('Import '+json.assets.length+' assets into the shared library? Existing assets will not be deleted.'))return;
-  let count=0;
-  for(const a of json.assets){
-   if(!a||typeof a.name!=='string'||a.name.length>120||!CATEGORIES.includes(a.category)||!TYPES.has(a.mime)||typeof a.base64!=='string')
-    throw Error('Invalid backup asset at position '+(count+1));
-   await gateway('add',{name:a.name,category:a.category,mime:a.mime,base64:a.base64});count++;
+  const assets=validateBackup(JSON.parse(await file.text()));
+  planned=assets.length;
+  if(!planned)return say('The backup contains no assets to restore.');
+  if(!confirm('Import '+planned+' assets into the shared library? Existing assets will not be deleted.'))return;
+  for(const asset of assets){
+   await gateway('add',{name:asset.name.trim(),category:asset.category,mime:asset.mime,base64:asset.base64});
+   imported++;
   }
-  await refresh();say('Restored '+count+' shared assets from backup.',true);
- }catch(e){say('Restore failed: '+e.message);}
+  await refresh();say('Restored '+imported+' shared assets from backup.',true);
+ }catch(e){
+  if(imported){
+   await refresh();
+   say('Restore interrupted after '+imported+' of '+planned+' assets. The imported items are retained; check the library before retrying. '+e.message);
+  }else say('Restore failed: '+e.message);
+ }
 }
 async function remove(asset){
  if(!canManage||!confirm('Permanently delete shared asset "'+asset.name+'"?'))return;
