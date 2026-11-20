@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "First Megasaver Flyer Studio",
-  "short_name": "Flyer Studio",
+  "name": "MegaFlyer Studio",
+  "short_name": "MegaFlyer Studio",
   "description": "Design and print First Megasaver flyers, product cards, and sale artwork",
   "start_url": "./",
   "scope": "./",
