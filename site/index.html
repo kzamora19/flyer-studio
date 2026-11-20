@@ -3,6 +3,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>First Megasaver · Flyer Studio</title>
+<meta name="theme-color" content="#113a84">
+<link rel="icon" type="image/svg+xml" href="./icons/flyer-studio.svg">
+<link rel="manifest" href="./manifest.webmanifest">
 <style>
 /* Archivo Black
 Copyright 2017 The Archivo Black Project Authors (https://github.com/Omnibus-Type/ArchivoBlack)
@@ -2524,8 +2527,38 @@ body.modalOpen{overflow:hidden}
   #editorMenuToggle{font-size:11px}
 }
 
+
+/* Non-blocking floating editors. The flyer remains interactive while the panel is open.
+   Confirmations (delete/replace/etc.) retain their existing explicit safeguards. */
+.brandIdentity{display:flex;align-items:center;gap:10px;min-width:0}
+.brandIdentity .brandAppIcon{width:38px;height:38px;border-radius:9px;flex:none;background:#113a84}
+.brandIdentity>div{display:flex;flex-direction:column;gap:2px}
+.brandIdentity strong{line-height:1.1}
+.brandIdentity small{display:block;line-height:1.1}
+.uiModalBackdrop{background:transparent!important;pointer-events:none!important;justify-content:flex-end!important;align-items:flex-start!important;padding:12px!important}
+.uiModalBackdrop .uiModalBox{pointer-events:auto!important;max-width:calc(100vw - 24px);max-height:calc(100dvh - 88px);box-shadow:0 12px 42px #0a254670}
+#editCardDialog{padding-left:12px!important;background:transparent!important;pointer-events:none!important}
+#editCardDialog .uiModalBox{width:min(430px,calc(100vw - 24px))!important}
+#settingsDialog .uiModalBox{width:min(560px,calc(100vw - 24px))!important}
+#sectionDialog .uiModalBox{width:min(570px,calc(100vw - 24px))!important}
+#headerDialog .uiModalBox{width:min(510px,calc(100vw - 24px))!important}
+.uiModalBackdrop .modalHeading{cursor:grab;touch-action:none;user-select:none}
+.uiModalBackdrop .modalHeading button{cursor:pointer;touch-action:auto}
+#powerModal{background:transparent!important;pointer-events:none!important;justify-content:flex-end!important;align-items:flex-start!important;padding:12px!important}
+#powerModal .powerDialog{pointer-events:auto!important;width:min(570px,calc(100vw - 24px));max-height:calc(100dvh - 88px)}
+#powerModal .powerTop{cursor:grab;touch-action:none;user-select:none}
+#powerModal .powerTop button{cursor:pointer;touch-action:auto}
+body.modalOpen{overflow:auto!important}
+@media(max-width:700px){
+ .uiModalBackdrop{inset:60px 0 0!important;align-items:flex-end!important;padding:8px!important}
+ .uiModalBackdrop .uiModalBox{width:calc(100vw - 16px)!important;max-height:55dvh!important}
+ #powerModal{align-items:flex-end!important;padding:8px!important}
+ #powerModal .powerDialog{width:calc(100vw - 16px)!important;max-height:55dvh!important}
+ .brandIdentity .brandAppIcon{width:32px;height:32px}
+}
+
 </style>
-<header><div><strong>Flyer Studio</strong><br><small>First Megasaver</small></div><span class="status" id="status">Draft</span></header>
+<header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>Flyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status">Draft</span></header>
 <main>
 <aside aria-label="Flyer editor">
 <h1>Sale flyer</h1>
@@ -5040,9 +5073,9 @@ function initStudioUI(){
   const backup=$('backup').closest('details');$('panel-backup').append(backup);backup.open=true;
   const feedbackEl=$('feedback');content.append(feedbackEl);
   const cardDialog=document.createElement('div');cardDialog.id='editCardDialog';cardDialog.className='uiModalBackdrop';cardDialog.hidden=true;
-  cardDialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="true" aria-labelledby="cardDialogTitle"><div class="modalHeading"><div><strong id="cardDialogTitle">Edit flyer card</strong><small id="cardDialogSubtitle">Select a product, barcode, or photo</small></div><button type="button" id="cardDialogClose" aria-label="Close editor">×</button></div><div class="modalInner"><div class="modalTabs"><button type="button" id="tabDetails">Card Details</button><button type="button" id="tabLookup">Barcode / PTG Lookup</button></div><section id="modalDetails" class="modalSection"><div id="modalManual"><p class="dialogTip">No product in this box? Enter a unique SKU to add one manually.</p><label>New product SKU / barcode <input id="manualSku" autocomplete="off" maxlength="100" placeholder="Enter unique SKU"></label><button type="button" id="createManualCard" class="primary">Add product to selected box</button></div><div id="modalOfferSelector"></div><div id="modalOfferEditor"></div></section><section id="modalLookup" class="modalSection"></section></div></div>';
+  cardDialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="cardDialogTitle"><div class="modalHeading"><div><strong id="cardDialogTitle">Edit flyer card</strong><small id="cardDialogSubtitle">Select a product, barcode, or photo</small></div><button type="button" id="cardDialogClose" aria-label="Close editor">×</button></div><div class="modalInner"><div class="modalTabs"><button type="button" id="tabDetails">Card Details</button><button type="button" id="tabLookup">Barcode / PTG Lookup</button></div><section id="modalDetails" class="modalSection"><div id="modalManual"><p class="dialogTip">No product in this box? Enter a unique SKU to add one manually.</p><label>New product SKU / barcode <input id="manualSku" autocomplete="off" maxlength="100" placeholder="Enter unique SKU"></label><button type="button" id="createManualCard" class="primary">Add product to selected box</button></div><div id="modalOfferSelector"></div><div id="modalOfferEditor"></div></section><section id="modalLookup" class="modalSection"></section></div></div>';
   const settings=document.createElement('div');settings.id='settingsDialog';settings.className='uiModalBackdrop';settings.hidden=true;
-  settings.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="modalHeading"><div><strong id="settingsTitle">Layout &amp; Appearance</strong><small>Campaign color, typography, page, and box count settings</small></div><button type="button" id="settingsClose" aria-label="Close settings">×</button></div><div class="modalInner"><p class="dialogTip">Settings apply to the live flyer preview and exported pages.</p><div id="settingsFields"></div></div></div>';
+  settings.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="settingsTitle"><div class="modalHeading"><div><strong id="settingsTitle">Layout &amp; Appearance</strong><small>Campaign color, typography, page, and box count settings</small></div><button type="button" id="settingsClose" aria-label="Close settings">×</button></div><div class="modalInner"><p class="dialogTip">Settings apply to the live flyer preview and exported pages.</p><div id="settingsFields"></div></div></div>';
   document.body.append(cardDialog,settings);
   $('modalLookup').append($('barcodePanel'));$('barcodePanel').open=true;
   $('modalOfferEditor').append($('offerForm'));
@@ -5147,8 +5180,8 @@ function relocateCampaignSettings(){
   }
   selectNav(currentMenu,currentSub);
 }
-function showDialog(id){$(id).hidden=false;document.body.classList.add('modalOpen');}
-function hideDialog(id){$(id).hidden=true;if($('settingsDialog').hidden&&$('editCardDialog').hidden&&(!$('sectionDialog')||$('sectionDialog').hidden)&&(!$('headerDialog')||$('headerDialog').hidden))document.body.classList.remove('modalOpen');highlightSelection=null;updatePreviewHighlight();}
+function showDialog(id){$(id).hidden=false;}
+function hideDialog(id){$(id).hidden=true;highlightSelection=null;updatePreviewHighlight();}
 function switchCardTab(tab){
   modalCardTab=tab;
   $('modalDetails').classList.toggle('active',tab==='details');
@@ -5780,7 +5813,7 @@ function initSectionHeaderControls(){
   remove.onclick=()=>removeOnlySectionHeader(selectedLayoutSection);
   $('addBelowSelected').after(edit,remove);
   const dialog=document.createElement('div');dialog.className='uiModalBackdrop';dialog.id='headerDialog';dialog.hidden=true;
-  dialog.innerHTML=`<div class="uiModalBox" role="dialog" aria-modal="true" aria-labelledby="headerDialogTitle">
+  dialog.innerHTML=`<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="headerDialogTitle">
     <div class="modalHeading"><div><strong id="headerDialogTitle">Edit section header</strong><small>Only the title bar changes. Products and product cards are untouched.</small></div><button type="button" id="closeHeaderDialog" aria-label="Close header editor">×</button></div>
     <form class="modalInner" id="sectionHeaderForm">
       <label>Section to label<select id="headerTargetSection"></select></label>
@@ -5815,7 +5848,7 @@ function initDirectSectionControls(arrange){
   $('deleteSelectedSection').onclick=()=>askDeleteSection(selectedLayoutSection);
   $('restoreHiddenSections').onclick=()=>openSectionManager('manage');
   const dialog=document.createElement('div');dialog.className='uiModalBackdrop';dialog.id='sectionDialog';dialog.hidden=true;
-  dialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="true" aria-labelledby="sectionDialogTitle"><div class="modalHeading"><div><strong id="sectionDialogTitle">Manage flyer sections</strong><small>Changes update the flyer preview; all product records are preserved when hiding.</small></div><button type="button" id="closeSectionDialog" aria-label="Close section manager">×</button></div><div class="modalInner"><form id="sectionQuickAdd"><label>New section title<input id="quickSectionName" type="text" maxlength="45" required placeholder="e.g. Appliances Under ₱5,000"></label><label>Flyer side<select id="quickSectionPage"><option value="front">Front</option><option value="back">Back</option></select></label><button type="submit" class="primary">+ Add Section</button></form><p id="sectionInsertHint" hidden></p><p id="sectionQuickNote"></p><div id="quickSectionsList"></div><div class="settingsFoot"><span class="settingsHint">Maximum six custom sections. Deletion is limited to empty custom sections.</span><button type="button" id="doneSectionDialog">Done</button></div></div></div>';
+  dialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="sectionDialogTitle"><div class="modalHeading"><div><strong id="sectionDialogTitle">Manage flyer sections</strong><small>Changes update the flyer preview; all product records are preserved when hiding.</small></div><button type="button" id="closeSectionDialog" aria-label="Close section manager">×</button></div><div class="modalInner"><form id="sectionQuickAdd"><label>New section title<input id="quickSectionName" type="text" maxlength="45" required placeholder="e.g. Appliances Under ₱5,000"></label><label>Flyer side<select id="quickSectionPage"><option value="front">Front</option><option value="back">Back</option></select></label><button type="submit" class="primary">+ Add Section</button></form><p id="sectionInsertHint" hidden></p><p id="sectionQuickNote"></p><div id="quickSectionsList"></div><div class="settingsFoot"><span class="settingsHint">Maximum six custom sections. Deletion is limited to empty custom sections.</span><button type="button" id="doneSectionDialog">Done</button></div></div></div>';
   document.body.append(dialog);
   $('closeSectionDialog').onclick=closeSectionManager;
   $('doneSectionDialog').onclick=closeSectionManager;
@@ -6243,7 +6276,7 @@ function initPowerTools(){
     toolbar.append(quick);
   }
   const backdrop=document.createElement('div');backdrop.id='powerModal';backdrop.hidden=true;
-  backdrop.innerHTML=`<div class="powerDialog" role="dialog" aria-modal="true" aria-labelledby="powerTitle">
+  backdrop.innerHTML=`<div class="powerDialog" role="dialog" aria-modal="false" aria-labelledby="powerTitle">
     <header class="powerTop"><div><strong id="powerTitle">Flyer Studio+ Tools</strong><p>Faster product work, reusable designs, and print checks</p></div><button type="button" id="powerClose" aria-label="Close tools">✕</button></header>
     <div class="powerTabs">${POWER_TABS.map(([key,title])=>`<button type="button" id="powerButton-${key}" data-tab="${key}">${title}</button>`).join('')}</div>
     <div class="powerContent">
@@ -6779,6 +6812,7 @@ window.flyerCloud={open:()=>powerOpen('cloud'),getStatus:()=>({connected:!!cloud
 })();
 
 </script>
+<script src="./floating-panels.js" defer></script>
 <script>window.FLYER_SHARED_ASSET_CONFIG={supabaseUrl:"https://tzklsscoiwnmeantcefw.supabase.co",publishableKey:"sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK"};</script>
 <script src="./shared-asset-ui.js" defer></script>
 </html>
