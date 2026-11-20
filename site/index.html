@@ -2536,25 +2536,26 @@ body.modalOpen{overflow:hidden}
 .brandIdentity>div{display:flex;flex-direction:column;gap:2px}
 .brandIdentity strong{line-height:1.1}
 .brandIdentity small{display:block;line-height:1.1}
-.uiModalBackdrop{background:transparent!important;pointer-events:none!important;justify-content:flex-end!important;align-items:flex-start!important;padding:12px!important}
+.uiModalBackdrop{background:transparent!important;pointer-events:none!important;justify-content:center!important;align-items:center!important;padding:12px!important}
+.uiModalBackdrop{inset:0!important}
 .uiModalBackdrop .uiModalBox{pointer-events:auto!important;max-width:calc(100vw - 24px);max-height:calc(100dvh - 88px);box-shadow:0 12px 42px #0a254670}
-#editCardDialog{padding-left:12px!important;background:transparent!important;pointer-events:none!important}
+#editCardDialog{padding-left:12px!important;justify-content:center!important;background:transparent!important;pointer-events:none!important}
 #editCardDialog .uiModalBox{width:min(430px,calc(100vw - 24px))!important}
 #settingsDialog .uiModalBox{width:min(560px,calc(100vw - 24px))!important}
 #sectionDialog .uiModalBox{width:min(570px,calc(100vw - 24px))!important}
 #headerDialog .uiModalBox{width:min(510px,calc(100vw - 24px))!important}
 .uiModalBackdrop .modalHeading{cursor:grab;touch-action:none;user-select:none}
 .uiModalBackdrop .modalHeading button{cursor:pointer;touch-action:auto}
-#powerModal{background:transparent!important;pointer-events:none!important;justify-content:flex-end!important;align-items:flex-start!important;padding:12px!important}
+#powerModal{background:transparent!important;pointer-events:none!important;justify-content:center!important;align-items:center!important;padding:12px!important}
 #powerModal .powerDialog{pointer-events:auto!important;width:min(570px,calc(100vw - 24px));max-height:calc(100dvh - 88px)}
 #powerModal .powerTop{cursor:grab;touch-action:none;user-select:none}
 #powerModal .powerTop button{cursor:pointer;touch-action:auto}
 body.modalOpen{overflow:auto!important}
 @media(max-width:700px){
- .uiModalBackdrop{inset:60px 0 0!important;align-items:flex-end!important;padding:8px!important}
- .uiModalBackdrop .uiModalBox{width:calc(100vw - 16px)!important;max-height:55dvh!important}
- #powerModal{align-items:flex-end!important;padding:8px!important}
- #powerModal .powerDialog{width:calc(100vw - 16px)!important;max-height:55dvh!important}
+ .uiModalBackdrop{inset:0!important;align-items:center!important;justify-content:center!important;padding:8px!important}
+ .uiModalBackdrop .uiModalBox{width:calc(100vw - 16px)!important;max-height:calc(100dvh - 16px)!important}
+ #powerModal{align-items:center!important;justify-content:center!important;padding:8px!important}
+ #powerModal .powerDialog{width:calc(100vw - 16px)!important;max-height:calc(100dvh - 16px)!important}
  .brandIdentity .brandAppIcon{width:32px;height:32px}
 }
 
