@@ -1,0 +1,25 @@
+name: MegaFlyer UI regression
+on:
+  push:
+    branches:
+      - main
+      - feature/horizontal-preview-tabs-20261120
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run MegaFlyer UI and shared asset checks
+        run: |
+          set -e
+          for test in tests/*.cjs; do
+            echo "Running $test"
+            node "$test"
+          done

@@ -2506,9 +2506,61 @@ body.modalOpen{overflow:hidden}
 #powerPTGQuick{white-space:nowrap;border-color:#a3b5d3}
 #powerPTGQuick[data-connected=true]{color:#137347;background:#e2f6eb;border-color:#69ba8f}
 
+
+/* Editor menu: PTG/Sales Tracker-style collapse, one column at ALL widths. */
+#sidebarFixed .editorMenuHeading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#sidebarFixed .editorMenuHeading h1{margin:0;font-size:18px}
+#editorMenuToggle{flex:none;padding:6px 10px;border:1px solid #b6c9e2;border-radius:7px;background:#f4f8fd;color:#173b70;font-size:12px;font-weight:700;cursor:pointer;min-height:32px}
+#editorMenuToggle:hover,#editorMenuToggle:focus-visible{background:#e5effd;outline-offset:2px}
+#studioNav{grid-template-columns:minmax(0,1fr)!important;display:grid;gap:4px}
+#studioNav>button{width:100%;text-align:left;min-height:34px}
+#studioNav #sidebarActions{display:block;width:100%;margin:4px 0 0;padding:7px 0 0;border-top:1px solid #d6e1ef;background:transparent}
+#studioNav #sidebarActions button{width:100%;font-size:12px;text-align:left;border-radius:6px;padding:8px 11px}
+#sidebarFixed.menuCollapsed{padding-bottom:8px}
+#sidebarFixed.menuCollapsed #editorMenuHint,#sidebarFixed.menuCollapsed #studioNav{display:none!important}
+#studioSubnav{display:block;margin:0 0 12px;padding:0 0 10px;border-top:0;border-bottom:1px solid #dbe5f0}
+#studioSubnav[hidden]{display:none!important}
+#studioSubnav>div:not([hidden]){display:flex;flex-direction:column;align-items:stretch;gap:5px}
+#studioSubnav button{width:100%;text-align:left;min-height:32px;padding:7px 10px}
+@media(max-width:700px){
+  #studioNav{grid-template-columns:minmax(0,1fr)!important}
+  #sidebarFixed .editorMenuHeading h1{font-size:16px}
+  #editorMenuToggle{font-size:11px}
+}
+
+
+/* Non-blocking floating editors. The flyer remains interactive while the panel is open.
+   Confirmations (delete/replace/etc.) retain their existing explicit safeguards. */
+.brandIdentity{display:flex;align-items:center;gap:10px;min-width:0}
+.brandIdentity .brandAppIcon{width:38px;height:38px;border-radius:9px;flex:none;background:#113a84}
+.brandIdentity>div{display:flex;flex-direction:column;gap:2px}
+.brandIdentity strong{line-height:1.1}
+.brandIdentity small{display:block;line-height:1.1}
+.uiModalBackdrop{background:transparent!important;pointer-events:none!important;justify-content:flex-end!important;align-items:flex-start!important;padding:12px!important}
+.uiModalBackdrop .uiModalBox{pointer-events:auto!important;max-width:calc(100vw - 24px);max-height:calc(100dvh - 88px);box-shadow:0 12px 42px #0a254670}
+#editCardDialog{padding-left:12px!important;background:transparent!important;pointer-events:none!important}
+#editCardDialog .uiModalBox{width:min(430px,calc(100vw - 24px))!important}
+#settingsDialog .uiModalBox{width:min(560px,calc(100vw - 24px))!important}
+#sectionDialog .uiModalBox{width:min(570px,calc(100vw - 24px))!important}
+#headerDialog .uiModalBox{width:min(510px,calc(100vw - 24px))!important}
+.uiModalBackdrop .modalHeading{cursor:grab;touch-action:none;user-select:none}
+.uiModalBackdrop .modalHeading button{cursor:pointer;touch-action:auto}
+#powerModal{background:transparent!important;pointer-events:none!important;justify-content:flex-end!important;align-items:flex-start!important;padding:12px!important}
+#powerModal .powerDialog{pointer-events:auto!important;width:min(570px,calc(100vw - 24px));max-height:calc(100dvh - 88px)}
+#powerModal .powerTop{cursor:grab;touch-action:none;user-select:none}
+#powerModal .powerTop button{cursor:pointer;touch-action:auto}
+body.modalOpen{overflow:auto!important}
+@media(max-width:700px){
+ .uiModalBackdrop{inset:60px 0 0!important;align-items:flex-end!important;padding:8px!important}
+ .uiModalBackdrop .uiModalBox{width:calc(100vw - 16px)!important;max-height:55dvh!important}
+ #powerModal{align-items:flex-end!important;padding:8px!important}
+ #powerModal .powerDialog{width:calc(100vw - 16px)!important;max-height:55dvh!important}
+ .brandIdentity .brandAppIcon{width:32px;height:32px}
+}
+
 </style>
 <link rel="stylesheet" href="./toolbar-tabs.css">
-<header><div style="display:flex;align-items:center;gap:10px"><img src="./icons/flyer-studio.svg" alt="" width="38" height="38" style="display:block;width:38px;height:38px;flex:none;border-radius:9px"><div><strong>MegaFlyer Studio</strong><br><small>First Megasaver</small></div></div><span class="status" id="status">Draft</span></header>
+<header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>MegaFlyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status">Draft</span></header>
 <main>
 <aside aria-label="Flyer editor">
 <h1>Sale flyer</h1>
@@ -2822,6 +2874,8 @@ function ptgConnected(session,message) {
   $('ptgConnection').textContent=message;
   if(typeof powerStatus==='function')powerStatus();
   invalidateLookup();
+  // Notify the Shared Asset Library without exposing any PTG token or identity.
+  window.dispatchEvent(new Event('megaflyer:ptg-session-changed'));
 }
 async function signInPTG(event) {
   event.preventDefault();
@@ -4971,7 +5025,7 @@ let highlightSelection=null;
 let modalCardTab='lookup';
 const NAV_ITEMS=[
   ['campaign','Campaign & Branding',[['text','Headlines & Text'],['artwork','Sale Artwork'],['labels','Section Labels']]],
-  ['cards','Edit Flyer Cards',[['front','Front Side'],['back','Back Side']]],
+  ['cards','Edit Flyer Cards',[]],
   ['bulk','Bulk Import',[]],
   ['review','Review & Approval',[]],
   ['backup','Project Backup',[]]
@@ -4980,13 +5034,35 @@ const previewFieldLabels={brand:'Brand header',title:'Sale headline',headlineDes
   tech:'Tech section',bundles:'Bundles section',back:'Back section',footer:'Footer',brandHeader:'Brand header',
   blue:'Section color',red:'Sale color',headlineFont:'Sale headline',sectionFont:'Section headers',taglineFont:'Tagline',
   techCards:'TechZone',frontCards:'Front cards',bundlesCards:'Bundles',backCards:'Back cards',paper:'Flyer page',bleed:'Flyer page'};
+
+// Collapsible, one-column editor menu. Only the menu is collapsed;
+// the selected editor panel and the working flyer-side buttons stay visible.
+function initEditorMenuCollapse(){
+  const fixed=$('sidebarFixed'),toggle=$('editorMenuToggle');
+  const key='flyer-studio-editor-menu-collapsed';
+  let collapsed=false;
+  try{collapsed=localStorage.getItem(key)==='1';}catch{}
+  function showMenu(value){
+    fixed.classList.toggle('menuCollapsed',value);
+    toggle.setAttribute('aria-expanded',String(!value));
+    toggle.textContent=value?'☰ Show menu':'Hide menu ▴';
+    toggle.setAttribute('aria-label',value?'Expand editor menu':'Collapse editor menu');
+  }
+  showMenu(collapsed);
+  toggle.onclick=()=>{
+    collapsed=!collapsed;
+    showMenu(collapsed);
+    try{localStorage.setItem(key,collapsed?'1':'0');}catch{}
+  };
+}
 function initStudioUI(){
   const aside=document.querySelector('main > aside'),stage=document.querySelector('main > .stage');
   const old=[...aside.children];
   const fixed=document.createElement('div');fixed.id='sidebarFixed';
-  fixed.innerHTML='<h1>Sale flyer</h1><p class="muted">Choose a section to edit. Your campaign and photos stay saved in this browser.</p><nav id="studioNav" aria-label="Flyer editor sections"></nav><div id="sidebarActions"><button type="button" id="layoutSettings">⚙ Layout &amp; Appearance</button></div>';
+  fixed.innerHTML='<div class="editorMenuHeading"><h1>Sale flyer</h1><button type="button" id="editorMenuToggle" aria-controls="studioNav" aria-expanded="true">Hide menu ▴</button></div><p class="muted" id="editorMenuHint">Choose a section to edit. Your campaign and photos stay saved in this browser.</p><nav id="studioNav" aria-label="Flyer editor sections"></nav><div id="sidebarActions"><button type="button" id="layoutSettings">⚙ Layout &amp; Appearance</button></div>';
   const content=document.createElement('div');content.id='sidebarContent';
   aside.prepend(fixed,content);
+  initEditorMenuCollapse();
   for(const [key] of NAV_ITEMS){const section=document.createElement('section');section.id='panel-'+key;section.dataset.panel=key;content.append(section);}
   const campaign=$('campaignPanel');$('panel-campaign').append(campaign);campaign.open=true;
   const artwork=$('headlineArtwork');artwork.open=true;
@@ -5001,9 +5077,9 @@ function initStudioUI(){
   const backup=$('backup').closest('details');$('panel-backup').append(backup);backup.open=true;
   const feedbackEl=$('feedback');content.append(feedbackEl);
   const cardDialog=document.createElement('div');cardDialog.id='editCardDialog';cardDialog.className='uiModalBackdrop';cardDialog.hidden=true;
-  cardDialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="true" aria-labelledby="cardDialogTitle"><div class="modalHeading"><div><strong id="cardDialogTitle">Edit flyer card</strong><small id="cardDialogSubtitle">Select a product, barcode, or photo</small></div><button type="button" id="cardDialogClose" aria-label="Close editor">×</button></div><div class="modalInner"><div class="modalTabs"><button type="button" id="tabDetails">Card Details</button><button type="button" id="tabLookup">Barcode / PTG Lookup</button></div><section id="modalDetails" class="modalSection"><div id="modalManual"><p class="dialogTip">No product in this box? Enter a unique SKU to add one manually.</p><label>New product SKU / barcode <input id="manualSku" autocomplete="off" maxlength="100" placeholder="Enter unique SKU"></label><button type="button" id="createManualCard" class="primary">Add product to selected box</button></div><div id="modalOfferSelector"></div><div id="modalOfferEditor"></div></section><section id="modalLookup" class="modalSection"></section></div></div>';
+  cardDialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="cardDialogTitle"><div class="modalHeading"><div><strong id="cardDialogTitle">Edit flyer card</strong><small id="cardDialogSubtitle">Select a product, barcode, or photo</small></div><button type="button" id="cardDialogClose" aria-label="Close editor">×</button></div><div class="modalInner"><div class="modalTabs"><button type="button" id="tabDetails">Card Details</button><button type="button" id="tabLookup">Barcode / PTG Lookup</button></div><section id="modalDetails" class="modalSection"><div id="modalManual"><p class="dialogTip">No product in this box? Enter a unique SKU to add one manually.</p><label>New product SKU / barcode <input id="manualSku" autocomplete="off" maxlength="100" placeholder="Enter unique SKU"></label><button type="button" id="createManualCard" class="primary">Add product to selected box</button></div><div id="modalOfferSelector"></div><div id="modalOfferEditor"></div></section><section id="modalLookup" class="modalSection"></section></div></div>';
   const settings=document.createElement('div');settings.id='settingsDialog';settings.className='uiModalBackdrop';settings.hidden=true;
-  settings.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="modalHeading"><div><strong id="settingsTitle">Layout &amp; Appearance</strong><small>Campaign color, typography, page, and box count settings</small></div><button type="button" id="settingsClose" aria-label="Close settings">×</button></div><div class="modalInner"><p class="dialogTip">Settings apply to the live flyer preview and exported pages.</p><div id="settingsFields"></div></div></div>';
+  settings.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="settingsTitle"><div class="modalHeading"><div><strong id="settingsTitle">Layout &amp; Appearance</strong><small>Campaign color, typography, page, and box count settings</small></div><button type="button" id="settingsClose" aria-label="Close settings">×</button></div><div class="modalInner"><p class="dialogTip">Settings apply to the live flyer preview and exported pages.</p><div id="settingsFields"></div></div></div>';
   document.body.append(cardDialog,settings);
   $('modalLookup').append($('barcodePanel'));$('barcodePanel').open=true;
   $('modalOfferEditor').append($('offerForm'));
@@ -5081,6 +5157,8 @@ function selectNav(menu,sub){
     group.hidden=group.dataset.submenu!==menu;
     for(const button of group.querySelectorAll('button'))button.classList.toggle('active',button.dataset.sub===currentSub);
   }
+  const subnav=$('studioSubnav');
+  if(subnav)subnav.hidden=![...subnav.querySelectorAll('.navChildren')].some(group=>!group.hidden);
   for(const panel of document.querySelectorAll('#sidebarContent>section'))panel.classList.toggle('active',panel.dataset.panel===menu);
   if(menu==='campaign'){
     $('headlineArtwork').hidden=currentSub!=='artwork';
@@ -5106,8 +5184,8 @@ function relocateCampaignSettings(){
   }
   selectNav(currentMenu,currentSub);
 }
-function showDialog(id){$(id).hidden=false;document.body.classList.add('modalOpen');}
-function hideDialog(id){$(id).hidden=true;if($('settingsDialog').hidden&&$('editCardDialog').hidden&&(!$('sectionDialog')||$('sectionDialog').hidden)&&(!$('headerDialog')||$('headerDialog').hidden))document.body.classList.remove('modalOpen');highlightSelection=null;updatePreviewHighlight();}
+function showDialog(id){$(id).hidden=false;}
+function hideDialog(id){$(id).hidden=true;highlightSelection=null;updatePreviewHighlight();}
 function switchCardTab(tab){
   modalCardTab=tab;
   $('modalDetails').classList.toggle('active',tab==='details');
@@ -5453,9 +5531,12 @@ function renderAppearanceEditor(){
 function initAdvancedStudio(){
   const nav=$('studioNav'),fixed=$('sidebarFixed'),subnav=document.createElement('div');subnav.id='studioSubnav';
   for(const child of [...nav.querySelectorAll('.navChildren')])subnav.append(child);
-  fixed.append(subnav);
-  // Pin the utility button at the very bottom, outside of scrollable content.
-  $('sidebarContent').after($('sidebarActions'));
+  // Secondary choices belong inside the active, scrollable editor panel;
+  // they are no longer a second pinned row above the editor.
+  $('sidebarContent').prepend(subnav);
+  // Layout & Appearance is an ordinary single-column menu item,
+  // not a separate button pinned below the content.
+  nav.append($('sidebarActions'));
   // Create independent navigation submenus for every main heading.
   const extra={bulk:[['csv','CSV Import'],['photos','Photo Matching']],review:[['validation','Validation'],['approval','Approval']],backup:[['download','Download'],['restore','Restore']]};
   for(const [menu,items] of Object.entries(extra)){
@@ -5736,7 +5817,7 @@ function initSectionHeaderControls(){
   remove.onclick=()=>removeOnlySectionHeader(selectedLayoutSection);
   $('addBelowSelected').after(edit,remove);
   const dialog=document.createElement('div');dialog.className='uiModalBackdrop';dialog.id='headerDialog';dialog.hidden=true;
-  dialog.innerHTML=`<div class="uiModalBox" role="dialog" aria-modal="true" aria-labelledby="headerDialogTitle">
+  dialog.innerHTML=`<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="headerDialogTitle">
     <div class="modalHeading"><div><strong id="headerDialogTitle">Edit section header</strong><small>Only the title bar changes. Products and product cards are untouched.</small></div><button type="button" id="closeHeaderDialog" aria-label="Close header editor">×</button></div>
     <form class="modalInner" id="sectionHeaderForm">
       <label>Section to label<select id="headerTargetSection"></select></label>
@@ -5771,7 +5852,7 @@ function initDirectSectionControls(arrange){
   $('deleteSelectedSection').onclick=()=>askDeleteSection(selectedLayoutSection);
   $('restoreHiddenSections').onclick=()=>openSectionManager('manage');
   const dialog=document.createElement('div');dialog.className='uiModalBackdrop';dialog.id='sectionDialog';dialog.hidden=true;
-  dialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="true" aria-labelledby="sectionDialogTitle"><div class="modalHeading"><div><strong id="sectionDialogTitle">Manage flyer sections</strong><small>Changes update the flyer preview; all product records are preserved when hiding.</small></div><button type="button" id="closeSectionDialog" aria-label="Close section manager">×</button></div><div class="modalInner"><form id="sectionQuickAdd"><label>New section title<input id="quickSectionName" type="text" maxlength="45" required placeholder="e.g. Appliances Under ₱5,000"></label><label>Flyer side<select id="quickSectionPage"><option value="front">Front</option><option value="back">Back</option></select></label><button type="submit" class="primary">+ Add Section</button></form><p id="sectionInsertHint" hidden></p><p id="sectionQuickNote"></p><div id="quickSectionsList"></div><div class="settingsFoot"><span class="settingsHint">Maximum six custom sections. Deletion is limited to empty custom sections.</span><button type="button" id="doneSectionDialog">Done</button></div></div></div>';
+  dialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="sectionDialogTitle"><div class="modalHeading"><div><strong id="sectionDialogTitle">Manage flyer sections</strong><small>Changes update the flyer preview; all product records are preserved when hiding.</small></div><button type="button" id="closeSectionDialog" aria-label="Close section manager">×</button></div><div class="modalInner"><form id="sectionQuickAdd"><label>New section title<input id="quickSectionName" type="text" maxlength="45" required placeholder="e.g. Appliances Under ₱5,000"></label><label>Flyer side<select id="quickSectionPage"><option value="front">Front</option><option value="back">Back</option></select></label><button type="submit" class="primary">+ Add Section</button></form><p id="sectionInsertHint" hidden></p><p id="sectionQuickNote"></p><div id="quickSectionsList"></div><div class="settingsFoot"><span class="settingsHint">Maximum six custom sections. Deletion is limited to empty custom sections.</span><button type="button" id="doneSectionDialog">Done</button></div></div></div>';
   document.body.append(dialog);
   $('closeSectionDialog').onclick=closeSectionManager;
   $('doneSectionDialog').onclick=closeSectionManager;
@@ -6199,7 +6280,7 @@ function initPowerTools(){
     toolbar.append(quick);
   }
   const backdrop=document.createElement('div');backdrop.id='powerModal';backdrop.hidden=true;
-  backdrop.innerHTML=`<div class="powerDialog" role="dialog" aria-modal="true" aria-labelledby="powerTitle">
+  backdrop.innerHTML=`<div class="powerDialog" role="dialog" aria-modal="false" aria-labelledby="powerTitle">
     <header class="powerTop"><div><strong id="powerTitle">Flyer Studio+ Tools</strong><p>Faster product work, reusable designs, and print checks</p></div><button type="button" id="powerClose" aria-label="Close tools">✕</button></header>
     <div class="powerTabs">${POWER_TABS.map(([key,title])=>`<button type="button" id="powerButton-${key}" data-tab="${key}">${title}</button>`).join('')}</div>
     <div class="powerContent">
@@ -6735,6 +6816,7 @@ window.flyerCloud={open:()=>powerOpen('cloud'),getStatus:()=>({connected:!!cloud
 })();
 
 </script>
+<script src="./floating-panels.js" defer></script>
 <script>window.FLYER_SHARED_ASSET_CONFIG={supabaseUrl:"https://tzklsscoiwnmeantcefw.supabase.co",publishableKey:"sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK"};</script>
 <script src="./shared-asset-ui.js" defer></script>
 <script src="./toolbar-tabs.js" defer></script>
