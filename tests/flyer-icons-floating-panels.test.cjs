@@ -14,6 +14,10 @@ assert.ok(png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),'PNG
 assert.equal(png.readUInt32BE(16),192,'PNG width 192');
 assert.equal(png.readUInt32BE(20),192,'PNG height 192');
 assert.match(svg,/<svg[^>]*viewBox="0 0 256 256"/,'Vector icon valid');
+assert.match(svg,/<clipPath id="megasaver-badge"><circle cx="193" cy="188" r="31"\/><\/clipPath>/,'Megasaver logo clipped to circular badge');
+assert.match(svg,/data:image\/png;base64,/,'Original logo image is embedded in self-contained SVG favicon');
+assert.ok(!svg.includes('fill="#9f4700"'),'Old gold star artwork removed');
+
 assert.match(html,/<link rel="icon" type="image\/svg\+xml" href="\.\/icons\/flyer-studio\.svg">/,'Browser favicon set');
 assert.match(html,/<link rel="apple-touch-icon" sizes="192x192"/,'Apple shortcut fallback set');
 assert.match(html,/<link rel="manifest" href="\.\/manifest\.webmanifest">/,'Web-app manifest linked');
