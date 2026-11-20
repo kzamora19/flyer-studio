@@ -64,3 +64,17 @@ This checklist applies to `feature/shared-asset-library`. GitHub Pages `main` is
 ## Evidence and limitations
 
 The development branch has isolated, no-network regression tests for backup validation and session preview cleanup. These are not substitutes for real signed-in PTG role tests, second-device synchronization, Google Drive file restore, or visual inspection of physical flyer exports. The backend and the live site must remain unchanged while these acceptance checks are outstanding.
+
+
+## Automated acceptance evidence — November 20, 2026
+
+**PASS (mocked and code-level only):** [MegaFlyer development acceptance run 44701946885](https://github.com/kzamora19/flyer-studio/actions/runs/44701946885) at commit `45787ecae9afbd3608d8cf443e444628f9f181ce`.
+
+- All nine native Node regression suites passed on GitHub Actions (PTG gateway identity, asset placement, banner fit, PDF structure, menus, icons/floating panels, backup preflight, preview cleanup, and session races).
+- Real headless Chromium passed simulated authorized/denied/signed-out PTG states without contacting live PTG/Supabase; it loaded a signed-image mock, applied it to the campaign logo and front/back artwork, and downloaded one PNG and a real two-page PDF.
+- [Chromium evidence artifact](https://github.com/kzamora19/flyer-studio/actions/runs/44701946885/artifacts/14613106869): front browser screenshot, `megaflyer-front-print.png` (2480 × 3507 pixels), and `megaflyer-two-page-draft.pdf` (2 A4 pages; each embedded JPEG is 300-ppi-sized). The PDF was rendered into both pages and visually inspected; no obvious text clipping appeared in the **demo card fixture**.
+- Test artwork intentionally uses a tiny white placeholder and demo product values, so large blank images/white branding squares in these files are **fixture limitations**, not approved flyer artwork or evidence of a bug.
+- The newer live UI toolbar on `main` was updated separately while development testing was in progress. The release branch incorporated those changes for its successful smoke test. `main` may change again; reconcile it before any future merge.
+- No real PTG credentials, production asset mutations, backup restore to Supabase, or Google Drive write were used in these checks.
+
+**Still NOT verified (must not silently mark complete):** real active Team Leader/Branch Admin/ordinary/revoked account permission behavior, second-device synchronization, manual Google Drive backup/restore, real customer/product images, and physical print approval. Leave this PR in draft until those acceptance gates are satisfied.
