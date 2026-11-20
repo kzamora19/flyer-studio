@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">First Megasaver Flyer Studio</title>
+  <desc id="desc">A white folded flyer with a red promotion banner and a crisp Mega Saver emblem on a rounded blue app tile</desc>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b409b"/><stop offset="1" stop-color="#08347c"/></linearGradient>
+    <linearGradient id="inner" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="#1052b9"/><stop offset="1" stop-color="#0348ae"/></linearGradient>
+    <linearGradient id="badgeBlue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#90d0ff"/><stop offset="1" stop-color="#4e9ff2"/></linearGradient>
+    <clipPath id="badgeClip"><circle cx="192" cy="188" r="30"/></clipPath>
+  </defs>
+  <rect x="2" y="2" width="252" height="252" rx="49" fill="url(#tile)"/>
+  <rect x="27" y="26" width="202" height="204" rx="38" fill="url(#inner)"/>
+  <path d="M70 36h86l42 42v132c0 10-7 16-17 16H70c-10 0-15-6-15-16V52c0-10 6-16 15-16Z" fill="#fff"/>
+  <path d="M156 36v34c0 7 4 11 11 11h31Z" fill="#c9e0fa"/>
+  <path d="M156 36v34c0 7 4 11 11 11h31" fill="none" stroke="#91b8e6" stroke-width="3"/>
+  <rect x="77" y="96" width="97" height="42" rx="9" fill="#f0212e"/>
+  <rect x="88" y="107" width="38" height="8" rx="4" fill="white"/>
+  <rect x="88" y="121" width="71" height="6" rx="3" fill="white" opacity=".94"/>
+  <rect x="77" y="157" width="89" height="9" rx="4.5" fill="#0650b8"/>
+  <rect x="77" y="176" width="79" height="9" rx="4.5" fill="#3d7ecb"/>
+  <rect x="77" y="195" width="57" height="9" rx="4.5" fill="#83aadf"/>
+  <circle cx="192" cy="188" r="34" fill="#fff"/>
+  <g clip-path="url(#badgeClip)">
+    <circle cx="192" cy="188" r="30" fill="url(#badgeBlue)"/>
+    <path d="M192 161l10 10h15v15l10 10-11 10v13h-14l-10 10-10-10h-15v-14l-10-9 10-10v-15h15Z" fill="white"/>
+    <path d="M170 173l11-11h-17v17Zm44 0-11-11h17v17Zm-44 30-11-9v23h20Zm44 0 11-9v23h-20Z" fill="#b3defd" opacity=".7"/>
+  </g>
+  <g fill="#0925c1" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-style="italic" font-weight="900">
+    <text x="192" y="184" font-size="11.7" letter-spacing="-.8">MEGA</text>
+    <text x="192" y="194.6" font-size="12.8" letter-spacing="-.8">SAVER</text>
+  </g>
+  <text x="192" y="199.5" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="2.8" text-anchor="middle" fill="#132cbe">Appliances · Gadgets · Furniture</text>
+</svg>

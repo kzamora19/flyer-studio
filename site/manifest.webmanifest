@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "First Megasaver Flyer Studio",
+  "short_name": "Flyer Studio",
+  "description": "Design and print First Megasaver flyers, product cards, and sale artwork",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#113a84",
+  "icons": [
+    {
+      "src": "./icons/flyer-studio-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/flyer-studio.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
