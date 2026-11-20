@@ -2502,6 +2502,28 @@ body.modalOpen{overflow:hidden}
 #powerPTGQuick{white-space:nowrap;border-color:#a3b5d3}
 #powerPTGQuick[data-connected=true]{color:#137347;background:#e2f6eb;border-color:#69ba8f}
 
+
+/* Editor menu: PTG/Sales Tracker-style collapse, one column at ALL widths. */
+#sidebarFixed .editorMenuHeading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#sidebarFixed .editorMenuHeading h1{margin:0;font-size:18px}
+#editorMenuToggle{flex:none;padding:6px 10px;border:1px solid #b6c9e2;border-radius:7px;background:#f4f8fd;color:#173b70;font-size:12px;font-weight:700;cursor:pointer;min-height:32px}
+#editorMenuToggle:hover,#editorMenuToggle:focus-visible{background:#e5effd;outline-offset:2px}
+#studioNav{grid-template-columns:minmax(0,1fr)!important;display:grid;gap:4px}
+#studioNav>button{width:100%;text-align:left;min-height:34px}
+#studioNav #sidebarActions{display:block;width:100%;margin:4px 0 0;padding:7px 0 0;border-top:1px solid #d6e1ef;background:transparent}
+#studioNav #sidebarActions button{width:100%;font-size:12px;text-align:left;border-radius:6px;padding:8px 11px}
+#sidebarFixed.menuCollapsed{padding-bottom:8px}
+#sidebarFixed.menuCollapsed #editorMenuHint,#sidebarFixed.menuCollapsed #studioNav{display:none!important}
+#studioSubnav{display:block;margin:0 0 12px;padding:0 0 10px;border-top:0;border-bottom:1px solid #dbe5f0}
+#studioSubnav[hidden]{display:none!important}
+#studioSubnav>div:not([hidden]){display:flex;flex-direction:column;align-items:stretch;gap:5px}
+#studioSubnav button{width:100%;text-align:left;min-height:32px;padding:7px 10px}
+@media(max-width:700px){
+  #studioNav{grid-template-columns:minmax(0,1fr)!important}
+  #sidebarFixed .editorMenuHeading h1{font-size:16px}
+  #editorMenuToggle{font-size:11px}
+}
+
 </style>
 <header><div><strong>Flyer Studio</strong><br><small>First Megasaver</small></div><span class="status" id="status">Draft</span></header>
 <main>
@@ -4966,7 +4988,7 @@ let highlightSelection=null;
 let modalCardTab='lookup';
 const NAV_ITEMS=[
   ['campaign','Campaign & Branding',[['text','Headlines & Text'],['artwork','Sale Artwork'],['labels','Section Labels']]],
-  ['cards','Edit Flyer Cards',[['front','Front Side'],['back','Back Side']]],
+  ['cards','Edit Flyer Cards',[]],
   ['bulk','Bulk Import',[]],
   ['review','Review & Approval',[]],
   ['backup','Project Backup',[]]
@@ -4975,13 +4997,35 @@ const previewFieldLabels={brand:'Brand header',title:'Sale headline',headlineDes
   tech:'Tech section',bundles:'Bundles section',back:'Back section',footer:'Footer',brandHeader:'Brand header',
   blue:'Section color',red:'Sale color',headlineFont:'Sale headline',sectionFont:'Section headers',taglineFont:'Tagline',
   techCards:'TechZone',frontCards:'Front cards',bundlesCards:'Bundles',backCards:'Back cards',paper:'Flyer page',bleed:'Flyer page'};
+
+// Collapsible, one-column editor menu. Only the menu is collapsed;
+// the selected editor panel and the working flyer-side buttons stay visible.
+function initEditorMenuCollapse(){
+  const fixed=$('sidebarFixed'),toggle=$('editorMenuToggle');
+  const key='flyer-studio-editor-menu-collapsed';
+  let collapsed=false;
+  try{collapsed=localStorage.getItem(key)==='1';}catch{}
+  function showMenu(value){
+    fixed.classList.toggle('menuCollapsed',value);
+    toggle.setAttribute('aria-expanded',String(!value));
+    toggle.textContent=value?'☰ Show menu':'Hide menu ▴';
+    toggle.setAttribute('aria-label',value?'Expand editor menu':'Collapse editor menu');
+  }
+  showMenu(collapsed);
+  toggle.onclick=()=>{
+    collapsed=!collapsed;
+    showMenu(collapsed);
+    try{localStorage.setItem(key,collapsed?'1':'0');}catch{}
+  };
+}
 function initStudioUI(){
   const aside=document.querySelector('main > aside'),stage=document.querySelector('main > .stage');
   const old=[...aside.children];
   const fixed=document.createElement('div');fixed.id='sidebarFixed';
-  fixed.innerHTML='<h1>Sale flyer</h1><p class="muted">Choose a section to edit. Your campaign and photos stay saved in this browser.</p><nav id="studioNav" aria-label="Flyer editor sections"></nav><div id="sidebarActions"><button type="button" id="layoutSettings">⚙ Layout &amp; Appearance</button></div>';
+  fixed.innerHTML='<div class="editorMenuHeading"><h1>Sale flyer</h1><button type="button" id="editorMenuToggle" aria-controls="studioNav" aria-expanded="true">Hide menu ▴</button></div><p class="muted" id="editorMenuHint">Choose a section to edit. Your campaign and photos stay saved in this browser.</p><nav id="studioNav" aria-label="Flyer editor sections"></nav><div id="sidebarActions"><button type="button" id="layoutSettings">⚙ Layout &amp; Appearance</button></div>';
   const content=document.createElement('div');content.id='sidebarContent';
   aside.prepend(fixed,content);
+  initEditorMenuCollapse();
   for(const [key] of NAV_ITEMS){const section=document.createElement('section');section.id='panel-'+key;section.dataset.panel=key;content.append(section);}
   const campaign=$('campaignPanel');$('panel-campaign').append(campaign);campaign.open=true;
   const artwork=$('headlineArtwork');artwork.open=true;
@@ -5076,6 +5120,8 @@ function selectNav(menu,sub){
     group.hidden=group.dataset.submenu!==menu;
     for(const button of group.querySelectorAll('button'))button.classList.toggle('active',button.dataset.sub===currentSub);
   }
+  const subnav=$('studioSubnav');
+  if(subnav)subnav.hidden=![...subnav.querySelectorAll('.navChildren')].some(group=>!group.hidden);
   for(const panel of document.querySelectorAll('#sidebarContent>section'))panel.classList.toggle('active',panel.dataset.panel===menu);
   if(menu==='campaign'){
     $('headlineArtwork').hidden=currentSub!=='artwork';
@@ -5448,9 +5494,12 @@ function renderAppearanceEditor(){
 function initAdvancedStudio(){
   const nav=$('studioNav'),fixed=$('sidebarFixed'),subnav=document.createElement('div');subnav.id='studioSubnav';
   for(const child of [...nav.querySelectorAll('.navChildren')])subnav.append(child);
-  fixed.append(subnav);
-  // Pin the utility button at the very bottom, outside of scrollable content.
-  $('sidebarContent').after($('sidebarActions'));
+  // Secondary choices belong inside the active, scrollable editor panel;
+  // they are no longer a second pinned row above the editor.
+  $('sidebarContent').prepend(subnav);
+  // Layout & Appearance is an ordinary single-column menu item,
+  // not a separate button pinned below the content.
+  nav.append($('sidebarActions'));
   // Create independent navigation submenus for every main heading.
   const extra={bulk:[['csv','CSV Import'],['photos','Photo Matching']],review:[['validation','Validation'],['approval','Approval']],backup:[['download','Download'],['restore','Restore']]};
   for(const [menu,items] of Object.entries(extra)){
