@@ -99,7 +99,7 @@ try{
   ['#addHeaderQuick','#headerDialog','#headerDialog .uiModalBox','#closeHeaderDialog','Header editor']
  ];
  for(const [trigger,wrapper,content,close,label] of editorCases){
-  await page.locator(trigger).click();
+  await page.locator(trigger).first().click();
   await page.locator(wrapper+':visible').waitFor();
   await checkEditorCentered(wrapper,content,label);
   await page.locator(close).click();
@@ -151,7 +151,7 @@ try{
   editorCases[0],editorCases[1],editorCases[2],editorCases[3],
   ['#powerLauncher','#powerModal','#powerModal .powerDialog','#powerClose','Studio+ Tools']
  ]){
-  await page.locator(trigger).click();
+  await page.locator(trigger).first().click();
   await page.locator(wrapper+':visible').waitFor();
   await checkEditorCentered(wrapper,content,label+' on mobile');
   await page.locator(close).click();
