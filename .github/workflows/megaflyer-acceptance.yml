@@ -46,6 +46,8 @@ jobs:
           npx playwright install chromium --with-deps
       - name: Render real PNG and two-page PDF with mocked PTG roles
         run: node tests/megaflyer-browser-smoke.mjs
+      - name: Verify isolated second-account asset sync and JSON backup restore
+        run: node tests/megaflyer-two-device-smoke.mjs
       - name: Save render evidence
         if: always()
         uses: actions/upload-artifact@v4
