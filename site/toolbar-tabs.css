@@ -1,0 +1,51 @@
+/* MegaFlyer preview: compact horizontal, scrollable action tabs.
+   Scoped to the preview toolbar; no action handlers or authoring controls change. */
+.stage{min-width:0}
+.stage .flyer-tab-shell{
+  display:flex;align-items:stretch;width:100%;max-width:100%;min-width:0;
+  margin:0 0 13px;background:#e8eff8;border-bottom:3px solid #098bd1;
+}
+.stage .flyer-tab-shell > .toolbar{
+  flex:1 1 auto;min-width:0;display:flex;flex-wrap:nowrap;gap:0;
+  justify-content:flex-start;align-items:stretch;margin:0;padding:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+}
+.stage .flyer-tab-shell > .toolbar::-webkit-scrollbar{display:none}
+.stage .flyer-tab-shell > .toolbar > button,
+.stage .flyer-tab-shell > .toolbar > button.primary,
+.stage .flyer-tab-shell > .toolbar > #powerLauncher,
+.stage .flyer-tab-shell > .toolbar > #powerPTGQuick,
+.stage .flyer-tab-shell > .toolbar > #cloudToolbar,
+.stage .flyer-tab-shell > .toolbar > #sharedAssetLauncher{
+  flex:0 0 auto;min-height:38px;margin:0;white-space:nowrap;
+  padding:7px 12px;border:1px solid #adc6e0;border-top:3px solid #0d90d4;
+  border-bottom:0;border-radius:3px 3px 0 0;
+  box-shadow:none;background:#fff;color:#173c6d;
+  font-size:12px;font-weight:650;line-height:1.25;
+}
+.stage .flyer-tab-shell > .toolbar > button + button{margin-left:-1px}
+.stage .flyer-tab-shell > .toolbar > button:hover:not(:disabled){
+  background:#edf6ff;border-top-color:#086bb6;color:#0a4f8c;
+}
+.stage .flyer-tab-shell > .toolbar > button[aria-pressed="true"]{
+  background:#dceeff;color:#075493;border-top-color:#074c98;
+  box-shadow:inset 0 -3px 0 #075fbb;
+}
+.stage .flyer-tab-shell > .toolbar > #powerPTGQuick[data-connected="true"]{
+  background:#e6f8ef;color:#12683e;
+}
+.stage .flyer-tab-shell > .toolbar > button:focus-visible,
+.stage .flyer-tab-shell > .flyer-tab-scroll:focus-visible{
+  outline:2px solid #0b64c1;outline-offset:-3px;position:relative;z-index:1;
+}
+.stage .flyer-tab-shell > .flyer-tab-scroll{
+  display:grid;place-items:center;flex:0 0 28px;min-width:28px;
+  padding:0;margin:0;border:1px solid #9db9d8;border-bottom:0;
+  border-radius:0;background:#f7fbff;color:#19528a;
+  font-size:21px;font-weight:700;line-height:1;cursor:pointer;
+}
+.stage .flyer-tab-shell > .flyer-tab-scroll:disabled{opacity:.4;cursor:default}
+@media(max-width:700px){
+  .stage .flyer-tab-shell > .toolbar > button{padding:7px 10px;min-height:40px}
+  .stage .flyer-tab-shell > .flyer-tab-scroll{flex-basis:25px;min-width:25px}
+}

@@ -10,7 +10,7 @@ const CATEGORIES=['logos','banners','backgrounds','templates','decorations','oth
 const MAX=10*1024*1024;
 const TYPES=new Set(['image/png','image/jpeg','image/webp']);
 const el=id=>document.getElementById(id);
-let rows=[],canManage=false,busy=false,previewURL='',selected=null;
+let rows=[],canManage=false,busy=false,previewURL='',selected=null,lastSessionId=null;
 function say(message,ok=false){el('sharedAssetNotice').textContent=message;el('sharedAssetNotice').dataset.ok=String(ok);}
 async function gateway(action,fields={}){
  if(!/^https:\/\/[^/]+\.supabase\.co$/.test(ROOT)||!KEY)
@@ -32,17 +32,48 @@ async function fileData(file){
  fileCheck(file);
  return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=()=>reject(Error('Could not read image.'));r.readAsDataURL(file);});
 }
+function clearPreview(){
+ if(previewURL){URL.revokeObjectURL(previewURL);previewURL='';}
+ const image=el('sharedAssetPreview');
+ if(image){image.hidden=true;image.removeAttribute('src');}
+ const label=el('sharedAssetSelected');if(label)label.value='';
+ selected=null;
+}
+// Prevent a previous PTG account's cached asset list/preview from remaining
+// visible when the connection changes, including while a request is pending.
+function handleSessionChange(){
+ lastSessionId=null;
+ clearPreview();
+ rows=[];canManage=false;
+ el('sharedAssetAdd').hidden=true;
+ el('sharedAssetManagerHint').textContent='PTG account changed. Check asset permissions.';
+ render();
+ say('PTG account changed. Refresh the Shared Asset Library.');
+ if(!el('sharedAssetModal').hidden&&!busy)void refresh();
+}
 async function refresh(){
  if(busy)return;
+ const sessionId=typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):'';
+ if(sessionId!==lastSessionId){
+  clearPreview();lastSessionId=sessionId;
+  rows=[];canManage=false;el('sharedAssetAdd').hidden=true;render();
+ }
  busy=true;el('sharedAssetRefresh').disabled=true;
  try{
-  const perms=await gateway('permissions');canManage=!!perms.canManage;
+  const perms=await gateway('permissions');
+  if(sessionId!==(typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):''))throw Error('PTG session changed while loading assets.');
+  canManage=!!perms.canManage;
   el('sharedAssetAdd').hidden=!canManage;
   el('sharedAssetManagerHint').textContent=canManage?'Authorized asset manager':'Read-only shared asset access';
   const result=await gateway('list',{category:el('sharedAssetFilter').value,search:el('sharedAssetSearch').value.trim()});
+  if(sessionId!==(typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):''))throw Error('PTG session changed while loading assets.');
   rows=result.assets||[];render();
   say(rows.length+' shared asset(s) found.',true);
- }catch(e){rows=[];canManage=false;el('sharedAssetAdd').hidden=true;render();say(e.message);}
+ }catch(e){
+  clearPreview();rows=[];canManage=false;el('sharedAssetAdd').hidden=true;
+  el('sharedAssetManagerHint').textContent='PTG Team Leader or higher sign-in required.';
+  render();say(e.message);
+ }
  finally{busy=false;el('sharedAssetRefresh').disabled=false;}
 }
 function button(row,label,fn){
@@ -64,10 +95,14 @@ function render(){
  if(!rows.length){const blank=document.createElement('p');blank.textContent='No shared assets available.';list.append(blank);}
 }
 async function assetImage(asset){
+ const sessionId=typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):'';
  const result=await gateway('preview',{id:asset.id});
+ if(sessionId!==(typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):''))throw Error('PTG session changed while loading image.');
  const response=await fetch(result.url,{cache:'no-store'});
  if(!response.ok)throw Error('Cannot load asset image.');
- return response.blob();
+ const blob=await response.blob();
+ if(sessionId!==(typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):''))throw Error('PTG session changed while loading image.');
+ return blob;
 }
 async function preview(asset){
  try{
@@ -170,22 +205,53 @@ async function exportBackup(){
   say('Backup file saved. Upload it to your Google Drive for safekeeping.',true);
  }catch(e){say('Backup failed: '+e.message);}
 }
+// Preflight the entire backup before creating remote assets, so later invalid
+// entries cannot cause partially imported libraries.
+function validateBackup(data){
+ if(data?.kind!=='FlyerStudioSharedAssetBackup'||data?.version!==1||!Array.isArray(data.assets)||data.assets.length>25)
+  throw Error('Not a supported Shared Asset Library backup.');
+ let total=0;
+ for(let i=0;i<data.assets.length;i++){
+  const a=data.assets[i];
+  if(!a||typeof a.name!=='string'||!a.name.trim()||a.name.trim().length>120||!CATEGORIES.includes(a.category)||!TYPES.has(a.mime)||typeof a.base64!=='string')
+   throw Error('Invalid backup asset at position '+(i+1)+'.');
+  const value=a.base64;
+  if(value.length<12||value.length>Math.ceil(MAX*4/3)+8||value.length%4!==0||!/^[A-Za-z0-9+/]+={0,2}$/.test(value))
+   throw Error('Invalid encoded image at position '+(i+1)+'.');
+  const pad=value.endsWith('==')?2:value.endsWith('=')?1:0;
+  const size=value.length/4*3-pad;
+  if(size<=0||size>MAX)throw Error('Image at position '+(i+1)+' exceeds the 10 MB limit.');
+  total+=size;
+  if(total>40*1024*1024)throw Error('Backup exceeds the 40 MB image limit.');
+  let signature;
+  try{signature=atob(value.slice(0,16));}catch{throw Error('Invalid encoded image at position '+(i+1)+'.');}
+  const png=a.mime==='image/png'&&signature.length>=8&&[137,80,78,71,13,10,26,10].every((b,j)=>signature.charCodeAt(j)===b);
+  const jpg=a.mime==='image/jpeg'&&signature.length>=3&&signature.charCodeAt(0)===255&&signature.charCodeAt(1)===216&&signature.charCodeAt(2)===255;
+  const webp=a.mime==='image/webp'&&signature.startsWith('RIFF')&&signature.slice(8,12)==='WEBP';
+  if(!(png||jpg||webp))throw Error('Image signature mismatch at position '+(i+1)+'.');
+ }
+ return data.assets;
+}
 async function restoreBackup(file){
  if(!canManage)return say('PTG Team Leader or higher permission required.');
+ let imported=0,planned=0;
  try{
   if(!file||file.size>55*1024*1024)throw Error('Choose a valid backup up to 55 MB.');
-  const json=JSON.parse(await file.text());
-  if(json?.kind!=='FlyerStudioSharedAssetBackup'||json?.version!==1||!Array.isArray(json.assets)||json.assets.length>25)
-   throw Error('Not a supported Shared Asset Library backup.');
-  if(!confirm('Import '+json.assets.length+' assets into the shared library? Existing assets will not be deleted.'))return;
-  let count=0;
-  for(const a of json.assets){
-   if(!a||typeof a.name!=='string'||a.name.length>120||!CATEGORIES.includes(a.category)||!TYPES.has(a.mime)||typeof a.base64!=='string')
-    throw Error('Invalid backup asset at position '+(count+1));
-   await gateway('add',{name:a.name,category:a.category,mime:a.mime,base64:a.base64});count++;
+  const assets=validateBackup(JSON.parse(await file.text()));
+  planned=assets.length;
+  if(!planned)return say('The backup contains no assets to restore.');
+  if(!confirm('Import '+planned+' assets into the shared library? Existing assets will not be deleted.'))return;
+  for(const asset of assets){
+   await gateway('add',{name:asset.name.trim(),category:asset.category,mime:asset.mime,base64:asset.base64});
+   imported++;
   }
-  await refresh();say('Restored '+count+' shared assets from backup.',true);
- }catch(e){say('Restore failed: '+e.message);}
+  await refresh();say('Restored '+imported+' shared assets from backup.',true);
+ }catch(e){
+  if(imported){
+   await refresh();
+   say('Restore interrupted after '+imported+' of '+planned+' assets. The imported items are retained; check the library before retrying. '+e.message);
+  }else say('Restore failed: '+e.message);
+ }
 }
 async function remove(asset){
  if(!canManage||!confirm('Permanently delete shared asset "'+asset.name+'"?'))return;
@@ -194,11 +260,11 @@ async function remove(asset){
 }
 function init(){
  if(el('sharedAssetModal'))return;
- const style=document.createElement('style');style.textContent=`#sharedAssetModal[hidden]{display:none!important}#sharedAssetModal{position:fixed;inset:0;z-index:99999;background:#0009;display:flex;align-items:center;justify-content:center;padding:20px}#sharedAssetDialog{width:min(860px,100%);max-height:90vh;overflow:auto;background:white;color:#182333;border-radius:16px;padding:22px;box-shadow:0 20px 65px #0005}#sharedAssetDialog input,#sharedAssetDialog select{padding:9px;max-width:100%}.sa-row{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:12px 0}.sa-row label{display:flex;flex-direction:column;gap:5px}.sa-item{display:flex;align-items:center;gap:6px;padding:8px;border-bottom:1px solid #ddd;flex-wrap:wrap}.sa-detail{flex:1;min-width:170px}.sa-detail small{display:block;color:#667}#sharedAssetNotice{padding:10px;background:#f4f5f8}#sharedAssetNotice[data-ok=true]{background:#e3f4eb}#sharedAssetPreview{max-height:210px;max-width:100%;object-fit:contain}`;
+ const style=document.createElement('style');style.textContent=`#sharedAssetModal[hidden]{display:none!important}#sharedAssetModal{position:fixed;inset:0;z-index:99999;background:transparent;pointer-events:none;display:flex;align-items:flex-start;justify-content:flex-end;padding:12px}#sharedAssetDialog{width:min(550px,100%);max-height:calc(100dvh - 88px);overflow:auto;pointer-events:auto;background:white;color:#182333;border-radius:16px;padding:22px;box-shadow:0 20px 65px #0005}#sharedAssetDialog input,#sharedAssetDialog select{padding:9px;max-width:100%}.sa-row{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:12px 0}.sa-row label{display:flex;flex-direction:column;gap:5px}.sa-item{display:flex;align-items:center;gap:6px;padding:8px;border-bottom:1px solid #ddd;flex-wrap:wrap}.sa-detail{flex:1;min-width:170px}.sa-detail small{display:block;color:#667}#sharedAssetNotice{padding:10px;background:#f4f5f8}#sharedAssetNotice[data-ok=true]{background:#e3f4eb}#sharedAssetPreview{max-height:210px;max-width:100%;object-fit:contain}#sharedAssetDialog .sa-drag-handle{cursor:grab;touch-action:none;user-select:none}#sharedAssetDialog .sa-drag-handle button{cursor:pointer;touch-action:auto}@media(max-width:700px){#sharedAssetModal{align-items:flex-end;padding:8px}#sharedAssetDialog{width:100%;max-height:55dvh;padding:14px}}`;
  document.head.append(style);
  const overlay=document.createElement('div');overlay.id='sharedAssetModal';overlay.hidden=true;
- overlay.innerHTML=`<div id="sharedAssetDialog" role="dialog" aria-modal="true" aria-labelledby="sharedAssetTitle">
- <div class="sa-row" style="justify-content:space-between"><h2 id="sharedAssetTitle">Shared Asset Library</h2><button type="button" id="sharedAssetClose">Close</button></div>
+ overlay.innerHTML=`<div id="sharedAssetDialog" role="dialog" aria-modal="false" aria-labelledby="sharedAssetTitle">
+ <div class="sa-row sa-drag-handle" style="justify-content:space-between"><h2 id="sharedAssetTitle">Shared Asset Library</h2><button type="button" id="sharedAssetClose">Close</button></div>
  <p id="sharedAssetManagerHint">Sign in with PTG Team Leader or higher. No separate cloud login is required.</p>
  <div class="sa-row"><button type="button" id="sharedAssetConnectPTG">PTG sign-in</button></div>
  <div class="sa-row"><label>Search<input id="sharedAssetSearch" placeholder="Find asset"></label><label>Category<select id="sharedAssetFilter"><option value="">All categories</option>${CATEGORIES.map(c=>'<option value="'+c+'">'+c+'</option>').join('')}</select></label><button type="button" id="sharedAssetRefresh">Refresh</button></div>
@@ -229,6 +295,7 @@ function init(){
   const username=el('ptgUsername');
   if(username&&!username.closest('[hidden]'))username.focus();
  };
+ window.addEventListener('megaflyer:ptg-session-changed',handleSessionChange);
  el('sharedAssetRefresh').onclick=refresh;el('sharedAssetFilter').onchange=refresh;el('sharedAssetSearch').onchange=refresh;el('sharedAssetUpload').onclick=add;
  el('sharedAssetExport').onclick=exportBackup;
  el('sharedAssetRestore').onchange=e=>{const file=e.currentTarget.files[0];e.currentTarget.value='';restoreBackup(file);};

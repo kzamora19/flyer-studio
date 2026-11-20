@@ -1,0 +1,32 @@
+name: MegaFlyer UI regression
+on:
+  push:
+    branches:
+      - main
+      - feature/horizontal-preview-tabs-20261120
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run MegaFlyer UI and shared asset checks
+        run: |
+          set -e
+          for test in tests/*.cjs; do
+            echo "Running $test"
+            node "$test"
+          done
+      - name: Install Chromium dependencies
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.65.1
+          npx playwright install chromium --with-deps
+      - name: Verify toolbar and editor UX in Chromium
+        run: node tests/megaflyer-browser-ui.mjs
