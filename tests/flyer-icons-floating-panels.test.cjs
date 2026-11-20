@@ -35,6 +35,10 @@ assert.match(html,/\.uiModalBackdrop\{background:transparent!important;pointer-e
 assert.match(html,/\.uiModalBackdrop \.uiModalBox\{pointer-events:auto!important/,'Editor controls remain interactive');
 assert.match(html,/#powerModal\{background:transparent!important;pointer-events:none!important/,'Studio+ backdrop is transparent/pass-through');
 assert.match(html,/#powerModal \.powerDialog\{pointer-events:auto!important/,'Studio+ controls interactive');
+assert.match(html,/\.uiModalBackdrop\{background:transparent!important;pointer-events:none!important;justify-content:center!important;align-items:center!important/,'Editor modals open centered');
+assert.match(html,/#powerModal\{background:transparent!important;pointer-events:none!important;justify-content:center!important;align-items:center!important/,'Studio+ opens centered');
+assert.match(html,/\.uiModalBackdrop\{inset:0!important;align-items:center!important;justify-content:center!important/,'Mobile editor modals open centered');
+
 assert.match(shared,/#sharedAssetModal\{position:fixed;inset:0;z-index:99999;background:transparent;pointer-events:none/,'Shared Asset Library backdrop is pass-through');
 assert.match(shared,/#sharedAssetDialog\{[^}]*pointer-events:auto/,'Shared Asset controls interactive');
 assert.match(shared,/#sharedAssetModal\{[^}]*display:flex;align-items:center;justify-content:center/,'Shared Asset Library opens centered by default');
