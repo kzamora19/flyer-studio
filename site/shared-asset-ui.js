@@ -1,8 +1,8 @@
-/* Staged Shared Asset UI: calls dual-auth Edge gateway; NOT deployed. */
+/* PTG-only Shared Asset UI on feature branch; public website NOT deployed. */
 (()=>{
 'use strict';
 // Explicit opt-in release configuration: never enable this feature before
-// backend permissions and account pairing are accepted.
+// backend permissions are accepted.
 const CONFIG=window.FLYER_SHARED_ASSET_CONFIG||null;
 const ROOT=CONFIG?.supabaseUrl||'';
 const KEY=CONFIG?.publishableKey||'';
@@ -82,30 +82,42 @@ async function preview(asset){
 async function apply(asset){
  try{
   const target=el('sharedAssetTarget').value;
-  const inputIds={
-   card:'cardPhotoUpload',
-   logo:'logo',
-   front:'frontArtworkUpload',
-   back:'backArtworkUpload'
-  };
-  const input=el(inputIds[target]);
-  if(!input)throw Error('The selected image destination is unavailable.');
-  if(target==='card'){
-   // Existing cardPhotoUpload handler writes to cardPhotoOffer, not merely
-   // the visually selected card. Prevent silently applying to the wrong card.
-   if(typeof cardPhotoOffer==='undefined'||!cardPhotoOffer)throw Error('Open a product card photo editor and select a filled card first.');
-  }
   const blob=await assetImage(asset);
   if(!TYPES.has(blob.type))throw Error('Unsupported stored image type.');
   const suffix={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[blob.type];
   const file=new File([blob],asset.name+suffix,{type:blob.type});
-  const transfer=new DataTransfer();transfer.items.add(file);
-  input.files=transfer.files;
-  // This triggers Flyer's existing readPhoto/edited pipeline, preserving
-  // autosave, photo cropping and export logic.
-  input.dispatchEvent(new Event('change',{bubbles:true}));
+  if(target==='card'){
+   // Resolve the currently selected flyer grid slot, not a stale editor photo.
+   // This works even when the card editor is closed behind this dialog.
+   if(typeof targetedOffer!=='function'||typeof attachUploadedPhoto!=='function')
+    throw Error('The product-card editor is unavailable.');
+   const offer=targetedOffer();
+   if(!offer)throw Error('Select a filled product card before applying a shared photo.');
+   if(!await attachUploadedPhoto(offer,file))throw Error('The selected product card changed. Please retry.');
+   edited('Shared asset applied to '+offer.sku+'.');
+  }else if(target==='logo'){
+   if(typeof state==='undefined'||!state.campaign||typeof readPhoto!=='function')
+    throw Error('Campaign branding is unavailable.');
+   // Classic headers always display the official logo, regardless of the
+   // campaign.logo value. Switch to the custom header when a custom asset is
+   // explicitly applied so the result is visible in preview and PDF.
+   const image=await readPhoto(file);
+   state.campaign.logo=image;
+   state.campaign.brandHeader='custom';
+   edited('Shared logo applied to campaign branding.');
+  }else if(target==='front'||target==='back'){
+   const input=el(target==='front'?'frontArtworkUpload':'backArtworkUpload');
+   if(!input)throw Error('Headline artwork controls are unavailable.');
+   const transfer=new DataTransfer();
+   transfer.items.add(file);input.files=transfer.files;
+   // Reuse the existing image-import listener and its validated save flow.
+   input.dispatchEvent(new Event('change',{bubbles:true}));
+  }else{
+   throw Error('Select a valid asset destination.');
+  }
   selected=asset;el('sharedAssetSelected').value=asset.name;
-  say('Sent '+asset.name+' to '+el('sharedAssetTarget').selectedOptions[0].textContent+'. Check the flyer preview.',true);
+  say('Applied '+asset.name+' to '+el('sharedAssetTarget').selectedOptions[0].textContent+
+   '. Check the flyer preview and PDF.',true);
  }catch(e){say('Could not apply asset: '+e.message);}
 }
 async function add(){
@@ -201,10 +213,20 @@ function init(){
  el('sharedAssetClose').onclick=()=>{overlay.hidden=true;launcher.focus();};
  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.hidden=true;});
  el('sharedAssetConnectPTG').onclick=()=>{
+  if(typeof ptgSession!=='undefined'&&ptgSession?.token){
+   say('PTG is already connected. Click Refresh to check asset permissions.',true);return;
+  }
+  if(typeof ptgLocalOrigin==='function'&&!ptgLocalOrigin()){
+   say('For local PTG sign-in, open Flyer Studio on http://127.0.0.1:3000/ instead of port 5500.');return;
+  }
+  if(typeof openCard!=='function'||typeof switchCardTab!=='function'){
+   say('PTG sign-in is not available in this editor.');return;
+  }
   overlay.hidden=true;
-  const user=el('ptgUsername');
-  if(user){user.scrollIntoView({block:'center',behavior:'smooth'});user.focus();}
-  else say('Open PTG sign-in in the product lookup panel.');
+  openCard(slotTarget.section,Number(slotTarget.slot));
+  switchCardTab('lookup');
+  const username=el('ptgUsername');
+  if(username&&!username.closest('[hidden]'))username.focus();
  };
  el('sharedAssetRefresh').onclick=refresh;el('sharedAssetFilter').onchange=refresh;el('sharedAssetSearch').onchange=refresh;el('sharedAssetUpload').onclick=add;
  el('sharedAssetExport').onclick=exportBackup;
