@@ -1,19 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
   <title id="title">First Megasaver Flyer Studio</title>
-  <desc id="desc">A white folded flyer with a red promotion banner and First Megasaver logo badge on a blue square</desc>
-  <defs><clipPath id="megasaver-badge"><circle cx="193" cy="188" r="31"/></clipPath></defs>
-  <rect width="256" height="256" rx="52" fill="#113a84"/>
-  <rect x="27" y="26" width="202" height="204" rx="36" fill="#0b56cf" opacity=".64"/>
-  <path d="M70 36h87l41 42v134a15 15 0 0 1-15 15H70a15 15 0 0 1-15-15V51a15 15 0 0 1 15-15Z" fill="#fff"/>
-  <path d="M156 36v34a10 10 0 0 0 10 10h32Z" fill="#c9e0ff"/>
-  <path d="M156 36v34a10 10 0 0 0 10 10h32" fill="none" stroke="#9dbbe2" stroke-width="3"/>
-  <rect x="77" y="97" width="98" height="43" rx="9" fill="#e92c32"/>
-  <rect x="88" y="108" width="39" height="8" rx="4" fill="#fff"/>
-  <rect x="88" y="122" width="73" height="6" rx="3" fill="#fff" opacity=".89"/>
-  <rect x="77" y="156" width="98" height="9" rx="4.5" fill="#1453ad"/>
-  <rect x="77" y="176" width="79" height="9" rx="4.5" fill="#1453ad" opacity=".76"/>
-  <rect x="77" y="196" width="58" height="9" rx="4.5" fill="#1453ad" opacity=".51"/>
-  <circle cx="193" cy="188" r="35" fill="#fff" stroke="#fff" stroke-width="7"/>
-  <image x="162" y="157" width="62" height="62" preserveAspectRatio="xMidYMid slice" clip-path="url(#megasaver-badge)" xlink:href="data:image/png;base64,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"/>
-  <circle cx="193" cy="188" r="31" fill="none" stroke="#fff" stroke-width="3"/>
+  <desc id="desc">A white folded flyer with a red promotion banner and a crisp Mega Saver emblem on a rounded blue app tile</desc>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b409b"/><stop offset="1" stop-color="#08347c"/></linearGradient>
+    <linearGradient id="inner" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="#1052b9"/><stop offset="1" stop-color="#0348ae"/></linearGradient>
+    <linearGradient id="badgeBlue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#90d0ff"/><stop offset="1" stop-color="#4e9ff2"/></linearGradient>
+    <clipPath id="badgeClip"><circle cx="192" cy="188" r="30"/></clipPath>
+  </defs>
+  <rect x="2" y="2" width="252" height="252" rx="49" fill="url(#tile)"/>
+  <rect x="27" y="26" width="202" height="204" rx="38" fill="url(#inner)"/>
+  <path d="M70 36h86l42 42v132c0 10-7 16-17 16H70c-10 0-15-6-15-16V52c0-10 6-16 15-16Z" fill="#fff"/>
+  <path d="M156 36v34c0 7 4 11 11 11h31Z" fill="#c9e0fa"/>
+  <path d="M156 36v34c0 7 4 11 11 11h31" fill="none" stroke="#91b8e6" stroke-width="3"/>
+  <rect x="77" y="96" width="97" height="42" rx="9" fill="#f0212e"/>
+  <rect x="88" y="107" width="38" height="8" rx="4" fill="white"/>
+  <rect x="88" y="121" width="71" height="6" rx="3" fill="white" opacity=".94"/>
+  <rect x="77" y="157" width="89" height="9" rx="4.5" fill="#0650b8"/>
+  <rect x="77" y="176" width="79" height="9" rx="4.5" fill="#3d7ecb"/>
+  <rect x="77" y="195" width="57" height="9" rx="4.5" fill="#83aadf"/>
+  <circle cx="192" cy="188" r="34" fill="#fff"/>
+  <g clip-path="url(#badgeClip)">
+    <circle cx="192" cy="188" r="30" fill="url(#badgeBlue)"/>
+    <path d="M192 161l10 10h15v15l10 10-11 10v13h-14l-10 10-10-10h-15v-14l-10-9 10-10v-15h15Z" fill="white"/>
+    <path d="M170 173l11-11h-17v17Zm44 0-11-11h17v17Zm-44 30-11-9v23h20Zm44 0 11-9v23h-20Z" fill="#b3defd" opacity=".7"/>
+  </g>
+  <g fill="#0925c1" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-style="italic" font-weight="900">
+    <text x="192" y="184" font-size="11.7" letter-spacing="-.8">MEGA</text>
+    <text x="192" y="194.6" font-size="12.8" letter-spacing="-.8">SAVER</text>
+  </g>
+  <text x="192" y="199.5" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="2.8" text-anchor="middle" fill="#132cbe">Appliances · Gadgets · Furniture</text>
 </svg>
