@@ -2873,6 +2873,8 @@ function ptgConnected(session,message) {
   $('ptgConnection').textContent=message;
   if(typeof powerStatus==='function')powerStatus();
   invalidateLookup();
+  // Notify the Shared Asset Library without exposing any PTG token or identity.
+  window.dispatchEvent(new Event('megaflyer:ptg-session-changed'));
 }
 async function signInPTG(event) {
   event.preventDefault();

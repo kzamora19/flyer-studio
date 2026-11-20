@@ -39,6 +39,18 @@ function clearPreview(){
  const label=el('sharedAssetSelected');if(label)label.value='';
  selected=null;
 }
+// Prevent a previous PTG account's cached asset list/preview from remaining
+// visible when the connection changes, including while a request is pending.
+function handleSessionChange(){
+ lastSessionId=null;
+ clearPreview();
+ rows=[];canManage=false;
+ el('sharedAssetAdd').hidden=true;
+ el('sharedAssetManagerHint').textContent='PTG account changed. Check asset permissions.';
+ render();
+ say('PTG account changed. Refresh the Shared Asset Library.');
+ if(!el('sharedAssetModal').hidden&&!busy)void refresh();
+}
 async function refresh(){
  if(busy)return;
  const sessionId=typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):'';
@@ -48,10 +60,13 @@ async function refresh(){
  }
  busy=true;el('sharedAssetRefresh').disabled=true;
  try{
-  const perms=await gateway('permissions');canManage=!!perms.canManage;
+  const perms=await gateway('permissions');
+  if(sessionId!==(typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):''))throw Error('PTG session changed while loading assets.');
+  canManage=!!perms.canManage;
   el('sharedAssetAdd').hidden=!canManage;
   el('sharedAssetManagerHint').textContent=canManage?'Authorized asset manager':'Read-only shared asset access';
   const result=await gateway('list',{category:el('sharedAssetFilter').value,search:el('sharedAssetSearch').value.trim()});
+  if(sessionId!==(typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):''))throw Error('PTG session changed while loading assets.');
   rows=result.assets||[];render();
   say(rows.length+' shared asset(s) found.',true);
  }catch(e){
@@ -80,10 +95,14 @@ function render(){
  if(!rows.length){const blank=document.createElement('p');blank.textContent='No shared assets available.';list.append(blank);}
 }
 async function assetImage(asset){
+ const sessionId=typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):'';
  const result=await gateway('preview',{id:asset.id});
+ if(sessionId!==(typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):''))throw Error('PTG session changed while loading image.');
  const response=await fetch(result.url,{cache:'no-store'});
  if(!response.ok)throw Error('Cannot load asset image.');
- return response.blob();
+ const blob=await response.blob();
+ if(sessionId!==(typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):''))throw Error('PTG session changed while loading image.');
+ return blob;
 }
 async function preview(asset){
  try{
@@ -276,6 +295,7 @@ function init(){
   const username=el('ptgUsername');
   if(username&&!username.closest('[hidden]'))username.focus();
  };
+ window.addEventListener('megaflyer:ptg-session-changed',handleSessionChange);
  el('sharedAssetRefresh').onclick=refresh;el('sharedAssetFilter').onchange=refresh;el('sharedAssetSearch').onchange=refresh;el('sharedAssetUpload').onclick=add;
  el('sharedAssetExport').onclick=exportBackup;
  el('sharedAssetRestore').onchange=e=>{const file=e.currentTarget.files[0];e.currentTarget.value='';restoreBackup(file);};
