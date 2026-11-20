@@ -10,7 +10,7 @@ const CATEGORIES=['logos','banners','backgrounds','templates','decorations','oth
 const MAX=10*1024*1024;
 const TYPES=new Set(['image/png','image/jpeg','image/webp']);
 const el=id=>document.getElementById(id);
-let rows=[],canManage=false,busy=false,previewURL='',selected=null;
+let rows=[],canManage=false,busy=false,previewURL='',selected=null,lastSessionId=null;
 function say(message,ok=false){el('sharedAssetNotice').textContent=message;el('sharedAssetNotice').dataset.ok=String(ok);}
 async function gateway(action,fields={}){
  if(!/^https:\/\/[^/]+\.supabase\.co$/.test(ROOT)||!KEY)
@@ -32,8 +32,20 @@ async function fileData(file){
  fileCheck(file);
  return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=()=>reject(Error('Could not read image.'));r.readAsDataURL(file);});
 }
+function clearPreview(){
+ if(previewURL){URL.revokeObjectURL(previewURL);previewURL='';}
+ const image=el('sharedAssetPreview');
+ if(image){image.hidden=true;image.removeAttribute('src');}
+ const label=el('sharedAssetSelected');if(label)label.value='';
+ selected=null;
+}
 async function refresh(){
  if(busy)return;
+ const sessionId=typeof ptgSession!=='undefined'&&ptgSession?.id?String(ptgSession.id):'';
+ if(sessionId!==lastSessionId){
+  clearPreview();lastSessionId=sessionId;
+  rows=[];canManage=false;el('sharedAssetAdd').hidden=true;render();
+ }
  busy=true;el('sharedAssetRefresh').disabled=true;
  try{
   const perms=await gateway('permissions');canManage=!!perms.canManage;
@@ -42,7 +54,11 @@ async function refresh(){
   const result=await gateway('list',{category:el('sharedAssetFilter').value,search:el('sharedAssetSearch').value.trim()});
   rows=result.assets||[];render();
   say(rows.length+' shared asset(s) found.',true);
- }catch(e){rows=[];canManage=false;el('sharedAssetAdd').hidden=true;render();say(e.message);}
+ }catch(e){
+  clearPreview();rows=[];canManage=false;el('sharedAssetAdd').hidden=true;
+  el('sharedAssetManagerHint').textContent='PTG Team Leader or higher sign-in required.';
+  render();say(e.message);
+ }
  finally{busy=false;el('sharedAssetRefresh').disabled=false;}
 }
 function button(row,label,fn){
