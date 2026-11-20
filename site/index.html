@@ -4458,12 +4458,44 @@ function artworkBackground(ctx,artwork,box,fallback) {
   gradient.addColorStop(1,far);
   return gradient;
 }
+// A wide imported banner cannot physically fill a tall half-width panel without
+// cropping its lettering. Preserve the full artwork and fill severe letterboxing
+// with a soft, cropped continuation of the SAME artwork instead of plain red bars.
+// The same renderer is used for the live preview, 300-ppi PNG and both PDF pages.
+function artworkNeedsBackdrop(image,w,h) {
+  if(!image||!image.width||!image.height||w<=0||h<=0)return false;
+  const contain=Math.min(w/image.width,h/image.height);
+  const gapX=(w-image.width*contain)/w;
+  const gapY=(h-image.height*contain)/h;
+  return Math.max(gapX,gapY)>0.18;
+}
+function artworkSoftBackdrop(ctx,image,x,y,w,h) {
+  const overscan=32;
+  const scale=Math.max((w+overscan*2)/image.width,(h+overscan*2)/image.height);
+  const drawW=image.width*scale,drawH=image.height*scale;
+  ctx.save();
+  ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  // Blur applies ONLY to the cropped background copy; the centered image and
+  // all lettering below remain unfiltered and preserve their original ratio.
+  ctx.filter='blur(20px) saturate(0.9)';
+  ctx.globalAlpha=0.78;
+  ctx.drawImage(image,x+(w-drawW)/2,y+(h-drawH)/2,drawW,drawH);
+  ctx.restore();
+  const shade=ctx.createLinearGradient(x,y,x,y+h);
+  shade.addColorStop(0,'rgba(15,19,48,0.32)');
+  shade.addColorStop(0.5,'rgba(22,12,38,0.12)');
+  shade.addColorStop(1,'rgba(15,19,48,0.32)');
+  fill(ctx,shade,x,y,w,h);
+}
 function banner(ctx,c,box,parts,artwork) {
   const {x,y,width:w,height:h}=box;
   if(artwork) {
     const imageHeight=h-(box.dateHeight||0);
     const imageBox={x,y,width:w,height:imageHeight};
     fill(ctx,artworkBackground(ctx,artwork,imageBox,c.red),x,y,w,imageHeight);
+    if(artworkNeedsBackdrop(artwork,w,imageHeight)) {
+      artworkSoftBackdrop(ctx,artwork,x,y,w,imageHeight);
+    }
     photo(ctx,artwork,x,y,w,imageHeight);
     if(box.dateHeight&&c.dates) {
       ctx.save();ctx.textAlign='center';
