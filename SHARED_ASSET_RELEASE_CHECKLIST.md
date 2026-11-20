@@ -1,8 +1,8 @@
 # MegaFlyer Studio — Shared Asset Library release acceptance
 
-**Status: development-only. Do not merge or publish until the actual browser and print checks are signed off.**
+**Status: acceptance testing in progress. The Shared Asset Library application code is already present on live `main` from separately approved releases. This draft PR contains additional QA tests and release documentation only; do not merge it without reviewing the current branch diff.**
 
-This checklist applies to `feature/shared-asset-library`. GitHub Pages `main` is the separate live application. The Shared Asset Library is guarded by **PTG session + PTG role**, not Flyer Cloud Workspace accounts. Do not enter passwords or tokens into test logs.
+This checklist tracks acceptance on `feature/shared-asset-library`. GitHub Pages `main` is the live application, with some functionality published separately from other development chats. The Shared Asset Library is guarded by **PTG session + PTG role**, not Flyer Cloud Workspace accounts. Do not enter passwords or tokens into test logs.
 
 ## Preflight
 
@@ -88,3 +88,11 @@ The development branch has isolated, no-network regression tests for backup vali
 - This **does not** prove genuine Supabase cross-device behavior, role enforcement with real PTG identities, nor real Google Drive upload/download/restore. The JSON was transferred entirely within the test runner (no Google account or production data touched).
 - Read-only security snapshot: Flyer Studio Supabase project ACTIVE_HEALTHY, one metadata record, one object, private `flyer-shared-assets` bucket, RLS enabled, and no direct table privileges for `anon` or `authenticated` on `flyer_shared_assets`. The PTG-gated Edge Function is ACTIVE version 2.
 - Outstanding live acceptance: authorized Team Leader **and** Admin, ordinary/disabled/revoked roles on real PTG; cross-device synchronization with distinct real accounts; one non-destructive test file exported to and restored from real Google Drive; and a printed **real** promotional flyer. Do not claim release completion from mock acceptance alone.
+
+
+## November 20, 2026 — latest approved production UI synchronization
+
+- The feature branch was brought up to live `main` commit `68417ef8d7` (centered MegaFlyer editor popups) after earlier sync to `3aab032532` (centered Shared Asset Library), without changing `main`.
+- The shared asset frontend, PTG authorization wiring, icon, horizontal toolbar, and popup fixes are **already in the live `main` source**. PR #5 is now only a draft acceptance/testing/documentation contribution, not a new deployment of the existing library.
+- The acceptance workflow now contains the isolated two-context asset sync, JSON offline transfer/restore and full-resolution flyer export tests. These are safe mocks and do not attest to live real-user behavior.
+- Real account permissions, actual cross-device sync, real Google Drive file transfer/restore, and physical print approval remain open. The live service must not be mutated for test purposes without a controlled authorized fixture.

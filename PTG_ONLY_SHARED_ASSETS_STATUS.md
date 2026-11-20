@@ -105,3 +105,11 @@ These are test-only commands; they do not write to Supabase or publish GitHub Pa
 - An early smoke-test click timed out because the Shared Asset Library panel covered the export toolbar; the test was corrected to close the panel before clicking. No production export resolution was lowered, and the full-resolution re-run passed.
 - A separately published UI release on `main` included the approved toolbar and editor changes during this work. This review branch is **draft** and contains automated-test/acceptance documentation; the live branch has continued to evolve. Avoid overwriting those current live changes.
 - Real TL/Admin/ordinary/revoked PTG account tests, cross-device sync and Google Drive backup/restore remain unverified. **No Supabase writes or PTG production changes were made by this acceptance run.**
+
+
+## November 20, 2026 — status correction after cross-chat production updates
+
+- Another chat already published the Shared Asset Library frontend and related MegaFlyer toolbar, centered asset popup, and all-editor popup centering on GitHub Pages `main`. Earlier entries describing the library as 'development-only' are historical and **not the current production status**.
+- Acceptance PR #5 remains **draft**. Its current Git diff consists of the dedicated GitHub Actions acceptance workflow, browser QA scripts, and documentation; no application runtime files differ from the synchronized live `main` baseline at this point.
+- The latest development-only CI run [44704485864](https://github.com/kzamora19/flyer-studio/actions/runs/44704485864) passed native Node regression, full-resolution Chromium export, and second-browser mock account asset export/restore/rename. No account secrets or production asset mutations were used.
+- The latest separately deployed popup change from `main` was preserved in the review branch before reporting this stage. Real PTG accounts, two physical devices, Google Drive upload/download and real flyer print signoff remain outstanding.
