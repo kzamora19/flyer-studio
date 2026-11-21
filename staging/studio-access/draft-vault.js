@@ -45,7 +45,42 @@
    return scope+":"+recordKey;
   }
   function aad(recordKey){return encoder.encode(NAME+":"+scope+":"+recordKey);}
+  // Cloud backups are manual and remain AES-GCM encrypted in the existing
+  // PTG project's RLS-denied archive. Neither backend receives the AES key.
+  const b64=buffer=>btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
+  const unb64=value=>{
+   if(typeof value!=="string"||!value.length||!/^[A-Za-z0-9_-]+$/.test(value))
+    throw Error("Invalid encrypted cloud record.");
+   return Uint8Array.from(atob(value.replaceAll("-","+").replaceAll("_","/")+
+    "=".repeat((4-value.length%4)%4)),c=>c.charCodeAt(0));
+  };
+  async function cloudExport(recordKey){
+   const stored=await operation("read",id(recordKey));
+   if(!stored)return null;
+   if(stored.format!=="AES-GCM-v1"||!(stored.iv instanceof Uint8Array)||
+      stored.iv.byteLength!==12||!(stored.encrypted instanceof ArrayBuffer))
+    throw Error("Invalid encrypted local project.");
+   const encrypted=b64(stored.encrypted);
+   if(encrypted.length>1_200_000)throw Error("Cloud archive size limit exceeded; keep the project local or use backup export.");
+   return {iv:b64(stored.iv),encrypted};
+  }
+  async function cloudImport(recordKey,record){
+   if(!record||typeof record!=="object"||typeof record.iv!=="string"||record.iv.length!==16||
+      typeof record.encrypted!=="string"||record.encrypted.length>1_200_000)
+    throw Error("Invalid cloud project envelope.");
+   const keyName=id(recordKey),iv=unb64(record.iv),encrypted=unb64(record.encrypted);
+   if(iv.length!==12||encrypted.length<16)throw Error("Invalid AES-GCM archive.");
+   const plaintext=await crypto.subtle.decrypt({name:"AES-GCM",iv,
+     additionalData:aad(recordKey)},await key,encrypted);
+   const decoded=JSON.parse(decoder.decode(plaintext));
+   if(!decoded||typeof decoded!=="object"||Array.isArray(decoded))
+    throw Error("Cloud project content is invalid.");
+   return operation("write",keyName,{format:"AES-GCM-v1",iv,
+      encrypted:encrypted.buffer,updatedAt:Date.now()});
+  }
   return Object.freeze({
+   cloudExport,cloudImport,
    async read(recordKey){
     const record=await operation("read",id(recordKey));
     if(record===null)return null;
