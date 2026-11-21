@@ -14,8 +14,8 @@ function lock(message){
  active=false;checking=false;privateKey=null;sessionId='';challenge='';
  if(timer)clearInterval(timer);if(expiryTimer)clearTimeout(expiryTimer);
  timer=null;expiryTimer=null;
- // Best-effort IndexedDB draft save. Completed writes must be awaited by users.
- try{const editor=mount.querySelector('iframe')?.contentWindow;if(typeof editor?.save==='function')editor.save();}catch{}
+ // The editor is origin-isolated: never reach into its DOM or storage.
+ // Local backup must be completed before expiry, or via a future scoped bridge.
  mount.replaceChildren();note(message,true);
 }
 function validSession(data){
@@ -93,9 +93,17 @@ async function open(){
   ticket=''; // Do not use the redeemed launch ticket for subsequent checks.
   if(typeof data.html!=='string'||!data.html.startsWith('<!-- PRIVATE EDITOR BUNDLE')||
      !/^[a-f0-9]{64}$/.test(String(data.sha256||'')))throw Error('Invalid private editor package');
+  // Reject any substituted or corrupted package before running editor code.
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data.html));
+  const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  if(hash!==data.sha256)throw Error('Protected Studio package integrity failed');
   recordAuth(data);
   const frame=document.createElement('iframe');
   frame.id='studio-editor-frame';frame.referrerPolicy='no-referrer';frame.title='MegaFlyer editor (authorized PTG session)';
+  // about:srcdoc WITHOUT an opaque sandbox inherits the shared github.io origin.
+  // Disallow allow-same-origin: editor scripts must never read PTG/Branchline storage.
+  // Cloud OAuth and IndexedDB require a separate secure compatibility bridge.
+  frame.setAttribute('sandbox','allow-scripts allow-downloads');
   frame.srcdoc=data.html;mount.replaceChildren(frame);active=true;status.hidden=true;
   const interval=Number.isInteger(cfg.checkIntervalMs)&&cfg.checkIntervalMs>=100?cfg.checkIntervalMs:30000;
   timer=setInterval(()=>{void check();},interval);warnIfExpiring();
