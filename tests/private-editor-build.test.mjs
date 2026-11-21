@@ -29,7 +29,9 @@ test('private/editor split contains complete artwork only in private package',()
    assert.match(publicHtml,/protected delivery gateway is not deployed/);
    assert.equal(manifest.sha256,sha(html));
    assert.equal(manifest.publicSha256,sha(publicHtml));
-   assert.equal(manifest.inlined.length,8);
+   assert.equal(manifest.inlined.length,10);
+   assert.match(html,/const onGitHubFlyer=\(\)=>true/);
+   assert.match(html,/const ptgLocalOrigin=\(\)=>true/);
  }finally{rmSync(out,{recursive:true,force:true});}
 });
 

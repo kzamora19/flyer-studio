@@ -31,6 +31,14 @@ for(const [file,type] of Object.entries(media)){
  html=html.split(file).join(uri);
  originals.push(file);
 }
+// srcdoc has an about:srcdoc URL even on GitHub Pages; keep catalog lookups
+// on the existing Supabase Edge endpoint and allow the PTG connection form.
+replaceOne("const onGitHubFlyer=()=>location.origin==='https://kzamora19.github.io'&&location.pathname.startsWith('/flyer-studio/');",
+  "const onGitHubFlyer=()=>true; // Protected bundle always uses Supabase flyer-catalog.",
+  'private catalog endpoint resolver');
+replaceOne("const ptgLocalOrigin=()=>ptgProxyOrigin()||location.origin==='https://kzamora19.github.io';",
+  "const ptgLocalOrigin=()=>true; // PTG Edge login is supported in private srcdoc.",
+  'private PTG login resolver');
 replaceOne('<link rel="manifest" href="./manifest.webmanifest">','','PWA manifest (no private offline install)');
 replaceOne('<link rel="stylesheet" href="./toolbar-tabs.css">',
   '<style>'+readFileSync(join(site,'toolbar-tabs.css'),'utf8')+'</style>','toolbar stylesheet');

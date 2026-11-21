@@ -56,6 +56,13 @@ try{
  assert.equal(new URL(page.url()).hash,'');
  assert.equal(await frame.locator('#printPdf').count(),1);
  assert.equal(await frame.locator('#png').count(),1);
+ const routing=await frame.locator('body').evaluate(()=>({
+  catalogURL:catalogImageURL('https://example.invalid/image.png'),
+  ptgConnectAllowed:ptgLocalOrigin()
+ }));
+ assert.match(routing.catalogURL,/\/functions\/v1\/flyer-catalog\?mode=image/);
+ assert.equal(routing.ptgConnectAllowed,true,'Protected editor PTG login should be available');
+
  await frame.locator('#sharedAssetLauncher').click({timeout:20000});
  await frame.locator('#sharedAssetModal').waitFor({state:'visible',timeout:10000});
  await frame.locator('#sharedAssetClose').click();
