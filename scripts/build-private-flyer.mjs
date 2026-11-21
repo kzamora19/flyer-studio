@@ -131,11 +131,15 @@ for(const name of ['floating-panels.js','shared-asset-ui.js','toolbar-tabs.js'])
 // script to site/index.html, the public Pages artifact, or generic asset uploads.
 const matchScript=readFileSync(join(site,'product-photo-match.js'),'utf8');
 const photoLibraryScript=readFileSync(join(site,'product-photo-library.js'),'utf8');
-if(!html.includes('</body>'))throw Error('Protected MegaFlyer body closing tag missing');
-html=html.replace('</body>',
+// Some current MegaFlyer source snapshots intentionally omit a closing
+// </body> tag. Append the protected-only scripts at EOF in that case.
+const smartPhotoScripts=
  '<script>window.FLYER_PRODUCT_PHOTO_CONFIG={publishableKey:window.FLYER_SHARED_ASSET_CONFIG?.publishableKey||""};</script>'+
  '<script>'+matchScript.replace(/<\/script/gi,'<\\/script')+'</script>'+
- '<script>'+photoLibraryScript.replace(/<\/script/gi,'<\\/script')+'</script></body>');
+ '<script>'+photoLibraryScript.replace(/<\/script/gi,'<\\/script')+'</script>';
+if(html.includes('</body>'))html=html.replace('</body>',smartPhotoScripts+'</body>');
+else if(html.includes('</html>'))html=html.replace('</html>',smartPhotoScripts+'</html>');
+else html+=smartPhotoScripts;
 originals.push('private Smart Product Photo Library client');
 if(/<(script|link|img)[^>]+(?:src|href)="(?:\.\/|assets\/)/i.test(html))
  throw Error('Protected HTML still references a local public script/image/stylesheet.');
