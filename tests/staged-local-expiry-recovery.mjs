@@ -85,12 +85,25 @@ try{
  await page.waitForTimeout(450);
  const actual=await frame.locator('body').evaluate(()=>state.campaign.subtitle);
  assert.equal(actual,expected,'Editor must restore local IndexedDB draft on authorized relaunch');
+ // A second PTG account on this same browser must start clean; it must
+ // never recover the first user's unfinished artwork, even from parent vault.
+ proof.setRecoveryAccount(101);
+ await page.goto(origin+'/?relaunch=2#ptg_studio_ticket='+'X'.repeat(43),{waitUntil:'domcontentloaded'});
+ await page.locator('#studio-editor-frame').waitFor({timeout:20000});
+ await frame.locator('#quickSaveProject').waitFor({state:'attached',timeout:24000});
+ const secondUserSubtitle=await frame.locator('body').evaluate(()=>state.campaign.subtitle);
+ assert.notEqual(secondUserSubtitle,expected,
+   'Another PTG account must not see unfinished flyer drafts from first account');
+ const secondScope=Buffer.alloc(32,101).toString('base64url');
+ assert.notEqual(secondScope,stableScope,'Mock accounts must receive distinct vault scopes');
  assert.equal(new URL(page.url()).hash,'');
  assert.equal(errors.length,0,errors.join('; '));
  assert.ok(calls.some(x=>x.action==='load'&&x.token==='E'));
  assert.ok(calls.some(x=>x.action==='load'&&x.token==='N'));
+ assert.ok(calls.some(x=>x.action==='load'&&x.token==='X'));
+
  assert.ok(calls.filter(x=>x.action==='check').every(x=>!x.token));
- console.log('PASS: opaque editor encrypted local photo/draft recovery on a fresh mock PTG login.');
+ console.log('PASS: opaque editor encrypted local recovery after PTG relaunch and cross-account isolation.');
 }finally{
  await browser?.close();
  if(server)await new Promise(ok=>server.close(ok));
