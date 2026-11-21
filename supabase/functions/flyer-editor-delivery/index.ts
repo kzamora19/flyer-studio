@@ -2,7 +2,7 @@
 // Returns a private editor bundle as JSON after checking a PTG-issued studio ticket.
 // GET text/html is not used: default Supabase Edge domains rewrite HTML responses.
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
-import {studioTicketOk,deliveryConfigured,exactHttpsOrigin} from "../_shared/studio-private-policy.mjs";
+import {studioTicketOk,deliveryConfigured,exactHttpsOrigin,validProofResponse} from "../_shared/studio-private-policy.mjs";
 
 const FLYER_URL=Deno.env.get("SUPABASE_URL")||"";
 const FLYER_SERVICE=Deno.env.get("SUPABASE_SECRET_KEY")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
@@ -30,15 +30,18 @@ function configReady(){
   path:BUNDLE_PATH,sha:BUNDLE_SHA,bucket:BUNDLE_BUCKET
  });
 }
-async function verified(ticket:string):Promise<string|null>{
+// Service-only PTG call. A launch ticket is exchanged ONCE; subsequent
+// checks must contain a fresh ECDSA signature bound to a single-use challenge.
+async function ptg(action:"exchange"|"prove",body:Record<string,unknown>){
  const check=await fetch(PTG_VERIFY_URL,{method:"POST",cache:"no-store",headers:{
    "Content-Type":"application/json","x-ptg-studio-secret":VERIFY_SECRET,
- },body:JSON.stringify({action:"verify",studio:"flyer",ticket}),signal:AbortSignal.timeout(8000)});
+ },body:JSON.stringify({action,studio:"flyer",...body}),signal:AbortSignal.timeout(8000)});
  if(!check.ok)return null;
  const data=await check.json().catch(()=>null);
- return data?.ok===true&&typeof data.expiresAt==="string"&&
-   Number.isFinite(Date.parse(data.expiresAt))&&Date.parse(data.expiresAt)>Date.now()?data.expiresAt:null;
+ return data?.ok===true&&validProofResponse(data)&&
+   Date.parse(data.expiresAt)>Date.now()?data:null;
 }
+
 Deno.serve(async req=>{
  const origin=req.headers.get("origin")||"";
  if(!exactHttpsOrigin(ALLOWED_ORIGIN)||origin!==exactHttpsOrigin(ALLOWED_ORIGIN))
@@ -51,13 +54,22 @@ Deno.serve(async req=>{
   return json(origin,{ok:false,error:"JSON required."},415);
  try{
   const raw=await req.text();
-  if(raw.length>1024)return json(origin,{ok:false,error:"Request too large."},413);
+  if(raw.length>3072)return json(origin,{ok:false,error:"Request too large."},413);
   const body=JSON.parse(raw);
-  if(!body||typeof body!=="object"||Array.isArray(body)||!studioTicketOk(body.ticket)||
-     !["load","check"].includes(body.action))return json(origin,{ok:false,error:"Invalid request."},400);
-  const expiresAt=await verified(body.ticket);
-  if(!expiresAt)return json(origin,{ok:false,error:"PTG Studio authorization required."},403);
-  if(body.action==="check")return json(origin,{ok:true,expiresAt});
+  if(!body||typeof body!=="object"||Array.isArray(body)||!["load","check"].includes(body.action))
+   return json(origin,{ok:false,error:"Invalid request."},400);
+  let auth;
+  if(body.action==="load"){
+   if(!studioTicketOk(body.ticket)||!body.publicKey||typeof body.publicKey!=="object")
+    return json(origin,{ok:false,error:"Invalid launch request."},400);
+   auth=await ptg("exchange",{ticket:body.ticket,publicKey:body.publicKey});
+  }else{
+   if(!validProofResponse(body))
+    return json(origin,{ok:false,error:"Invalid signed recheck."},400);
+   auth=await ptg("prove",{sessionId:body.sessionId,challenge:body.challenge,signature:body.signature});
+  }
+  if(!auth)return json(origin,{ok:false,error:"PTG Studio authorization required."},403);
+  if(body.action==="check")return json(origin,auth);
   const admin=createClient(FLYER_URL,FLYER_SERVICE,{auth:{persistSession:false,autoRefreshToken:false}});
   const {data,error}=await admin.storage.from(BUNDLE_BUCKET).download(BUNDLE_PATH);
   if(error||!data)throw Error("Private release object unavailable");
@@ -67,7 +79,7 @@ Deno.serve(async req=>{
   const hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(html))),
     b=>b.toString(16).padStart(2,"0")).join("");
   if(hash!==BUNDLE_SHA)throw Error("Private editor bundle hash mismatch");
-  return json(origin,{ok:true,html,expiresAt,sha256:hash});
+  return json(origin,{...auth,html,sha256:hash});
  }catch(error){
   console.error("Private Studio delivery blocked:",error instanceof Error?error.name:"unknown");
   return json(origin,{ok:false,error:"Private editor delivery unavailable."},503);
