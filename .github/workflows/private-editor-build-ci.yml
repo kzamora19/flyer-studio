@@ -5,12 +5,20 @@ on:
     paths:
       - "scripts/build-private-flyer.mjs"
       - "tests/private-editor-build.test.mjs"
+      - "tests/private-delivery-policy.test.mjs"
+      - "supabase/functions/flyer-editor-delivery/**"
+      - "supabase/functions/_shared/studio-private-policy.mjs"
+      - "supabase/config.toml"
       - ".github/workflows/private-editor-build-ci.yml"
       - "site/**"
   pull_request:
     paths:
       - "scripts/build-private-flyer.mjs"
       - "tests/private-editor-build.test.mjs"
+      - "tests/private-delivery-policy.test.mjs"
+      - "supabase/functions/flyer-editor-delivery/**"
+      - "supabase/functions/_shared/studio-private-policy.mjs"
+      - "supabase/config.toml"
       - ".github/workflows/private-editor-build-ci.yml"
       - "site/**"
 permissions:
@@ -27,6 +35,10 @@ jobs:
           node --check scripts/build-private-flyer.mjs
           node --test tests/private-editor-build.test.mjs
           node --test tests/private-delivery-policy.test.mjs
+      - uses: denoland/setup-deno@v2
+        with: {deno-version: v2.x}
+      - name: Typecheck staged server-only delivery function
+        run: deno check supabase/functions/flyer-editor-delivery/index.ts
       - name: Enforce public-artefact non-disclosure
         run: |
           if test -e site/private/studio.html || test -e site/private-editor.html; then
