@@ -1,0 +1,62 @@
+name: MegaFlyer Smart Product Photos release gate
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'site/product-photo-*'
+      - 'site/toolbar-tabs.js'
+      - 'supabase/functions/flyer-product-photos/**'
+      - 'supabase/migrations/202611210001_smart_product_photos.sql'
+      - 'tests/megaflyer-smart-photo-*'
+      - '.github/workflows/megaflyer-photo-release-ci.yml'
+permissions:
+  contents: read
+jobs:
+  standalone-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check standalone client, fixed-origin bridge and PTG permissions
+        run: |
+          node --check site/product-photo-match.js
+          node --check site/product-photo-standalone.js
+          node --check site/product-photo-library.js
+          node --check site/toolbar-tabs.js
+          node --test tests/megaflyer-smart-photo-release.cjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check private Edge service types
+        run: deno check supabase/functions/flyer-product-photos/index.ts
+      - name: Prepare disposable PostgreSQL roles and Storage bucket fixture
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "create role anon; create role authenticated; create role service_role;"
+          psql -v ON_ERROR_STOP=1 -c "create schema storage; create table storage.buckets(id text primary key,name text not null,public boolean not null,file_size_limit integer,allowed_mime_types text[]);"
+      - name: Apply photo migration to disposable database only
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202611210001_smart_product_photos.sql
+      - name: Assert no public access, valid primary switching and per-product isolation
+        run: psql -v ON_ERROR_STOP=1 -f tests/megaflyer-smart-photo-db.sql
