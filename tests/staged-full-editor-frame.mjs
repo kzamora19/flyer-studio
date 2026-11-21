@@ -187,7 +187,22 @@ try{
  await frame.locator('#smartPhotoOpen').click();
  await frame.locator('#smartPhotoFile').setInputFiles({
   name:'test-product.png',mimeType:'image/png',buffer:Buffer.from(miniPng,'base64')});
- await frame.locator('.spp-card').first().waitFor({timeout:20000});
+ try{await frame.locator('.spp-card').first().waitFor({timeout:8000});}
+ catch(error){
+  const diagnostic=await frame.locator('body').evaluate(()=>({
+   notice:document.getElementById('smartPhotoNotice')?.textContent,
+   selection:typeof targetedOffer==='function'?{
+    sku:targetedOffer()?.sku,name:targetedOffer()?.name,brand:targetedOffer()?.brand,
+    model:targetedOffer()?.model,photo:!!targetedOffer()?.photo,
+    sameAsFirst:targetedOffer()===state.offers?.[0]
+   }:null,
+   share:document.getElementById('smartPhotoShare')?.checked,
+   galleryCount:document.querySelectorAll('.spp-card').length,
+   account:typeof ptgSession==='undefined'?null:{id:ptgSession?.id,hasToken:!!ptgSession?.token}
+  }));
+  console.log('SMART_PRODUCT_PHOTO_FAILURE_DIAGNOSTIC',JSON.stringify({diagnostic,photoCalls,pageErrors:errors}));
+  throw error;
+ }
  assert.ok(photoCalls.includes('upload'),'Saved product photo must cross protected launcher bridge.');
  assert.equal(savedProductPhoto?.barcode_norm,'0000012345');
  await frame.locator('.spp-card button').first().click();
