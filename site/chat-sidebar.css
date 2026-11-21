@@ -1,6 +1,6 @@
 /* Chat-style two-level studio navigation. Additive: original menu buttons and
    panel IDs remain in place so the existing editors and PTG permissions work. */
-body.flyerChatLayout main {grid-template-columns: 358px minmax(0,1fr);}
+body.flyerChatLayout main {display:grid;grid-template-columns: 358px minmax(0,1fr);}
 body.flyerChatLayout.chatRailWide main {grid-template-columns: 445px minmax(0,1fr);}
 body.flyerChatLayout main>aside {
   display:flex; flex-direction:row; padding:0; overflow:hidden; min-width:0;
