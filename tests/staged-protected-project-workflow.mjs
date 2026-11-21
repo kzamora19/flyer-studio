@@ -44,11 +44,8 @@ const unpack=doc=>doc.format==='gzip-base64-v1'
 try{
  browserInstance=await chromium.launch({headless:true});
  const context=await browserInstance.newContext({viewport:{width:1280,height:850}});
- await context.addInitScript(({user})=>{
-  localStorage.setItem('flyer-studio-cloud-auth-v1',JSON.stringify({
-   access_token:'offline-test-access-token',refresh_token:'offline-test-refresh-token',
-   expires_at:Math.floor(Date.now()/1000)+3600,user}));
- },{user});
+ // The sandbox must NOT inherit login tokens from the parent origin.
+ // Exercise an explicit in-editor Supabase Cloud sign-in instead.
  await context.route('https://tzklsscoiwnmeantcefw.supabase.co/**',async route=>{
   const req=route.request(),url=new URL(req.url()),method=req.method(),path=url.pathname;
   if(path==='/functions/v1/flyer-editor-delivery'){
@@ -59,6 +56,10 @@ try{
    throw Error('Unexpected protected delivery action: '+body.action);
   }
   if(path==='/auth/v1/user')return status(route,user);
+  if(path==='/auth/v1/token')return status(route,{
+    access_token:'offline-test-access-token',refresh_token:'offline-test-refresh-token',
+    expires_at:Math.floor(Date.now()/1000)+3600,user
+  });
   if(path.endsWith('/flyer_cloud_projects')){
    if(method==='GET'){
     const id=(url.searchParams.get('id')||'').replace(/^eq\./,'');
@@ -104,6 +105,17 @@ try{
    'Save/Retrieve should not appear in top tab toolbar');
  await editor.locator('#studioNav [data-nav="backup"]').click();
  assert.equal(await editor.locator('#panel-backup #projectCloudActions #quickSaveProject:visible').count(),1);
+ // An explicit sign-in inside the opaque sandbox replaces the previous
+ // insecure test that injected a token into shared parent localStorage.
+ await editor.locator('#quickSaveProject').click();
+ await editor.locator('#quickProjectSignedOut').waitFor({state:'visible',timeout:12000});
+ await editor.locator('#quickProjectSignIn').click();
+ await editor.locator('#cloudEmail').fill(user.email);
+ await editor.locator('#cloudPassword').fill('staged-non-production-password');
+ await editor.locator('#cloudSignIn').click();
+ await editor.waitForFunction(()=>document.getElementById('cloudAccount')?.textContent.includes('flyer-test@example.invalid'));
+ await editor.evaluate(()=>powerClose());
+ await editor.locator('#quickSaveProject').click();
  assert.equal(await editor.locator('#panel-backup #projectCloudActions #quickRetrieveProject:visible').count(),1);
  await editor.waitForFunction(()=>!!document.getElementById('cloudAccount')?.textContent.includes('flyer-test@example.invalid'));
  assert.equal(await editor.locator('#quickRetrieveProject').count(),1);
