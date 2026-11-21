@@ -38,7 +38,10 @@ test('private/editor split contains complete artwork only in private package',()
    assert.match(publicHtml,/protected delivery gateway is not deployed/);
    assert.equal(manifest.sha256,sha(html));
    assert.equal(manifest.publicSha256,sha(publicHtml));
-   assert.equal(manifest.inlined.length,13);\n   assert.match(html,/smartPhotoPanel/);\n   assert.match(html,/FLYER_PRODUCT_PHOTO_CONFIG/);\n   assert.doesNotMatch(publicHtml,/smartPhotoPanel|Product Photo Library/);
+   assert.equal(manifest.inlined.length,13);
+   assert.match(html,/smartPhotoPanel/);
+   assert.match(html,/FLYER_PRODUCT_PHOTO_CONFIG/);
+   assert.doesNotMatch(publicHtml,/smartPhotoPanel|Product Photo Library/);
    assert.match(html,/__MEGAFLYER_PRIVATE_DB__/);
    assert.doesNotMatch(html,/indexedDB.open\('megasaver-flyer-studio'/);
    assert.match(html,/megaflyer-private-storage-port/);
