@@ -47,8 +47,12 @@
   function aad(recordKey){return encoder.encode(NAME+":"+scope+":"+recordKey);}
   // Cloud backups are manual and remain AES-GCM encrypted in the existing
   // PTG project's RLS-denied archive. Neither backend receives the AES key.
-  const b64=buffer=>btoa(String.fromCharCode(...new Uint8Array(buffer)))
-    .replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
+  const b64=buffer=>{
+   const bytes=new Uint8Array(buffer),chunks=[];
+   for(let offset=0;offset<bytes.length;offset+=8192)
+    chunks.push(String.fromCharCode(...bytes.subarray(offset,offset+8192)));
+   return btoa(chunks.join("")).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
+  };
   const unb64=value=>{
    if(typeof value!=="string"||!value.length||!/^[A-Za-z0-9_-]+$/.test(value))
     throw Error("Invalid encrypted cloud record.");
