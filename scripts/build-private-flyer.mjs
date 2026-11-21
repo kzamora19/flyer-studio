@@ -139,11 +139,11 @@ for(const name of ['floating-panels.js','shared-asset-ui.js','toolbar-tabs.js'])
   const cssLoader="  const css=document.createElement('link');\\n  css.rel='stylesheet';css.href='./chat-sidebar.css';\\n  document.head.append(css);".replaceAll('\\n','\n');
   if(!sidebar.includes(cssLoader))throw Error('Latest chat sidebar stylesheet loader changed');
   sidebar=sidebar.replace(cssLoader,'  // The private builder already embeds the sidebar stylesheet.');
-  code+='\\n'+sidebar;
+  code+='\n'+sidebar;
   originals.push('latest ChatGPT-style two-level sidebar');
  }
  // Escape a literal closing script sequence if a future JS module contains one.
- replaceOne(target,'<script>'+code.replace(/<\\/script/gi,'<\\\\/script')+'</script>',name);
+ replaceOne(target,'<script>'+code.replace(/<\/script/gi,'<\\/script')+'</script>',name);
 }
 // The Smart Product Photo Library is private-bundle-only. Do NOT add either
 // script to site/index.html, the public Pages artifact, or generic asset uploads.
