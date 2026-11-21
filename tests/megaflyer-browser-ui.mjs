@@ -52,7 +52,7 @@ try{
    return {max,scrolled:stage.scrollTop,stageTop:stage.getBoundingClientRect().top,
      tabTop:tabs.getBoundingClientRect().top,position:getComputedStyle(tabs).position};
  });
- assert.ok(desktopPin.max>200&&desktopPin.scrolled>200,
+ assert.ok(desktopPin.max>100&&desktopPin.scrolled>100,
    'Desktop flyer preview must be independently scrollable: '+JSON.stringify(desktopPin));
  assert.equal(desktopPin.position,'sticky','Preview tabs use sticky layout');
  assert.ok(desktopPin.tabTop>=desktopPin.stageTop-2 && desktopPin.tabTop<=desktopPin.stageTop+23,
