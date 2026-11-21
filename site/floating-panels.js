@@ -51,3 +51,5 @@ window.addEventListener('resize',()=>{
  }
 });
 })();
+// Load optional, presentation-only two-level navigation after the existing editor.
+(()=>{const script=document.createElement('script');script.src='./chat-sidebar.js';script.defer=true;document.head.append(script)})();
