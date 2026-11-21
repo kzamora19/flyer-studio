@@ -55,6 +55,24 @@ try{
  await page.locator('#studio-editor-frame').waitFor({timeout:30000});
  const frame=page.frameLocator('#studio-editor-frame');
  await frame.locator('#sharedAssetLauncher').waitFor({timeout:30000});
+ await frame.locator('#smartPhotoOpen').waitFor({timeout:15000});
+ await frame.locator('#smartPhotoOpen').click();
+ await frame.locator('#smartPhotoPanel').waitFor({state:'visible'});
+ assert.equal(await frame.locator('#smartPhotoShare').isChecked(),true);
+ assert.ok(await frame.locator('#smartPhotoCount').count()===1);
+ const photoHooks=await frame.locator('body').evaluate(()=>({
+  attach:typeof attachUploadedPhoto,
+  select:typeof targetedOffer,
+  inputs:[...document.querySelectorAll('input[type=file]')].map(e=>({
+   id:e.id,accept:e.accept,near:e.parentElement?.id||e.parentElement?.className||''
+  })).slice(0,20)
+ }));
+ assert.equal(photoHooks.attach,'function');
+ assert.equal(photoHooks.select,'function');
+ console.log('SMART_PRODUCT_PHOTO_CARD_HOOKS',JSON.stringify(photoHooks));
+ await frame.locator('#smartPhotoClose').click();
+ assert.equal(await frame.locator('#smartPhotoPanel').isHidden(),true);
+
  assert.match(await frame.locator('title').textContent(),/MegaFlyer Studio/);
  assert.equal((await frame.locator('body>header .brandIdentity strong').textContent()).trim(),'MegaFlyer Studio');
  assert.equal((await frame.locator('body>header .brandIdentity small').textContent()).trim(),
