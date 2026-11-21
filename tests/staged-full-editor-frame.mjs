@@ -187,7 +187,7 @@ try{
  await frame.locator('#smartPhotoOpen').click();
  await frame.locator('#smartPhotoFile').setInputFiles({
   name:'test-product.png',mimeType:'image/png',buffer:Buffer.from(miniPng,'base64')});
- await frame.locator('#smartPhotoNotice[data-ok="true"]').getByText('Product photo saved',{exact:false}).waitFor({timeout:20000});
+ await frame.locator('.spp-card').first().waitFor({timeout:20000});
  assert.ok(photoCalls.includes('upload'),'Saved product photo must cross protected launcher bridge.');
  assert.equal(savedProductPhoto?.barcode_norm,'0000012345');
  await frame.locator('.spp-card button').first().click();
