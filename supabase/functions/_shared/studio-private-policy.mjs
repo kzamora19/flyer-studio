@@ -26,3 +26,11 @@ export function validProofResponse(value){
   typeof value.challenge==="string" && /^[A-Za-z0-9_-]{43}$/.test(value.challenge) &&
   typeof value.expiresAt==="string" && Number.isFinite(Date.parse(value.expiresAt));
 }
+
+export function validSignedProof(value){
+ return !!value && typeof value==="object" &&
+  typeof value.sessionId==="string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.sessionId) &&
+  typeof value.challenge==="string" && /^[A-Za-z0-9_-]{43}$/.test(value.challenge) &&
+  typeof value.signature==="string" && /^[A-Za-z0-9_-]{80,96}$/.test(value.signature);
+}
