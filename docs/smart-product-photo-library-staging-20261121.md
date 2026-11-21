@@ -54,3 +54,21 @@ The approved standalone [MegaFlyer PR #16](https://github.com/kzamora19/flyer-st
 The standalone editor loads `site/product-photo-standalone.js`. This script explicitly skips the future private editor (`window.__MEGAFLYER_PRIVATE_DB__`), which continues using the isolated MessagePort bridge. This draft branch has synchronized the released matcher, library, Edge backend, schema and toolbar adapter to avoid future integration regression.
 
 **Remaining HOLD applies to the private PTG-delivery migration only:** protected ticket flow, OAuth/Drive/Save/Retrieve, remote revoked-user checks, photo retrieval on a second real PTG device, original PWA/public JS removal, migration backups, and coordinated release with Branchline/PTG/MegaFrame. The existing photo schema must be treated as applied to the Flyer production project; do not use this project for synthetic staging tests.
+
+
+## Signed PTG Studio photo authorization — November 21 integration hardening
+
+The standalone public MegaFlyer photo library remains live on the original **bearer + app-session** PTG verification path. The **unreleased protected Studio** now uses a distinct, private proof mode:
+
+1. PTG launcher exchanges a one-time ticket for a private **non-extractable P-256 signing key** and rotating challenge; user bearer/app-session tokens remain outside the isolated editor.
+2. The isolated editor requests only a named photo operation over its private MessagePort; its `currentSession()` is a local proof-mode marker, never a real PTG token.
+3. The trusted GitHub Pages launcher serializes photo operations with periodic session rechecks, signs the current one-time challenge, and sends a `studioProof` to the Flyer Edge photo gateway. It does not forward a PTG user bearer, session ID, or browser role claim.
+4. The Flyer photo gateway calls PTG `ptg-studio-access` **server-to-server** using the restricted Studio gateway secret. PTG verifies the P-256 signature, current source account, branch, role, session version, expiration, revocation and one-time challenge replay. Only then does PTG return the canonical actor ID and `canManage` scope **to the trusted service**.
+5. The photo operation uses the verified actor and permissions. Each response, even a storage error after a valid proof, returns the **next one-time challenge** to the launcher. A missing/invalid proof shuts down the protected iframe; no fallback to standalone bearer auth or permissive `Origin: null`.
+6. The private Studio delivery service strips PTG's internal actor/scope fields from browser responses; MegaFrame's private delivery continues its existing sanitization.
+
+The staged photo gateway requires `FLYER_PTG_STUDIO_GATEWAY_SECRET`, `PTG_STUDIO_GATEWAY_URL` and `PTG_STUDIO_DEPLOYMENT_MODE` to enable the protected proof path. It fails closed without them. Never overwrite the currently live `flyer-product-photos` function with this draft until the **entire four-app** release and hosted tests are approved.
+
+**Isolated test evidence:** [MegaFlyer private Chromium, 2 jobs passed](https://github.com/kzamora19/flyer-studio/actions/runs/44889656108) includes proof-only photo recall/upload without PTG bearer, parallel lookups, Save/Retrieve and 300-DPI exports, encrypted local account isolation, and active-photo-proof revocation forcibly unmounting the editor. PTG authorization regression tests validate actor ID and TL/admin distinction. These are mocks and disposable local Supabase fixtures, **not** hosted role-account acceptance.
+
+**Still blocked:** actual PTG login in the isolated editor for non-photo workflows; production-safe cloud project and template authorization without a second account, Google OAuth/Drive, hosted revocation, real devices/printing, private source and PWA cutover, backups and conflict-free four-PR merging. No staging project is provisioned; existing live accounts must not be used for destructive acceptance tests.
