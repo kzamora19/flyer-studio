@@ -7,6 +7,7 @@ on:
       - "tests/private-editor-build.test.mjs"
       - "tests/private-delivery-policy.test.mjs"
       - "tests/staged-studio-launch.test.mjs"
+      - "tests/staged-studio-browser.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -19,6 +20,7 @@ on:
       - "tests/private-editor-build.test.mjs"
       - "tests/private-delivery-policy.test.mjs"
       - "tests/staged-studio-launch.test.mjs"
+      - "tests/staged-studio-browser.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -50,3 +52,17 @@ jobs:
             echo "Protected source appeared inside the Pages site."; exit 1;
           fi
           test ! -e .studio-private-build/private/studio.html
+
+  launch-browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Install isolated Chromium browser
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.65.1
+          npx playwright install chromium --with-deps
+      - name: Verify mock PTG launcher, private editor mount and revocation
+        run: node tests/staged-studio-browser.mjs
