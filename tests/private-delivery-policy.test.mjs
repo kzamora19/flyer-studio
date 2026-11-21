@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {studioTicketOk,releasePathOk,sha256Ok,exactHttpsOrigin,deliveryConfigured}
+import {studioTicketOk,releasePathOk,sha256Ok,exactHttpsOrigin,deliveryConfigured,validProofResponse,validSignedProof}
   from '../supabase/functions/_shared/studio-private-policy.mjs';
 
 test('only exact HTTPS delivery origins are accepted',()=>{
@@ -34,12 +34,16 @@ test('delivery fails closed without a service-only secret, immutable hash and pr
 test('staged server rechecks source PTG ticket before every load or status response',()=>{
  const source=readFileSync(new URL('../supabase/functions/flyer-editor-delivery/index.ts',import.meta.url),'utf8');
  assert.match(source,/PTG_VERIFY_URL/);
- assert.match(source,/action:"verify",studio:"flyer",ticket/);
- assert.match(source,/if\(!expiresAt\)return json/);
+ assert.match(source,/action,studio:"flyer",\.\.\.body/);
+ assert.match(source,/ptg\("exchange"/);
+ assert.match(source,/ptg\("prove"/);
+ assert.match(source,/if\(!auth\)return json/);
  assert.match(source,/if\(body\.action==="check"\)/);
  assert.match(source,/admin\.storage\.from\(BUNDLE_BUCKET\)\.download\(BUNDLE_PATH\)/);
  assert.match(source,/if\(hash!==BUNDLE_SHA\)/);
  assert.match(source,/private,?\/?/i);
+ assert.equal(validProofResponse({sessionId:'d151a9b1-4c42-4dd2-a20b-4b9cfef1a650',challenge:'X'.repeat(43),expiresAt:new Date().toISOString()}),true);
+ assert.equal(validSignedProof({sessionId:'d151a9b1-4c42-4dd2-a20b-4b9cfef1a650',challenge:'X'.repeat(43),signature:'S'.repeat(86)}),true);
  assert.doesNotMatch(source,/createSignedUrl\(/);
  assert.doesNotMatch(source,/["\x27]Content-Type["\x27]\s*:\s*["\x27]text\/html/);
 });
