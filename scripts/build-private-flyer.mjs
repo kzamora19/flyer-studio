@@ -36,7 +36,7 @@ for(const [file,type] of Object.entries(media)){
 // the protected launcher, not the editor or shared github.io browser storage.
 const draftBridge=readFileSync(join(root,'staging/editor-storage-bridge.js'),'utf8');
 replaceOne('<meta charset="utf-8">',
- '<meta charset="utf-8">\\n<script>'+draftBridge.replace(/<\\/script/gi,'<\\\\/script')+'</script>',
+ '<meta charset="utf-8">\n<script>'+draftBridge+'</script>',
  'private encrypted storage bridge');
 const databaseStart=html.indexOf('function loadDatabase() {');
 const databaseEnd=html.indexOf('function readReference() {',databaseStart);
