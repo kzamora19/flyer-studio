@@ -39,7 +39,7 @@ test("cutover preview publishes only identity assets and one PTG access page",()
   assert.match(pages,/PTG_STUDIO_CUTOVER_PREVIEW=1 node scripts\/build-cutover-pages\.mjs staging\/\.cutover-release/);
   assert.match(pages,/path: \.\/staging\/\.cutover-release/);
   assert.doesNotMatch(pages,/path: \.\/site/,"Approved cutover may never publish full editor source");
-  assert.match(pages,/if: vars\.MEGAFLYER_CUTOVER_APPROVED/,
+  assert.match(pages,/if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main' && vars\.MEGAFLYER_CUTOVER_APPROVED/,
    "No ordinary main branch push may redeploy the public editing source");
  }finally{rmSync(target,{recursive:true,force:true});}
 });
