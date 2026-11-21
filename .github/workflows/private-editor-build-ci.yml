@@ -45,6 +45,8 @@ jobs:
       - name: Verify editor/private-bundle separation (no deployment)
         run: |
           node --check scripts/build-private-flyer.mjs
+          node --check staging/editor-storage-bridge.js
+          node --check staging/studio-access/draft-vault.js
           node --test tests/private-editor-build.test.mjs
           node --test tests/private-delivery-policy.test.mjs
           node --test tests/staged-studio-launch.test.mjs
