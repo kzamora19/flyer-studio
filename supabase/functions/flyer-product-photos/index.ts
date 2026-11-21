@@ -75,7 +75,9 @@ function fileFromBase64(input:unknown,mime:unknown,limit:number){
  return bytes;
 }
 async function hash(bytes:Uint8Array){
- return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),x=>x.toString(16).padStart(2,"0")).join("");
+ const safeBuffer=new ArrayBuffer(bytes.byteLength);
+ new Uint8Array(safeBuffer).set(bytes);
+ return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",safeBuffer)),x=>x.toString(16).padStart(2,"0")).join("");
 }
 async function audit(action:string,user:Identity,photoId:string,before:unknown,after:unknown){
  const {error}=await admin!.from("flyer_product_photo_audit").insert({
