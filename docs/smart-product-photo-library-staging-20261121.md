@@ -1,9 +1,9 @@
 # MegaFlyer Smart Product Photo Library — development integration
 
-**Status: DRAFT / HOLD. This branch is NOT deployed and must not be merged alone.**
+**Split status: standalone product-photo library RELEASED; PTG-protected unified editor remains DRAFT / HOLD. Do not merge this protected-delivery PR alone.**
 Part of the Branchline / PTG / MegaFrame / MegaFlyer coordinated four-app release.
 
-## Current implementation in development
+## Product photo implementation (released standalone; protected frame staged)
 
 - Added `site/product-photo-match.js`: preserves barcode leading zeroes, uses barcode first, exact normalized brand + model second, and treats description as a **suggestion only**.
 - Added a private-only `Product Photos` panel, injected into the PTG-protected MegaFlyer editor by `scripts/build-private-flyer.mjs`. It does not appear in the existing public `site/index.html`, GitHub Pages release, or generic Shared Asset Library.
@@ -45,3 +45,12 @@ Automated source, packaging, Deno and browser tests are run in the draft MegaFly
 6. Old public editor/PWA retirement, backups, rollback, all four PRs tested on the exact release SHAs, and explicit owner deployment approval.
 
 **NO production database migration, Supabase Edge deployment, GitHub Pages publishing, or PR merge is authorized by this document.**
+
+
+## Standalone live release checkpoint — 2026-11-21
+
+The approved standalone [MegaFlyer PR #16](https://github.com/kzamora19/flyer-studio/pull/16) was released to `main` (commit `6fd07c46fcb83c978b2a5ba19096b2a26f3fab3b`) and [GitHub Pages deployment #44888006747](https://github.com/kzamora19/flyer-studio/actions/runs/44888006747) succeeded. The existing public editor remains available; only shared product-photo content requires the active PTG TL+ session. The previously staged `flyer-product-photos` Supabase SQL schema and private bucket are now applied to the existing **Flyer Studio** project, and the Edge function is deployed. Anonymous photo requests were rejected with HTTP 401 and foreign origins with HTTP 403 in [live negative test #44887913830](https://github.com/kzamora19/flyer-studio/actions/runs/44887913830).
+
+The standalone editor loads `site/product-photo-standalone.js`. This script explicitly skips the future private editor (`window.__MEGAFLYER_PRIVATE_DB__`), which continues using the isolated MessagePort bridge. This draft branch has synchronized the released matcher, library, Edge backend, schema and toolbar adapter to avoid future integration regression.
+
+**Remaining HOLD applies to the private PTG-delivery migration only:** protected ticket flow, OAuth/Drive/Save/Retrieve, remote revoked-user checks, photo retrieval on a second real PTG device, original PWA/public JS removal, migration backups, and coordinated release with Branchline/PTG/MegaFrame. The existing photo schema must be treated as applied to the Flyer production project; do not use this project for synthetic staging tests.
