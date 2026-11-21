@@ -7,6 +7,7 @@ import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {chromium} from 'playwright';
+import {createProofMock} from './staged-proof-mock.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const temp=mkdtempSync(join(tmpdir(),'megaflyer-secure-frame-'));
 let server,browser;
@@ -33,16 +34,17 @@ try{
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
  const context=await browser.newContext({viewport:{width:1440,height:900}});
  const errors=[],calls=[];
+ const proof=createProofMock();
  await context.route('**/*',async route=>{
   const url=new URL(route.request().url());
   if(url.origin===origin)return route.continue();
   if(url.hostname==='tzklsscoiwnmeantcefw.supabase.co'&&url.pathname==='/functions/v1/flyer-editor-delivery'){
    const payload=route.request().postDataJSON();calls.push(payload.action);
+   const result=await proof.handle(payload);
    return route.fulfill({status:200,contentType:'application/json',
     headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
     body:JSON.stringify(payload.action==='load'?
-      {ok:true,html:privateHtml,sha256:manifest.sha256,expiresAt:new Date(Date.now()+600_000).toISOString()}:
-      {ok:true,expiresAt:new Date(Date.now()+600_000).toISOString()})});
+      {...result,html:privateHtml,sha256:manifest.sha256}:result)});
   }
   return route.fulfill({status:404,body:'External service disabled in offline QA'});
  });
@@ -82,7 +84,7 @@ try{
  assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
  assert.ok(png.readUInt32BE(16)>=2000&&png.readUInt32BE(20)>=2800,'A4 PNG must be 300-ppi sized');
  // A second authorised load isolates the heavyweight PDF export from PNG buffers.
- await page.goto(origin+'/#ptg_studio_ticket='+'R'.repeat(43),{waitUntil:'domcontentloaded'});
+ await page.goto(origin+'/#ptg_studio_ticket='+'S'.repeat(43),{waitUntil:'domcontentloaded'});
  await page.locator('#studio-editor-frame').waitFor({timeout:30000});
  await frame.locator('#printPdf').waitFor({state:'attached',timeout:30000});
  await frame.locator('#studioNav [data-nav="review"]').click();
