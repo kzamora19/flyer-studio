@@ -17,6 +17,7 @@ on:
       - "tests/staged-local-expiry-recovery.mjs"
       - "tests/cloud-backup-browser.test.mjs"
       - "tests/cloud-launcher-browser.test.mjs"
+      - "tests/drive-backup.test.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -67,6 +68,8 @@ jobs:
           node --check scripts/build-private-flyer.mjs
           node --check staging/editor-storage-bridge.js
           node --check staging/studio-access/draft-vault.js
+          node --check staging/studio-access/drive-backup.js
+          node --test tests/drive-backup.test.mjs
           node --check site/product-photo-match.js
           node --check site/product-photo-library.js
           node --test tests/smart-product-photo-library.test.mjs
