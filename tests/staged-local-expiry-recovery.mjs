@@ -42,6 +42,18 @@ try{
      headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
      body:JSON.stringify(req.action==='load'?{...result,html:bundle,sha256:sha}:result)});
   }
+  if(u.hostname==='tzklsscoiwnmeantcefw.supabase.co'&&u.pathname==='/functions/v1/flyer-product-photos'){
+   const req=route.request().postDataJSON();
+   assert.equal(route.request().headers().authorization,undefined,
+    'No PTG bearer may leave the opaque Studio');
+   assert.ok(req.studioProof?.signature,'Photo requests must use signed PTG Studio proof');
+   const next=await proof.handle({action:'check',...req.studioProof});
+   return route.fulfill({status:200,contentType:'application/json',
+    headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
+    body:JSON.stringify({result:req.action==='permissions'?
+     {canView:true,canUpload:true,canManage:false}:{photos:[],match:'none'},
+     studioProof:next})});
+  }
   return route.fulfill({status:404,body:'All external access is blocked during QA'});
  });
  const page=await context.newPage();
