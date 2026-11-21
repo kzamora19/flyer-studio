@@ -27,7 +27,8 @@ try{
    res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'});
    res.end(readFileSync(join(staging,'launch.js')));return;
   }
-  res.writeHead(404);res.end();
+  if(p==='/draft-vault.js'){res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'});res.end(readFileSync(join(staging,'draft-vault.js')));return;}
+ res.writeHead(404);res.end();
  });
  await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
  const origin='http://127.0.0.1:'+server.address().port;
