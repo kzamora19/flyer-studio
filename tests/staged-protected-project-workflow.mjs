@@ -155,7 +155,18 @@ try{
  assert.equal(await editor.locator('.quickProjectItem').count(),1,'Project search filters by name');
  page.once('dialog',dlg=>dlg.accept());
  await editor.locator('.quickProjectItem button').click();
- await editor.waitForFunction(()=>window.flyerCloud.getStatus().project==='Unfinished Promo A');
+ const loadedA=await editor.waitForFunction(()=>window.flyerCloud.getStatus().project==='Unfinished Promo A',null,{timeout:12000}).then(()=>true,()=>false);
+ if(!loadedA){
+  const debug=await editor.evaluate(()=>({
+   cloud:window.flyerCloud.getStatus(),
+   quickNotice:document.querySelector('#quickProjectNotice')?.textContent,
+   cloudNotice:document.querySelector('#cloudNotice')?.textContent,
+   quickModalHidden:document.querySelector('#quickProjectModal')?.hidden,
+   stateSubtitle:state.campaign.subtitle
+  }));
+  console.log('STAGED_CLOUD_RETRIEVE_DIAGNOSTIC:',JSON.stringify({debug,projectCount:projects.length,revisions:projects.map(p=>({name:p.name,revision:p.revision}))}));
+ }
+ assert.equal(loadedA,true,'Retrieving a saved cloud project must restore the selected project');
  assert.equal(await editor.evaluate(()=>state.campaign.subtitle),'Version A - edited later');
  assert.equal(await editor.evaluate(()=>state.offers[0].photo),image,'Retrieved project restores product photo');
 
