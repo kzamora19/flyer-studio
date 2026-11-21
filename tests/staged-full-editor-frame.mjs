@@ -219,6 +219,27 @@ try{
  await frame.locator('#smartPhotoNotice').getByText('not shared',{exact:false}).waitFor({timeout:15000});
  assert.equal(photoCalls.filter(x=>x==='upload').length,uploadsBefore,
   'Explicit opt-out must not contact shared image upload backend.');
+ // The native product-card importer must auto-save ONLY after its ordinary
+ // editor listener applies the image. This never touches customer #photos.
+ await frame.locator('#smartPhotoNativeShare').check();
+ await frame.locator('body').evaluate(()=>{targetedOffer().photo='';});
+ const nativeUploadsBefore=photoCalls.filter(x=>x==='upload').length;
+ const secondPng='iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGOUNLrEAANMDEgANwcAN/UBJXjVRskAAAAASUVORK5CYII=';
+ await frame.locator('#cardPhotoUpload').setInputFiles({
+   name:'native-card-product.png',mimeType:'image/png',buffer:Buffer.from(secondPng,'base64')
+ });
+ await frame.locator('#smartPhotoNativeSaved').getByText('saved in shared library',{exact:false}).waitFor({timeout:12000});
+ assert.equal(photoCalls.filter(x=>x==='upload').length,nativeUploadsBefore+1,
+   'A successful native product-card photo import should be shared exactly once');
+ // The UI must separately allow exclusion of the next native upload.
+ await frame.locator('#smartPhotoNativeShare').uncheck();
+ const thirdPng='iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGPcIqfMAANMDEgANwcAMW8A/bn8wfEAAAAASUVORK5CYII=';
+ await frame.locator('#cardPhotoUpload').setInputFiles({
+   name:'excluded-native.png',mimeType:'image/png',buffer:Buffer.from(thirdPng,'base64')
+ });
+ await frame.locator('#smartPhotoNativeSaved').getByText('not added to shared library',{exact:false}).waitFor({timeout:5000});
+ assert.equal(photoCalls.filter(x=>x==='upload').length,nativeUploadsBefore+1,
+   'Native product-card opt-out cannot save into shared library');
  console.log('PASS: actual protected editor product image upload, barcode recall, reuse and opt-out using synthetic PTG and cloud responses.');
 
  assert.ok(calls.includes('load'));
