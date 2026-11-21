@@ -1,6 +1,7 @@
 // Private Smart Product Photo Library (shared PTG TL+).
 // Standalone use requires live PTG authentication; private-editor cutover remains separately gated.
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
+import {validPtgGatewayUrl,validSignedProof} from "../_shared/studio-private-policy.mjs";
 
 const URL_FLYER=Deno.env.get("SUPABASE_URL")||"";
 const SERVICE=Deno.env.get("SUPABASE_SECRET_KEY")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
@@ -8,6 +9,13 @@ const PTG_PUBLIC=Deno.env.get("FLYER_PTG_PUBLISHABLE_KEY")||"sb_publishable_kv2q
 const ALLOWED_ORIGIN=Deno.env.get("FLYER_PRODUCT_PHOTO_ALLOWED_ORIGIN")||"https://kzamora19.github.io";
 const PTG_REF="agknxlowackphvwyvxge";
 const PTG_ORIGIN="https://"+PTG_REF+".supabase.co";
+// Protected editor has an opaque origin and NEVER receives a PTG bearer.
+// Only its P-256 proof holder may ask the PTG authority to validate access.
+// Standalone MegaFlyer retains the current live PTG bearer + app-session path.
+const STUDIO_GATEWAY_SECRET=Deno.env.get("FLYER_PTG_STUDIO_GATEWAY_SECRET")||"";
+const STUDIO_GATEWAY_URL=validPtgGatewayUrl(
+  Deno.env.get("PTG_STUDIO_GATEWAY_URL")||"",
+  Deno.env.get("PTG_STUDIO_DEPLOYMENT_MODE")||"");
 const PHOTO_BUCKET="flyer-product-photos";
 const MAX_FILE=2*1024*1024,MAX_THUMB=256*1024,MAX_BODY=3_500_000;
 const TYPES=new Set(["image/png","image/jpeg","image/webp"]);
@@ -29,7 +37,33 @@ function configured(){
  /^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(URL_FLYER);
 }
 type Identity={id:string,canManage:boolean};
-async function identity(req:Request):Promise<Identity>{
+type StudioContinuation={sessionId:string,challenge:string,expiresAt:string};
+async function identity(req:Request,body:Record<string,unknown>):Promise<{user:Identity;proof?:StudioContinuation}>{
+ if(Object.prototype.hasOwnProperty.call(body,"studioProof")){
+  // Never fall back to client bearer auth on a failed proof request.
+  if(!STUDIO_GATEWAY_URL||STUDIO_GATEWAY_SECRET.length<32)
+   throw new Denied("Protected Studio photo access is not configured",503);
+  if(!validSignedProof(body.studioProof))
+   throw new Denied("Invalid signed Studio photo proof",403);
+  const p=body.studioProof as Record<string,string>;
+  const verified=await fetch(STUDIO_GATEWAY_URL,{method:"POST",cache:"no-store",
+   redirect:"error",headers:{"Content-Type":"application/json",
+    "x-ptg-studio-secret":STUDIO_GATEWAY_SECRET},
+   body:JSON.stringify({action:"prove",studio:"flyer",
+    sessionId:p.sessionId,challenge:p.challenge,signature:p.signature}),
+   signal:AbortSignal.timeout(8000)});
+  if(!verified.ok)throw new Denied("PTG Studio session expired or revoked",401);
+  const data=await verified.json().catch(()=>null);
+  if(!data?.ok||!uuid(data.actorId)||data.sessionId!==p.sessionId||
+     !/^[A-Za-z0-9_-]{43}$/.test(String(data.challenge||""))||
+     !Number.isFinite(Date.parse(String(data.expiresAt||"")))||
+     Date.parse(data.expiresAt)<=Date.now()||
+     typeof data.canManage!=="boolean")
+   throw new Denied("Unverified PTG Studio photo permission",401);
+  return {user:{id:data.actorId,canManage:data.canManage},
+    proof:{sessionId:data.sessionId,challenge:data.challenge,expiresAt:data.expiresAt}};
+ }
+
  const bearer=req.headers.get("authorization")||"",session=req.headers.get("x-ptg-session-id")||"";
  if(!bearer.startsWith("Bearer ")||bearer.length<32||!uuid(session))throw new Denied("PTG login required",401);
  // Both checks are server-to-server and are repeated for every action,
@@ -50,7 +84,7 @@ async function identity(req:Request):Promise<Identity>{
  const canManage=role==="SYSTEM_ADMIN"||role==="BRANCH_ADMIN";
  if(!canManage && !(role==="BRANCH_USER"&&legacy==="TEAM LEADER"))
   throw new Denied("PTG Team Leader or higher required",403);
- return {id:u.id,canManage};
+ return {user:{id:u.id,canManage}};
 }
 function product(value:unknown){
  if(!obj(value))throw new Denied("Select a product card first",400);
@@ -251,6 +285,7 @@ Deno.serve(async req=>{
  if(req.method==="OPTIONS")return response(origin,{ok:true});
  if(req.method!=="POST")return response(origin,{error:"Method not allowed"},405);
  if(!configured())return response(origin,{error:"Photo library unavailable"},503);
+ let rotated:StudioContinuation|undefined;
  try{
   const declared=Number(req.headers.get("content-length")||"0");
   if(declared>MAX_BODY)throw new Denied("Upload is too large",413);
@@ -260,11 +295,16 @@ Deno.serve(async req=>{
   if(raw.length>MAX_BODY)throw new Denied("Upload is too large",413);
   const body=JSON.parse(raw);
   if(!obj(body))throw new Denied("Invalid payload",400);
-  const user=await identity(req);
-  return response(origin,await execute(body,user));
+  const credential=await identity(req,body);
+  rotated=credential.proof;
+  const result=await execute(body,credential.user);
+  return response(origin,rotated?{result,studioProof:rotated}:result);
  }catch(error){
   const status=error instanceof Denied?error.status:503;
   if(status===503)console.error("Smart photo gateway failed:",error instanceof Error?error.name:"unknown");
-  return response(origin,{error:error instanceof Denied?error.message:"Photo library temporarily unavailable"},status);
+  // A valid proof is consumed even if image storage/DB subsequently errors.
+  // Return its NEW challenge so the parent can still retry safely.
+  return response(origin,{error:error instanceof Denied?error.message:"Photo library temporarily unavailable",
+    ...(rotated?{studioProof:rotated}:{})},status);
  }
 });

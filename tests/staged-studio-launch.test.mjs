@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const source=readFileSync(new URL('../staging/studio-access/launch.js',import.meta.url),'utf8');
+const html=readFileSync(new URL('../staging/studio-access/index.html',import.meta.url),'utf8');
+test('staged Studio launcher strips ticket before making requests',()=>{
+ assert.match(source,/history\.replaceState\(null,'',location\.pathname\+location\.search\)/);
+ assert.ok(source.indexOf('history.replaceState')<source.indexOf('fetch(cfg.endpoint'));
+ assert.match(source,/cache:'no-store'/);
+ assert.match(source,/referrerPolicy:'no-referrer'/);
+ assert.match(source,/gateway\(\{action:'load',ticket,publicKey\}\)/);
+ assert.match(source,/gateway\(await signedRequest\(\)\)/);
+ assert.match(source,/recordAuth\(data\)/);
+ assert.match(source,/setTimeout\(\(\)=>lock\(/);
+ assert.match(source,/visibilitychange/);
+ assert.match(source,/generateKey/);
+ assert.match(source,/crypto\.subtle\.sign/);
+ assert.match(source,/crypto\.subtle\.digest/);
+ assert.match(source,/allow-scripts allow-downloads allow-modals/);
+ assert.doesNotMatch(source,/allow-same-origin['\"]/);
+ assert.match(source,/ticket='';/);
+ assert.doesNotMatch(source,/action:'check',ticket/);
+ assert.match(source,/Math\.min\(when,absoluteCutoff\)/);
+ assert.match(source,/mount\.replaceChildren\(\)/);
+ assert.doesNotMatch(source,/localStorage|sessionStorage/);
+ assert.match(html,/Protected launch prototype/);
+ assert.doesNotMatch(html,/PTG_STUDIO_GATEWAY_SECRET|SUPABASE_SERVICE_ROLE_KEY/);
+});
