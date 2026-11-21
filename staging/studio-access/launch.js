@@ -4,7 +4,7 @@ const cfg=window.STUDIO_ACCESS_CONFIG||{};
 const status=document.getElementById('status'),mount=document.getElementById('mount');
 const portal='https://kzamora19.github.io/first-megasaver-ptg/studios/';
 let timer=null,expiryTimer=null,active=false,checking=false,expiresAt=0,absoluteCutoff=0,expiryWarned=false;
-let privateKey=null,sessionId='',challenge='';
+let privateKey=null,sessionId='',challenge='',draftPort=null;
 function note(message,link=false){
  status.textContent=message;
  if(link){const a=document.createElement('a');a.href=portal;a.rel='noreferrer';a.textContent='Open from PTG Creative Studios';status.append(document.createTextNode(' '),a);}
@@ -13,6 +13,7 @@ function note(message,link=false){
 function lock(message){
  active=false;checking=false;privateKey=null;sessionId='';challenge='';
  if(timer)clearInterval(timer);if(expiryTimer)clearTimeout(expiryTimer);
+ if(draftPort){draftPort.close();draftPort=null;}
  timer=null;expiryTimer=null;
  // The editor is origin-isolated: never reach into its DOM or storage.
  // Local backup must be completed before expiry, or via a future scoped bridge.
@@ -97,6 +98,11 @@ async function open(){
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data.html));
   const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
   if(hash!==data.sha256)throw Error('Protected Studio package integrity failed');
+  if(!window.MEGAFLYER_LOCAL_DRAFT_VAULT ||
+     !/^[A-Za-z0-9_-]{43}$/.test(String(data.draftScope||'')) ||
+     !/^[A-Za-z0-9_-]{43}$/.test(String(data.draftKey||'')))
+    throw Error('Verified PTG account encrypted recovery is unavailable.');
+  const vault=window.MEGAFLYER_LOCAL_DRAFT_VAULT.session(data.draftScope,data.draftKey);
   recordAuth(data);
   const frame=document.createElement('iframe');
   frame.id='studio-editor-frame';frame.referrerPolicy='no-referrer';frame.title='MegaFlyer editor (authorized PTG session)';
@@ -104,6 +110,27 @@ async function open(){
   // Disallow allow-same-origin: editor scripts must never read PTG/Branchline storage.
   // Cloud OAuth and IndexedDB require a separate secure compatibility bridge.
   frame.setAttribute('sandbox','allow-scripts allow-downloads');
+  const channel=new MessageChannel();
+  draftPort=channel.port1;
+  channel.port1.onmessage=async ({data:message})=>{
+   if(!active||Date.now()>=expiresAt||mount.querySelector('iframe')!==frame||
+      !message||!Number.isSafeInteger(message.id)||
+      !['read','write','delete'].includes(message.action)||
+      typeof message.key!=='string'||!/^p:[A-Za-z0-9_-]{1,96}$/.test(message.key))return;
+   try{
+    const result=message.action==='read'?await vault.read(message.key):
+      message.action==='write'?await vault.write(message.key,message.record):
+      await vault.delete(message.key);
+    if(active&&Date.now()<expiresAt)channel.port1.postMessage({id:message.id,ok:true,value:result});
+   }catch{
+    if(active&&Date.now()<expiresAt)channel.port1.postMessage({id:message.id,ok:false});
+   }
+  };
+  channel.port1.start();
+  frame.addEventListener('load',()=>{
+   if(active&&Date.now()<expiresAt&&frame.contentWindow)
+    frame.contentWindow.postMessage({kind:'megaflyer-private-storage-port'},'*',[channel.port2]);
+  },{once:true});
   frame.srcdoc=data.html;mount.replaceChildren(frame);active=true;status.hidden=true;
   const interval=Number.isInteger(cfg.checkIntervalMs)&&cfg.checkIntervalMs>=100?cfg.checkIntervalMs:30000;
   timer=setInterval(()=>{void check();},interval);warnIfExpiring();
