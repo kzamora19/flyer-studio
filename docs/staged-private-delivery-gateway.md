@@ -31,3 +31,16 @@ The PTG gateway must actually be deployed and share the secret, and the function
 6. Production Storage, Edge Function, secrets and PTG migration must stay unchanged until explicit release approval.
 
 This source is a **non-deployed technical prototype**, not a finished app-wide access guarantee.
+
+
+## November 21, 2026 — Browser proof (no production services)
+
+GitHub Actions [run 44860294219](https://github.com/kzamora19/flyer-studio/actions/runs/44860294219) passed both the Node/Deno checks and the isolated Chromium launcher tests:
+
+- An opaque, syntactically valid mock PTG ticket is removed from the URL before making the mocked backend request.
+- A mock protected editor document is mounted only after a simulated successful response, and removed on a simulated revoked PTG session.
+- **The actual full MegaFlyer editor bundle** generated from the approved live source (over 1 MB) successfully mounts in the protected iframe in headless Chromium. Its PDF/PNG toolbar controls are present, and the Shared Asset Library modal opens/closes.
+- All network calls in this test are mocked; no real PTG account, Supabase Storage, database, Google Drive or production printer was used.
+- **Not yet covered:** actual PNG/PDF downloads from the protected iframe, cloud OAuth callback and project save/restore inside it, image catalog endpoints, renewal beyond the PTG ten-minute ticket lifetime, direct-URL/PWA-cache cutover, and real account revocation. Do not interpret basic editor mounting as completion of these workflows.
+
+The current public GitHub Pages editor is unchanged; these changes remain in a draft, non-deployed pull request.
