@@ -25,6 +25,7 @@ const server=createServer((req,res)=>{
   res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'});
   res.end(readFileSync(join(root,'staging/studio-access/launch.js')));return;
  }
+ if(p==='/draft-vault.js'){res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'});res.end(readFileSync(join(root,'staging/studio-access/draft-vault.js')));return;}
  res.writeHead(404);res.end();
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
