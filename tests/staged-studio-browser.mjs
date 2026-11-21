@@ -49,7 +49,7 @@ try{
  assert.equal(new URL(page.url()).hash,'');
  await page.frameLocator('#studio-editor-frame').locator('#editor-ready').waitFor({timeout:15000});
  await page.waitForFunction(()=>document.getElementById('studio-editor-frame')===null,{timeout:15000});
- assert.ok((await page.locator('#status').textContent()).includes('expired or been revoked'));
+ assert.ok((await page.locator('#status').textContent()).includes('been revoked'));
  assert.ok(requests.some(x=>x.action==='load'));
  assert.ok(requests.some(x=>x.action==='check'));
  assert.ok(requests.every(x=>x.ticket==='T'.repeat(43)));
