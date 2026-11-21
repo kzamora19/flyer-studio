@@ -56,7 +56,7 @@ function product(value:unknown){
  if(!obj(value))throw new Denied("Select a product card first",400);
  const b=barcode(value.barcode||value.sku),brand=word(value.brand),model=word(value.model);
  const description=String(value.description||"").trim().replace(/\s+/g," ").slice(0,180);
- if(!b && !(brand&&model))throw new Denied("A barcode or exact brand and model is required",400);
+ if(!b && !(brand&&model) && !description)throw new Denied("A barcode, model, or description is required",400);
  return {barcode_norm:b,brand_norm:brand,model_norm:model,description,
   product_key:b?"b:"+b:"m:"+brand+"|"+model};
 }
@@ -145,6 +145,7 @@ async function storeBlob(body:Record<string,unknown>,user:Identity){
 }
 async function upload(body:Record<string,unknown>,user:Identity,replaceId?:string){
  const p=product(body.product);
+ if(!p.product_key)throw new Denied("Saving needs a barcode or exact brand and model",400);
  const existing=replaceId?await record(replaceId):null;
  if(existing && (existing.product_key!==p.product_key||!user.canManage))
   throw new Denied("Only admins can replace a photo of the same product");
