@@ -1,70 +1,65 @@
-// Full MegaFlyer bundle in the non-deployed protected frame, with all network access mocked.
+// Staged launcher browser test. Every PTG/Supabase request is mocked.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join,resolve,dirname} from 'node:path';
+import {readFileSync} from 'node:fs';
+import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {execFileSync} from 'node:child_process';
 import {chromium} from 'playwright';
-const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const temp=mkdtempSync(join(tmpdir(),'megaflyer-secure-frame-'));
-let server,browser;
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../staging/studio-access');
+const pageHTML=readFileSync(resolve(root,'index.html'),'utf8');
+const marker='publishableKey:"sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK"';
+assert.ok(pageHTML.includes(marker));
+const html=pageHTML.replace(marker,marker+',checkIntervalMs:500');
+const server=createServer((req,res)=>{
+ const p=new URL(req.url,'http://localhost').pathname;
+ if(p==='/'||p==='/index.html'){
+  res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(html);return;
+ }
+ if(p==='/launch.js'){
+  res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'});
+  res.end(readFileSync(resolve(root,'launch.js')));return;
+ }
+ res.writeHead(404);res.end();
+});
+await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
+const origin='http://127.0.0.1:'+server.address().port;
+let browser;
 try{
- execFileSync(process.execPath,[join(root,'scripts/build-private-flyer.mjs'),temp],{cwd:root,stdio:'pipe'});
- const privateHtml=readFileSync(join(temp,'private/studio.html'),'utf8');
- const manifest=JSON.parse(readFileSync(join(temp,'manifest.json'),'utf8'));
- const staging=join(root,'staging/studio-access');
- const landing=readFileSync(join(staging,'index.html'),'utf8');
- server=createServer((req,res)=>{
-  const p=new URL(req.url,'http://localhost').pathname;
-  if(p==='/'||p==='/index.html'){
-   res.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'});
-   res.end(landing);return;
-  }
-  if(p==='/launch.js'){
-   res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'});
-   res.end(readFileSync(join(staging,'launch.js')));return;
-  }
-  res.writeHead(404);res.end();
- });
- await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
- const origin='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
- const context=await browser.newContext({viewport:{width:1440,height:900}});
- const errors=[],calls=[];
- await context.route('**/*',async route=>{
+ const ctx=await browser.newContext({viewport:{width:1200,height:800}});
+ const requests=[],errors=[];
+ await ctx.route('**/*',async route=>{
   const url=new URL(route.request().url());
-  if(url.origin===origin)return route.continue();
-  if(url.hostname==='tzklsscoiwnmeantcefw.supabase.co'&&url.pathname==='/functions/v1/flyer-editor-delivery'){
-   const payload=route.request().postDataJSON();calls.push(payload.action);
-   return route.fulfill({status:200,contentType:'application/json',
-    headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
-    body:JSON.stringify(payload.action==='load'?
-      {ok:true,html:privateHtml,sha256:manifest.sha256,expiresAt:new Date(Date.now()+600_000).toISOString()}:
-      {ok:true,expiresAt:new Date(Date.now()+600_000).toISOString()})});
+  if(url.origin===origin){await route.continue();return;}
+  if(url.host==='tzklsscoiwnmeantcefw.supabase.co'&&url.pathname==='/functions/v1/flyer-editor-delivery'){
+   const body=route.request().postDataJSON();
+   requests.push(body);
+   const headers={'access-control-allow-origin':origin,'access-control-allow-headers':'*'};
+   if(body.action==='load')return route.fulfill({status:200,contentType:'application/json',headers,
+    body:JSON.stringify({ok:true,html:'<!-- PRIVATE EDITOR BUNDLE. -->\n<!doctype html><button id="editor-ready">Mock protected editor</button>',sha256:'a'.repeat(64),expiresAt:new Date(Date.now()+60_000).toISOString()})});
+   if(body.action==='check')return route.fulfill({status:403,contentType:'application/json',headers,
+    body:JSON.stringify({ok:false,error:'Revoked'})});
   }
-  return route.fulfill({status:404,body:'External service disabled in offline QA'});
+  return route.abort();
  });
- const page=await context.newPage();
+ const page=await ctx.newPage();
  page.on('pageerror',e=>errors.push(e.message));
- await page.goto(origin+'/#ptg_studio_ticket='+'R'.repeat(43),{waitUntil:'domcontentloaded'});
- await page.locator('#studio-editor-frame').waitFor({timeout:30000});
- const frame=page.frameLocator('#studio-editor-frame');
- await frame.locator('#sharedAssetLauncher').waitFor({timeout:30000});
- assert.match(await frame.locator('title').textContent(),/MegaFlyer Studio/);
+ await page.goto(origin+'/#ptg_studio_ticket='+'T'.repeat(43),{waitUntil:'domcontentloaded'});
+ await page.locator('#studio-editor-frame').waitFor({timeout:15000});
  assert.equal(new URL(page.url()).hash,'');
- assert.equal(await frame.locator('#pdf').count(),1);
- assert.equal(await frame.locator('#png').count(),1);
- await frame.locator('#sharedAssetLauncher').click({timeout:20000});
- await frame.locator('#sharedAssetModal').waitFor({state:'visible',timeout:10000});
- await frame.locator('#sharedAssetClose').click();
- assert.equal(await frame.locator('#sharedAssetModal').isHidden(),true);
- assert.deepEqual(errors,[],errors.join('; '));
- assert.ok(calls.includes('load'));
- console.log('PASS: full 1MB+ MegaFlyer bundle loads in ticket-gated srcdoc; editor controls and asset dialog work under mock gateway.');
+ await page.frameLocator('#studio-editor-frame').locator('#editor-ready').waitFor({timeout:15000});
+ await page.waitForFunction(()=>document.getElementById('studio-editor-frame')===null,{timeout:15000});
+ assert.ok((await page.locator('#status').textContent()).includes('expired or been revoked'));
+ assert.ok(requests.some(x=>x.action==='load'));
+ assert.ok(requests.some(x=>x.action==='check'));
+ assert.ok(requests.every(x=>x.ticket==='T'.repeat(43)));
+ const noTicket=await ctx.newPage();
+ await noTicket.goto(origin,{waitUntil:'domcontentloaded'});
+ await noTicket.getByText('A valid PTG authorization is required.').waitFor({timeout:8000});
+ assert.equal(await noTicket.locator('#studio-editor-frame').count(),0);
+ assert.deepEqual(errors,[]);
+ console.log('PASS: mock ticket login, URL fragment removal, protected iframe and revoked-session lock.');
 }finally{
  await browser?.close();
- if(server)await new Promise(ok=>server.close(ok));
- rmSync(temp,{recursive:true,force:true});
+ await new Promise(ok=>server.close(ok));
 }
