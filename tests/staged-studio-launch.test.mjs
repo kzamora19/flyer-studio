@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const source=readFileSync(new URL('../staging/studio-access/launch.js',import.meta.url),'utf8');
+const html=readFileSync(new URL('../staging/studio-access/index.html',import.meta.url),'utf8');
+test('staged Studio launcher strips ticket before making requests',()=>{
+ assert.match(source,/history\.replaceState\(null,'',location\.pathname\+location\.search\)/);
+ assert.ok(source.indexOf('history.replaceState')<source.indexOf('fetch(cfg.endpoint'));
+ assert.match(source,/cache:'no-store'/);
+ assert.match(source,/referrerPolicy:'no-referrer'/);
+ assert.match(source,/gateway\('load'\)/);
+ assert.match(source,/gateway\('check'\)/);
+ assert.match(source,/mount\.replaceChildren\(\)/);
+ assert.doesNotMatch(source,/localStorage|sessionStorage/);
+ assert.match(html,/Protected launch prototype/);
+ assert.doesNotMatch(html,/PTG_STUDIO_GATEWAY_SECRET|SUPABASE_SERVICE_ROLE_KEY/);
+});

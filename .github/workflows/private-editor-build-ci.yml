@@ -6,6 +6,8 @@ on:
       - "scripts/build-private-flyer.mjs"
       - "tests/private-editor-build.test.mjs"
       - "tests/private-delivery-policy.test.mjs"
+      - "tests/staged-studio-launch.test.mjs"
+      - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
       - "supabase/config.toml"
@@ -16,6 +18,8 @@ on:
       - "scripts/build-private-flyer.mjs"
       - "tests/private-editor-build.test.mjs"
       - "tests/private-delivery-policy.test.mjs"
+      - "tests/staged-studio-launch.test.mjs"
+      - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
       - "supabase/config.toml"
@@ -35,6 +39,7 @@ jobs:
           node --check scripts/build-private-flyer.mjs
           node --test tests/private-editor-build.test.mjs
           node --test tests/private-delivery-policy.test.mjs
+          node --test tests/staged-studio-launch.test.mjs
       - uses: denoland/setup-deno@v2
         with: {deno-version: v2.x}
       - name: Typecheck staged server-only delivery function
