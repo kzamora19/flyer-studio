@@ -1,1 +1,18 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow"><title>MegaFlyer Studio — Protected launch prototype</title><style>body{font:16px/1.5 system-ui;background:#eff3fa;color:#213047;margin:0}header{padding:16px;background:white}main{padding:20px}#status{padding:24px;background:white;max-width:660px;margin:auto;border-radius:12px}#studio-editor-frame{width:100%;height:86vh;border:0;background:white}</style></head><body><header><strong>MegaFlyer Studio</strong></header><main><div id="status" role="status">Checking PTG Studio authorization…</div><div id="mount"></div></main><script>window.STUDIO_ACCESS_CONFIG={endpoint:"https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-editor-delivery",publishableKey:"sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK"};</script><script src="./draft-vault.js" defer></script><script src="./launch.js" defer></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow"><title>MegaFlyer Studio — Protected launch prototype</title><style>body{font:16px/1.5 system-ui;background:#eff3fa;color:#213047;margin:0}header{padding:16px;background:white}main{padding:20px}#status{padding:24px;background:white;max-width:660px;margin:auto;border-radius:12px}#studio-editor-frame{width:100%;height:86vh;border:0;background:white}#cloudPanel{display:flex;align-items:center;flex-wrap:wrap;gap:9px;background:white;
+  padding:12px 16px;border-bottom:1px solid #dae3f0;font:13px/1.5 system-ui}
+#cloudPanel[hidden]{display:none}
+#cloudPanel strong{font-size:13px;color:#1d2836}
+#cloudPanel small{font-size:11px;color:#526174;max-width:330px}
+#cloudPanel button{font:600 12px system-ui;padding:8px 11px;border-radius:7px;
+ background:#355ee8;color:white;border:1px solid #2348c7}
+#cloudPanel select{min-width:140px;max-width:220px;padding:7px;border:1px solid #b7c4d5;border-radius:7px}
+#cloudPanel label{font:600 11px system-ui;color:#34455d;display:flex;align-items:center;gap:5px}
+#cloudMessage{width:100%;color:#34455d;font-size:12px}
+@media(max-width:700px){#cloudPanel{padding:10px;gap:6px}#cloudPanel small{width:100%}}
+</style></head><body><header><strong>MegaFlyer Studio</strong></header><main><div id="status" role="status">Checking PTG Studio authorization…</div><section id="cloudPanel" hidden aria-label="Manual encrypted cloud project backups">
+  <strong>Encrypted Cloud Project Backup</strong>
+  <small>Manual only, for the current project. Projects containing large photos may need local export.</small>
+  <button type="button" id="cloudBackup">Back up current project</button>
+  <button type="button" id="cloudRestore">Retrieve from cloud</button>
+  <output id="cloudMessage" role="status" aria-live="polite"></output>
+ </section><div id="mount"></div></main><script>window.STUDIO_ACCESS_CONFIG={endpoint:"https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-editor-delivery",publishableKey:"sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK"};</script><script src="./draft-vault.js" defer></script><script src="./launch.js" defer></script></body></html>
