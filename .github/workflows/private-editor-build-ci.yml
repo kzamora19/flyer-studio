@@ -26,6 +26,7 @@ jobs:
         run: |
           node --check scripts/build-private-flyer.mjs
           node --test tests/private-editor-build.test.mjs
+          node --test tests/private-delivery-policy.test.mjs
       - name: Enforce public-artefact non-disclosure
         run: |
           if test -e site/private/studio.html || test -e site/private-editor.html; then
