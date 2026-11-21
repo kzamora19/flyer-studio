@@ -70,6 +70,8 @@ jobs:
           node --check staging/studio-access/draft-vault.js
           node --check staging/studio-access/drive-backup.js
           node --test tests/drive-backup.test.mjs
+          node --check staging/studio-access/central-drive.js
+          node --test tests/central-drive.test.mjs
           node --check site/product-photo-match.js
           node --check site/product-photo-library.js
           node --test tests/smart-product-photo-library.test.mjs
