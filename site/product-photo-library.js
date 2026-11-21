@@ -1,4 +1,4 @@
-/* STAGING ONLY. Smart Product Photo Library for the PRIVATE MegaFlyer editor.
+/* Smart Product Photo Library. PTG-authenticated and enabled on approved production UI.
  * Product-card imports only. No customer photos, logos or generic assets are
  * scanned or shared. A separate PTG-gated Edge Function owns private storage.
  */
