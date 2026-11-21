@@ -42,3 +42,14 @@
     document.addEventListener('DOMContentLoaded',initFlyerTabs,{once:true});
   else initFlyerTabs();
 })();
+
+/* Public-only optional Smart Product Photo Library. The protected editor
+ * injects its private MessagePort client separately and never loads this. */
+(()=>{
+  if(window.__MEGAFLYER_PRIVATE_DB__ ||
+     location.origin!=='https://kzamora19.github.io' ||
+     !location.pathname.startsWith('/flyer-studio/'))return;
+  const script=document.createElement('script');
+  script.src='./product-photo-standalone.js';script.async=false;
+  document.head.append(script);
+})();
