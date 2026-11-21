@@ -12,6 +12,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   deploy:
+    # Main-branch pushes must NOT republish the public editor after integration.
+    # Only explicitly authorized coordinated cutover may publish the safe stub.
+    if: vars.MEGAFLYER_CUTOVER_APPROVED == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -21,10 +24,18 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure Pages
         uses: actions/configure-pages@v5
-      - name: Upload static app
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify editor-free cutover preview (fail closed)
+        run: |
+          node --check scripts/build-cutover-pages.mjs
+          node --test tests/staged-cutover-pages.test.mjs
+      - name: Build approved editor-free historical Pages output
+        run: PTG_STUDIO_CUTOVER_PREVIEW=1 node scripts/build-cutover-pages.mjs staging/.cutover-release
+      - name: Upload editor-free Pages artifact only
         uses: actions/upload-pages-artifact@v4
         with:
-          path: ./site
+          path: ./staging/.cutover-release
       - name: Publish
         id: deployment
         uses: actions/deploy-pages@v4

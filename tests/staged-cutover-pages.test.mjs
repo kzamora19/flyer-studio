@@ -32,7 +32,12 @@ test("cutover preview publishes only identity assets and one PTG access page",()
   const original=readFileSync(join(root,"site","index.html"),"utf8");
   assert.match(original,/<title>MegaFlyer Studio · First Megasaver<\/title>/,
    "Live Pages source remains intact until coordinated release");
-  assert.doesNotMatch(readFileSync(join(root,".github/workflows/pages.yml"),"utf8"),
-   /build-cutover-pages/,"Normal Pages workflow must remain unchanged");
+  const pages=readFileSync(join(root,".github/workflows/pages.yml"),"utf8");
+  assert.match(pages,/vars\.MEGAFLYER_CUTOVER_APPROVED == 'true'/);
+  assert.match(pages,/PTG_STUDIO_CUTOVER_PREVIEW=1 node scripts\/build-cutover-pages\.mjs staging\/\.cutover-release/);
+  assert.match(pages,/path: \.\/staging\/\.cutover-release/);
+  assert.doesNotMatch(pages,/path: \.\/site/,"Approved cutover may never publish full editor source");
+  assert.match(pages,/if: vars\.MEGAFLYER_CUTOVER_APPROVED/,
+   "No ordinary main branch push may redeploy the public editing source");
  }finally{rmSync(target,{recursive:true,force:true});}
 });

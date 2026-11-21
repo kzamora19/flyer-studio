@@ -4,6 +4,9 @@ on:
     branches: [feature/ptg-private-delivery-poc-20261121]
     paths:
       - "scripts/build-private-flyer.mjs"
+      - "scripts/build-cutover-pages.mjs"
+      - "tests/staged-cutover-pages.test.mjs"
+      - ".github/workflows/pages.yml"
       - "tests/private-editor-build.test.mjs"
       - "tests/private-delivery-policy.test.mjs"
       - "tests/staged-studio-launch.test.mjs"
@@ -20,6 +23,9 @@ on:
   pull_request:
     paths:
       - "scripts/build-private-flyer.mjs"
+      - "scripts/build-cutover-pages.mjs"
+      - "tests/staged-cutover-pages.test.mjs"
+      - ".github/workflows/pages.yml"
       - "tests/private-editor-build.test.mjs"
       - "tests/private-delivery-policy.test.mjs"
       - "tests/staged-studio-launch.test.mjs"
