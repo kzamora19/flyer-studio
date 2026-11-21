@@ -1,3 +1,7 @@
-# Staged function only. No deploy should run from this branch.
+project_id = "tzklsscoiwnmeantcefw"
+[functions.flyer-catalog]
+verify_jwt = false  # Public catalog metadata/images only; user-specific data never exposed here.
+
+# Staging source only — this protected editor service is NOT deployed.
 [functions.flyer-editor-delivery]
 verify_jwt = false
