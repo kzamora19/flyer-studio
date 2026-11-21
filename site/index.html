@@ -6930,8 +6930,9 @@ function quickProjectInit(){
   save.id='quickSaveProject';save.title='Save the current flyer or create a named cloud project';
   const retrieve=cloudMakeButton('📂 Retrieve Project',()=>void quickProjectOpen('retrieve'));
   retrieve.id='quickRetrieveProject';retrieve.title='Open previously saved cloud projects';
-  const cloud=$c('cloudToolbar');
-  if(cloud)cloud.before(save,retrieve);else toolbar.append(save,retrieve);
+  const back=$c('back');
+  if(back&&back.parentElement===toolbar)back.after(save,retrieve);
+  else toolbar.prepend(save,retrieve);
  }
  $c('quickProjectClose').onclick=quickProjectClose;
  $c('quickProjectSignIn').onclick=quickProjectSignIn;
