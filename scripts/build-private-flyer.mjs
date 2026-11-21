@@ -31,6 +31,26 @@ for(const [file,type] of Object.entries(media)){
  html=html.split(file).join(uri);
  originals.push(file);
 }
+// Replace the opaque-origin editor's IndexedDB dependency with an explicit
+// MessagePort adapter. PTG account-scoped AES-GCM persistence stays only in
+// the protected launcher, not the editor or shared github.io browser storage.
+const draftBridge=readFileSync(join(root,'staging/editor-storage-bridge.js'),'utf8');
+replaceOne('<meta charset="utf-8">',
+ '<meta charset="utf-8">\\n<script>'+draftBridge.replace(/<\\/script/gi,'<\\\\/script')+'</script>',
+ 'private encrypted storage bridge');
+const databaseStart=html.indexOf('function loadDatabase() {');
+const databaseEnd=html.indexOf('function readReference() {',databaseStart);
+if(databaseStart<0||databaseEnd<=databaseStart)
+ throw Error('MegaFlyer local draft implementation changed: review before private packaging.');
+html=html.slice(0,databaseStart)+
+ `function loadDatabase() {
+  return window.__MEGAFLYER_PRIVATE_DB__.request('read','p:current').then(record=>{
+   database=window.__MEGAFLYER_PRIVATE_DB__.database();return record;
+  });
+}
+`+html.slice(databaseEnd);
+originals.push('private IndexedDB replacement');
+
 // srcdoc has an about:srcdoc URL even on GitHub Pages; keep catalog lookups
 // on the existing Supabase Edge endpoint and allow the PTG connection form.
 replaceOne("const onGitHubFlyer=()=>location.origin==='https://kzamora19.github.io'&&location.pathname.startsWith('/flyer-studio/');",
