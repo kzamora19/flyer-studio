@@ -38,19 +38,19 @@ for(const name of ['floating-panels.js','shared-asset-ui.js','toolbar-tabs.js'])
  const target='<script src="./'+name+'" defer></script>';
  const code=readFileSync(join(site,name),'utf8');
  // Escape a literal closing script sequence if a future JS module contains one.
- replaceOne(target,'<script>'+code.replace(/<\\/script/gi,'<\\\\/script')+'</script>',name);
+ replaceOne(target,'<script>'+code.replace(/<\/script/gi,'<\\/script')+'</script>',name);
 }
-if(/<(script|link|img)[^>]+(?:src|href)="(?:\\.\\/|assets\\/)/i.test(html))
+if(/<(script|link|img)[^>]+(?:src|href)="(?:\.\/|assets\/)/i.test(html))
  throw Error('Protected HTML still references a local public script/image/stylesheet.');
 if(!html.includes('MegaFlyer Studio')||!html.includes('sharedAssetLauncher'))
  throw Error('Private package does not contain the expected complete editor.');
-html='<!-- PRIVATE EDITOR BUNDLE. NEVER PUBLISH VIA GITHUB PAGES. -->\\n'+html;
+html='<!-- PRIVATE EDITOR BUNDLE. NEVER PUBLISH VIA GITHUB PAGES. -->\n'+html;
 const privateDir=join(output,'private'),publicDir=join(output,'public');
 mkdirSync(privateDir,{recursive:true});mkdirSync(publicDir,{recursive:true});
 writeFileSync(join(privateDir,'studio.html'),html);
 const publicEntry=`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>MegaFlyer Studio — PTG access</title><main style="max-width:35rem;margin:12vh auto;font:16px/1.5 system-ui;padding:24px"><h1>MegaFlyer Studio</h1><p>Open MegaFlyer Studio using an authorized PTG Team Leader, Branch Admin, or System Admin account.</p><p>This preview entry does not provide access to the editor. The protected delivery gateway is not deployed.</p><a href="https://kzamora19.github.io/first-megasaver-ptg/studios/" rel="noreferrer">Open PTG Creative Studios</a></main></html>`;
 writeFileSync(join(publicDir,'index.html'),publicEntry);
 const manifest={kind:'MegaFlyerPrivateEditorBuild',version:1,bytes:Buffer.byteLength(html),sha256:sha(html),inlined:originals,publicBytes:Buffer.byteLength(publicEntry),publicSha256:sha(publicEntry)};
-writeFileSync(join(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\\n');
+writeFileSync(join(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
 console.log('Private Editor packaging check complete: bundle bytes',manifest.bytes,'digest',manifest.sha256.slice(0,16));
 console.log('Public entry bytes',manifest.publicBytes,'(not deployed)');

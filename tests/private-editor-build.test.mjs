@@ -18,14 +18,14 @@ test('private/editor split contains complete artwork only in private package',()
    const manifest=JSON.parse(readFileSync(join(out,'manifest.json'),'utf8'));
    assert.match(html,/MegaFlyer Studio/);
    assert.match(html,/sharedAssetLauncher/);
-   assert.match(html,/data:image\\/svg\\+xml;base64,/);
-   assert.match(html,/data:image\\/png;base64,/);
+   assert.match(html,/data:image\/svg\+xml;base64,/);
+   assert.match(html,/data:image\/png;base64,/);
    assert.match(html,/PRIVATE EDITOR BUNDLE/);
-   assert.doesNotMatch(html,/<script src="\\.\\/(?:shared-asset-ui|floating-panels|toolbar-tabs)\\.js"/);
+   assert.doesNotMatch(html,/<script src="\.\/(?:shared-asset-ui|floating-panels|toolbar-tabs)\.js"/);
    assert.doesNotMatch(html,/<link rel="manifest"/);
    assert.ok(html.length>1000000,'Full app source only in private package');
    assert.ok(publicHtml.length<2500);
-   assert.doesNotMatch(publicHtml,/sharedAssetLauncher|function render\\(|PTG_STUDIO_GATEWAY_SECRET|STATE_MASTER/);
+   assert.doesNotMatch(publicHtml,/sharedAssetLauncher|function render\(|PTG_STUDIO_GATEWAY_SECRET|STATE_MASTER/);
    assert.match(publicHtml,/protected delivery gateway is not deployed/);
    assert.equal(manifest.sha256,sha(html));
    assert.equal(manifest.publicSha256,sha(publicHtml));
