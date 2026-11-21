@@ -76,3 +76,22 @@ test('backend refuses unverified reads, keeps images private and audits modifica
  assert.match(migration,/flyer_product_photo_audit/);
  assert.match(migration,/unique\(product_key,blob_id\)/);
 });
+
+
+test('opaque-origin editor relays only whitelisted photo operations through PTG launcher',()=>{
+ const editor=file('site/product-photo-library.js');
+ const bridge=file('staging/editor-storage-bridge.js');
+ const launcher=file('staging/studio-access/launch.js');
+ const edge=file('supabase/functions/flyer-product-photos/index.ts');
+ assert.match(editor,/__MEGAFLYER_PHOTO_RPC__/);
+ assert.doesNotMatch(editor,/fetch\\(API/);
+ assert.match(bridge,/__MEGAFLYER_PHOTO_RPC__=photo/);
+ assert.match(bridge,/action:"product-photo"/);
+ assert.match(launcher,/message.action==='product-photo'/);
+ assert.match(launcher,/new Set\\(\\['permissions','resolve','search','image','upload','replace','setPrimary','remove'\\]\\)/);
+ assert.match(launcher,/https:\\/\\/tzklsscoiwnmeantcefw\\.supabase\\.co\\/functions\\/v1\\/flyer-product-photos/);
+ assert.match(launcher,/Authorization:'Bearer '\\+message.token/);
+ assert.match(edge,/origin!==ALLOWED_ORIGIN/);
+ assert.doesNotMatch(edge,/origin==='null'|origin === 'null'|Access-Control-Allow-Origin.*\\*/);
+ assert.doesNotMatch(launcher,/allow-same-origin/);
+});
