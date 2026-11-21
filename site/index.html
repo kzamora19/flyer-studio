@@ -6338,6 +6338,7 @@ const CLOUD_BUCKET='flyer-studio-private';
 const CLOUD_AUTH_STORE='flyer-studio-cloud-auth-v1';
 let cloudSession=null,cloudUser=null,cloudProject=null,cloudRevision=0,cloudLastDocument=null;
 let cloudSaving=false,cloudDirty=false,cloudConflict=false,cloudTimer=null,cloudInitialized=false,cloudSuspend=false;
+let cloudEditGeneration=0;
 let cloudProjects=[],cloudVersions=[];
 
 /* Google Drive backups: users explicitly authorize drive.file; access tokens live in memory only. */
@@ -6555,6 +6556,7 @@ function cloudRenderAuth(){
  $c('cloudSave').disabled=!cloudProject||!cloudUser||cloudConflict;
  $c('cloudDetach').disabled=!cloudProject;
  if($c('driveStatus'))driveRender();
+ if($c('quickProjectModal'))quickProjectRender();
  const pill=$c('cloudToolbar');if(pill){pill.textContent=cloudUser?(cloudProject?'☁ Auto-sync':'☁ Connected'):'☁ Cloud';pill.dataset.connected=String(!!cloudUser);}
 }
 function cloudMakeButton(label,onClick,cls=''){
@@ -6614,56 +6616,78 @@ async function cloudUnpack(document){
 }
 function cloudCheckFlyer(value){if(!value||typeof value!=='object'||!value.campaign||typeof value.campaign!=='object'||!Array.isArray(value.offers)||value.offers.length>500)throw Error('This cloud file is not a supported Flyer Studio project.');return value;}
 function cloudQueue(){
- if(!cloudUser||!cloudProject||cloudSuspend||cloudConflict)return;
- cloudDirty=true;clearTimeout(cloudTimer);cloudStatus('Unsaved changes · syncing shortly');cloudTimer=setTimeout(()=>cloudSaveNow(false),3500);
+ if(!cloudUser||!cloudProject||cloudConflict)return;
+ cloudDirty=true;cloudEditGeneration++;
+ if(cloudSuspend)return;
+ clearTimeout(cloudTimer);cloudStatus('Unsaved changes · syncing shortly');cloudTimer=setTimeout(()=>cloudSaveNow(false),3500);
 }
 async function cloudSaveNow(interactive=true){
- if(!cloudUser||!cloudProject){if(interactive)cloudInfo('Select or create a cloud project first.');return;}
- if(cloudConflict){cloudInfo('A newer cloud version exists. Open the latest cloud copy or save a new copy to prevent overwriting it.');return;}
- if(cloudSaving){cloudDirty=true;return;}
- cloudSaving=true;const savingProject=cloudProject.id,oldRevision=cloudRevision,oldDocument=cloudLastDocument;
+ if(!cloudUser||!cloudProject){if(interactive)cloudInfo('Select or create a cloud project first.');return false;}
+ if(cloudConflict){cloudInfo('A newer cloud version exists. Open the latest cloud copy or save a new copy to prevent overwriting it.');return false;}
+ if(cloudSaving){cloudDirty=true;return false;}
+ cloudSaving=true;const savingProject=cloudProject.id,oldRevision=cloudRevision,oldDocument=cloudLastDocument,startingGeneration=cloudEditGeneration;
  clearTimeout(cloudTimer);cloudDirty=false;cloudStatus('Saving cloud project…');cloudRenderAuth();
  try{
   const snapshot=structuredClone(state),document=await cloudPack(snapshot);
   const body={document,revision:oldRevision+1,updated_at:new Date().toISOString(),status:['Draft','In review','Changes requested','Approved'].includes(snapshot.status)?snapshot.status:'Draft'};
   const records=await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+savingProject+'&revision=eq.'+oldRevision+'&select=id,name,revision,updated_at'),{method:'PATCH',data:body,headers:{Prefer:'return=representation'}});
-  if(!records?.length){cloudConflict=true;cloudInfo('Cloud conflict: this project was updated elsewhere. Your browser copy is safe. Open the latest cloud project, or save a separate cloud copy.');return;}
+  if(!records?.length){cloudConflict=true;cloudInfo('Cloud conflict: this project was updated elsewhere. Your browser copy is safe. Open the latest cloud project, or save a separate cloud copy.');return false;}
   if(oldDocument){try{await cloudRequest(cloudTable('flyer_cloud_versions'),{method:'POST',data:{project_id:savingProject,owner_id:cloudUser.id,revision:oldRevision,document:oldDocument},headers:{Prefer:'resolution=ignore-duplicates,return=minimal'}});}catch(err){console.warn('Could not retain prior cloud revision:',err.message);}}
-  cloudRevision=records[0].revision;cloudProject={...cloudProject,...records[0]};cloudLastDocument=document;cloudRenderAuth();
+  cloudRevision=records[0].revision;cloudProject={...cloudProject,...records[0]};cloudLastDocument=document;
+  if(cloudEditGeneration!==startingGeneration)cloudDirty=true;
+  cloudRenderAuth();
   cloudStatus('Saved to cloud · revision '+cloudRevision,true);
   void driveBackupNow({packed:document,project:cloudProject,revision:cloudRevision});
   if(interactive)cloudInfo('Cloud save complete. Open this project from another device after signing in.',true);
- }catch(e){cloudDirty=true;cloudInfo('Cloud save failed: '+cloudErr(e)+'. The local browser flyer remains intact.');}
+  return true;
+ }catch(e){cloudDirty=true;cloudInfo('Cloud save failed: '+cloudErr(e)+'. The local browser flyer remains intact.');return false;}
  finally{cloudSaving=false;if(cloudDirty&&!cloudConflict&&cloudProject)cloudQueue();}
 }
 async function cloudNewCopy(){
- if(!cloudUser)return cloudInfo('Sign in first.');
+ if(!cloudUser){cloudInfo('Sign in first.');return false;}
+ if(cloudSaving){cloudInfo('Finish the current cloud save before creating another project.');return false;}
  const name=($c('cloudProjectName').value||'').trim().slice(0,120);
- if(!name){cloudInfo('Enter a name for the cloud project.');return;}
- cloudBusy(true);try{
-   if(cloudProject&&cloudDirty&&!confirm('Unsaved cloud changes are pending. Save the current project first?'))return;
-   if(cloudProject&&cloudDirty)await cloudSaveNow(true);
+ if(!name){cloudInfo('Enter a name for the cloud project.');return false;}
+ // Save As New must preserve the original project's last saved revision.
+ // Pause its queued autosave while the new, separately named copy is created.
+ const priorSuspend=cloudSuspend,startingGeneration=cloudEditGeneration;
+ cloudSuspend=true;clearTimeout(cloudTimer);cloudBusy(true);
+ try{
    const snapshot=structuredClone(state),document=await cloudPack(snapshot);
    const result=await cloudRequest(cloudTable('flyer_cloud_projects','select=id,name,revision,updated_at'),{method:'POST',data:{owner_id:cloudUser.id,name,document,status:['Draft','In review','Changes requested','Approved'].includes(snapshot.status)?snapshot.status:'Draft'},headers:{Prefer:'return=representation'}});
    if(!result?.[0]?.id)throw Error('Cloud did not return a project ID.');
-   cloudProject=result[0];cloudRevision=result[0].revision;cloudLastDocument=document;cloudConflict=false;cloudDirty=false;cloudRenderAuth();
-   cloudInfo('New cloud copy created. Edits will now autosave to '+name+'. Your browser copy stays available.',true);void driveBackupNow({packed:document,project:cloudProject,revision:cloudRevision});await cloudRefreshList();
- }catch(e){cloudInfo('Could not create cloud project: '+cloudErr(e));}finally{cloudBusy(false)}
+   cloudProject=result[0];cloudRevision=result[0].revision;cloudLastDocument=document;cloudConflict=false;
+   cloudDirty=cloudEditGeneration!==startingGeneration;
+   cloudRenderAuth();
+   cloudInfo('New cloud copy created. Edits will now autosave to '+name+'. The previous saved project is unchanged.',true);
+   void driveBackupNow({packed:document,project:cloudProject,revision:cloudRevision});
+   await cloudRefreshList();return true;
+ }catch(e){
+   cloudInfo('Could not create cloud project: '+cloudErr(e)+'. Your browser flyer remains intact.');return false;
+ }finally{
+   cloudSuspend=priorSuspend;
+   if(cloudDirty&&cloudProject&&!cloudConflict&&!cloudSuspend)cloudQueue();
+   cloudBusy(false);
+ }
 }
 async function cloudRefreshList(){
- if(!cloudUser)return;
- try{cloudProjects=await cloudRequest(cloudTable('flyer_cloud_projects','select=id,name,revision,status,updated_at&order=updated_at.desc&limit=60'))||[];cloudDrawProjects();}
- catch(e){cloudInfo('Could not list cloud projects: '+cloudErr(e));}
+ if(!cloudUser)return false;
+ try{cloudProjects=await cloudRequest(cloudTable('flyer_cloud_projects','select=id,name,revision,status,updated_at&order=updated_at.desc&limit=200'))||[];cloudDrawProjects();return true;}
+ catch(e){cloudInfo('Could not list cloud projects: '+cloudErr(e));return false;}
 }
-function cloudDrawProjects(){const list=$c('cloudProjects');if(!list)return;list.replaceChildren();if(!cloudProjects.length){list.textContent='No cloud projects yet. Save a new cloud copy to begin.';return;}
+function cloudDrawProjects(){const list=$c('cloudProjects');if($c('quickProjectModal'))quickProjectRender();if(!list)return;list.replaceChildren();if(!cloudProjects.length){list.textContent='No cloud projects yet. Save a new cloud copy to begin.';return;}
  for(const p of cloudProjects){cloudItem(list,p.name,'Revision '+p.revision+' · '+p.status+' · '+new Date(p.updated_at).toLocaleString(),[
   ['Open',()=>cloudOpenProject(p.id)],['Delete',()=>cloudDeleteProject(p),'powerDanger']
  ]);}
 }
 async function cloudOpenProject(id){
- if(!cloudUser)return;
- if(!confirm('Open this cloud project? The current browser flyer will be replaced. Download a local project backup first if you need it.'))return;
- if(cloudSaving)return cloudInfo('Finish the pending save first.');
+ if(!cloudUser)return false;
+ if(cloudSaving){cloudInfo('Finish the pending save first.');return false;}
+ if(cloudProject&&cloudDirty){
+   const ok=await cloudSaveNow(true);
+   if(!ok||cloudDirty||cloudConflict){cloudInfo('Opening stopped: current project has changes that could not be saved safely.');return false;}
+ }
+ if(!confirm('Open this saved project? The current browser flyer will be replaced. Save this flyer as a new cloud project or download a backup first if you need to keep it.'))return false;
  cloudBusy(true);try{
   const rows=await cloudRequest(cloudTable('flyer_cloud_projects','id=eq.'+id+'&select=id,name,revision,status,updated_at,document&limit=1'));
   const p=rows?.[0];if(!p)throw Error('Project not found or no longer accessible.');
@@ -6675,8 +6699,8 @@ async function cloudOpenProject(id){
    selected=offerKey(state.offers[0]);save();setup();refresh();
   }finally{cloudSuspend=false;}
   cloudProject={id:p.id,name:p.name,revision:p.revision,updated_at:p.updated_at};cloudRevision=p.revision;cloudLastDocument=p.document;cloudDirty=false;cloudConflict=false;cloudRenderAuth();
-  cloudInfo('Loaded '+p.name+' from the cloud. Changes now autosave to this project.',true);await cloudLoadVersions();
- }catch(e){cloudInfo('Could not open cloud project: '+cloudErr(e));}finally{cloudBusy(false)}
+  cloudInfo('Loaded '+p.name+' from the cloud. Changes now autosave to this project.',true);await cloudLoadVersions();return true;
+ }catch(e){cloudInfo('Could not open cloud project: '+cloudErr(e));return false;}finally{cloudBusy(false)}
 }
 async function cloudDeleteProject(p){
  if(!confirm('Permanently delete cloud project "'+p.name+'" and its saved revisions? The current browser flyer will remain intact.'))return;
@@ -6764,6 +6788,165 @@ async function cloudDownloadPhotos(){
  }catch(e){cloudInfo('Photo download failed: '+cloudErr(e));}finally{cloudBusy(false)}
 }
 function cloudUpdateLocalPhotoOptions(){const e=$c('cloudLocalPhoto');if(!e)return;const old=e.value;e.replaceChildren(...powerPhotos.map(item=>new Option((item.sku||'No barcode')+' · '+(item.model||item.name||'Photo'),item.id)));if(powerPhotos.some(item=>item.id===old))e.value=old;}
+/* Saved projects shortcut: shares the existing private Cloud Workspace data and auth. */
+let quickProjectMode='save',quickProjectBusy=false;
+function quickProjectNotice(message,good=false){
+ const el=$c('quickProjectNotice');if(!el)return;
+ el.textContent=message;el.dataset.ok=String(good);
+}
+function quickProjectSetBusy(value){
+ quickProjectBusy=value;
+ for(const id of ['quickProjectSaveCurrent','quickProjectSaveNew','quickProjectRefresh']){
+  const el=$c(id);if(el)el.disabled=value;
+ }
+}
+function quickProjectRender(){
+ const dialog=$c('quickProjectModal');if(!dialog)return;
+ $c('quickProjectSignedOut').hidden=!!cloudUser;
+ $c('quickProjectSignedIn').hidden=!cloudUser;
+ $c('quickProjectSaveView').hidden=quickProjectMode!=='save';
+ $c('quickProjectRetrieveView').hidden=quickProjectMode!=='retrieve';
+ $c('quickProjectTitle').textContent=quickProjectMode==='save'?'Save Project':'Retrieve Project';
+ $c('quickProjectCurrent').textContent=cloudProject
+    ?'Current project: '+cloudProject.name+' · revision '+cloudRevision
+    :'Current flyer: local draft (not yet saved to cloud)';
+ $c('quickProjectSaveCurrent').disabled=!cloudUser||!cloudProject||cloudConflict||cloudSaving||quickProjectBusy;
+ $c('quickProjectSaveNew').disabled=!cloudUser||cloudSaving||quickProjectBusy;
+ const list=$c('quickProjectList');list.replaceChildren();
+ if(!cloudUser){list.textContent='Sign in to your Flyer Studio Cloud account to retrieve saved projects.';return;}
+ const query=($c('quickProjectSearch').value||'').trim().toLowerCase();
+ const filtered=cloudProjects.filter(p=>p.name.toLowerCase().includes(query));
+ if(!filtered.length){list.textContent=cloudProjects.length?'No saved projects match that search.':'No saved cloud projects yet. Save your first project to see it here.';return;}
+ for(const p of filtered){
+  const row=document.createElement('div');row.className='quickProjectItem';
+  const description=document.createElement('div');description.className='quickProjectDetails';
+  const name=document.createElement('strong');name.textContent=p.name;
+  const meta=document.createElement('small');meta.textContent='Revision '+p.revision+' · '+p.status+' · '+new Date(p.updated_at).toLocaleString();
+  description.append(name,meta);row.append(description);
+  const open=cloudMakeButton(cloudProject?.id===p.id?'Reopen':'Open',()=>void quickProjectRetrieve(p.id));
+  open.disabled=quickProjectBusy||cloudSaving;row.append(open);list.append(row);
+ }
+}
+function quickProjectClose(){
+ const dialog=$c('quickProjectModal');if(!dialog)return;
+ dialog.hidden=true;
+ const panel=dialog.querySelector('.uiModalBox');
+ if(panel){panel.style.transform='';delete panel.dataset.dragX;delete panel.dataset.dragY;}
+}
+async function quickProjectOpen(mode){
+ if(!$c('quickProjectModal'))return;
+ quickProjectMode=mode==='retrieve'?'retrieve':'save';
+ if(!$c('powerModal').hidden)powerClose();
+ $c('quickProjectModal').hidden=false;
+ quickProjectNotice('');
+ quickProjectRender();
+ if(cloudUser&&quickProjectMode==='retrieve'){
+  const success=await cloudRefreshList();
+  if(!success)quickProjectNotice('Could not refresh saved projects. Check your connection and try again.');
+  quickProjectRender();
+ }
+}
+function quickProjectSignIn(){
+ quickProjectClose();
+ powerOpen('cloud');
+ cloudInfo('Sign in to Flyer Studio Cloud. Then use Save Project or Retrieve Project again.');
+ if(!cloudUser)$c('cloudEmail')?.focus();
+}
+async function quickProjectSaveCurrent(){
+ if(!cloudUser||!cloudProject){quickProjectNotice('Enter a name and use Save As New Project first.');return;}
+ quickProjectSetBusy(true);
+ try{
+  const ok=await cloudSaveNow(true);
+  quickProjectNotice(ok?'Saved '+cloudProject.name+' · revision '+cloudRevision+'.':'Save did not complete. Your local flyer remains intact.',ok);
+ }finally{quickProjectSetBusy(false);quickProjectRender();}
+}
+async function quickProjectSaveNew(){
+ if(!cloudUser)return quickProjectSignIn();
+ const name=($c('quickProjectName').value||'').trim().slice(0,120);
+ if(!name){quickProjectNotice('Enter a project name before saving.');$c('quickProjectName').focus();return;}
+ $c('cloudProjectName').value=name;
+ quickProjectSetBusy(true);
+ try{
+  const ok=await cloudNewCopy();
+  quickProjectNotice(ok?'Saved as new project: '+name+'. Future edits will autosave to this copy.':'New project was not saved. Your current flyer remains available.',ok);
+  if(ok)$c('quickProjectName').value='';
+ }finally{quickProjectSetBusy(false);quickProjectRender();}
+}
+async function quickProjectRetrieve(id){
+ if(quickProjectBusy||cloudSaving)return quickProjectNotice('Finish the current save first.');
+ quickProjectSetBusy(true);
+ try{
+  const opened=await cloudOpenProject(id);
+  if(opened){quickProjectClose();feedback('Retrieved cloud project: '+cloudProject.name+'.');}
+  else quickProjectNotice('Project was not opened. Your current flyer is unchanged.');
+ }finally{quickProjectSetBusy(false);quickProjectRender();}
+}
+function quickProjectInit(){
+ if($c('quickProjectModal'))return;
+ const style=document.createElement('style');
+ style.textContent=`
+ #quickProjectModal{z-index:6500}
+ #quickProjectModal .uiModalBox{width:min(630px,calc(100vw - 24px))!important;max-height:calc(100dvh - 24px)!important;pointer-events:auto}
+ #quickProjectModal .modalInner{padding:16px;overflow:auto}
+ #quickProjectModal .modalInner>section{margin-top:12px}
+ #quickProjectModal .quickProjectActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:9px 0}
+ #quickProjectModal .quickProjectActions button{min-height:36px}
+ #quickProjectModal .quickProjectItem{display:flex;align-items:center;gap:10px;border:1px solid #d6e2f0;background:#f8fbff;border-radius:8px;padding:10px;margin:6px 0}
+ #quickProjectModal .quickProjectDetails{flex:1;min-width:0;overflow-wrap:anywhere}
+ #quickProjectModal .quickProjectDetails small{display:block;color:#61718a;margin-top:3px}
+ #quickProjectModal #quickProjectNotice:not(:empty){margin-top:12px;padding:9px;background:#fff4df;border-radius:6px}
+ #quickProjectModal #quickProjectNotice[data-ok="true"]{background:#e8f6ee;color:#165b37}
+ #quickProjectModal .quickProjectHint{font-size:12px;color:#506680;line-height:1.5}
+ #quickProjectModal #quickProjectSearch{width:100%}
+ @media(max-width:700px){#quickProjectModal .uiModalBox{width:calc(100vw - 16px)!important;max-height:calc(100dvh - 16px)!important}}
+ `;document.head.append(style);
+ const dialog=document.createElement('div');dialog.id='quickProjectModal';dialog.className='uiModalBackdrop';dialog.hidden=true;
+ dialog.innerHTML=`<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="quickProjectTitle">
+ <div class="modalHeading"><div><strong id="quickProjectTitle">Save Project</strong><small>Save unfinished flyers and continue later</small></div>
+ <button type="button" id="quickProjectClose" aria-label="Close project manager">×</button></div>
+ <div class="modalInner">
+ <p id="quickProjectCurrent" class="quickProjectHint"></p>
+ <section id="quickProjectSignedOut" hidden><p>Cloud sign-in is needed to save and retrieve flyers across devices. Your current draft remains in this browser.</p>
+ <div class="quickProjectActions"><button type="button" id="quickProjectSignIn">Sign in to Cloud</button></div></section>
+ <section id="quickProjectSignedIn" hidden>
+ <div id="quickProjectSaveView">
+ <p class="quickProjectHint">Save changes to the current project, or create a separately named copy. New edits autosave to the selected cloud project.</p>
+ <div class="quickProjectActions"><button type="button" id="quickProjectSaveCurrent">Save Changes</button></div>
+ <label>New project name<input id="quickProjectName" maxlength="120" placeholder="e.g. November Holiday Sale"></label>
+ <div class="quickProjectActions"><button type="button" id="quickProjectSaveNew">Save As New Project</button></div></div>
+ <div id="quickProjectRetrieveView" hidden>
+ <p class="quickProjectHint">Select a saved project to continue editing. Opening a different project replaces the current browser flyer.</p>
+ <label>Search saved projects<input id="quickProjectSearch" placeholder="Search project names" autocomplete="off"></label>
+ <div class="quickProjectActions"><button type="button" id="quickProjectRefresh">Refresh Project List</button></div>
+ <div id="quickProjectList" aria-live="polite"></div></div></section>
+ <div class="quickProjectActions"><button type="button" id="quickProjectLocalBackup">Download Local Backup</button></div>
+ <p class="quickProjectHint">Local drafts remain in this browser until cleared. Cloud projects are private to your signed-in Flyer Studio account.</p>
+ <p id="quickProjectNotice" role="status" aria-live="polite"></p>
+ </div></div>`;
+ document.body.append(dialog);
+ const toolbar=document.querySelector('.stage .toolbar');
+ if(toolbar){
+  const save=cloudMakeButton('💾 Save Project',()=>void quickProjectOpen('save'));
+  save.id='quickSaveProject';save.title='Save the current flyer or create a named cloud project';
+  const retrieve=cloudMakeButton('📂 Retrieve Project',()=>void quickProjectOpen('retrieve'));
+  retrieve.id='quickRetrieveProject';retrieve.title='Open previously saved cloud projects';
+  const back=$c('back');
+  if(back&&back.parentElement===toolbar)back.after(save,retrieve);
+  else toolbar.prepend(save,retrieve);
+ }
+ $c('quickProjectClose').onclick=quickProjectClose;
+ $c('quickProjectSignIn').onclick=quickProjectSignIn;
+ $c('quickProjectSaveCurrent').onclick=()=>void quickProjectSaveCurrent();
+ $c('quickProjectSaveNew').onclick=()=>void quickProjectSaveNew();
+ $c('quickProjectRefresh').onclick=()=>void cloudRefreshList().then(ok=>{quickProjectNotice(ok?'Project list refreshed.':'Unable to refresh project list.',ok);quickProjectRender();});
+ $c('quickProjectSearch').oninput=quickProjectRender;
+ $c('quickProjectLocalBackup').onclick=()=>$c('backup')?.click();
+ document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&!dialog.hidden){event.stopImmediatePropagation();quickProjectClose();}
+ },true);
+ quickProjectRender();
+}
+
 function cloudMakeUI(){
  if(cloudInitialized)return;const modal=$c('powerModal');if(!modal)return;
  cloudInitialized=true;
@@ -6800,6 +6983,7 @@ function cloudMakeUI(){
  const oldSave=save;save=function(...args){const result=oldSave(...args);cloudQueue();return result;};
  const oldPowerLoad=powerLoad;powerLoad=async function(...args){const result=await oldPowerLoad(...args);cloudUpdateLocalPhotoOptions();return result;};
  const oldPowerRefresh=powerRefreshControls;powerRefreshControls=function(...args){const result=oldPowerRefresh(...args);cloudUpdateLocalPhotoOptions();return result;};
+ quickProjectInit();
  cloudRenderAuth();cloudRecoverSession();
 }
 async function cloudRecoverSession(){
