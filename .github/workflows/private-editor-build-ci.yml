@@ -6,6 +6,7 @@ on:
       - "scripts/build-private-flyer.mjs"
       - "scripts/build-cutover-pages.mjs"
       - "tests/staged-cutover-pages.test.mjs"
+      - "tests/staged-cutover-browser.mjs"
       - ".github/workflows/pages.yml"
       - "tests/private-editor-build.test.mjs"
       - "tests/private-delivery-policy.test.mjs"
@@ -25,6 +26,7 @@ on:
       - "scripts/build-private-flyer.mjs"
       - "scripts/build-cutover-pages.mjs"
       - "tests/staged-cutover-pages.test.mjs"
+      - "tests/staged-cutover-browser.mjs"
       - ".github/workflows/pages.yml"
       - "tests/private-editor-build.test.mjs"
       - "tests/private-delivery-policy.test.mjs"
@@ -82,6 +84,8 @@ jobs:
         run: |
           npm install --no-save --ignore-scripts playwright@1.65.1
           npx playwright install chromium --with-deps
+      - name: Test historical public Pages cutover preview on mobile Chromium
+        run: node tests/staged-cutover-browser.mjs
       - name: Verify mock PTG launcher, private editor mount and revocation
         run: node tests/staged-studio-browser.mjs
       - name: Verify actual full editor loads inside protected mock frame
