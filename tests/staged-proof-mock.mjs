@@ -14,7 +14,9 @@ export function createProofMock(){
     assert.equal(body.publicKey?.d,undefined,'Private key must never leave the browser');
     key=await webcrypto.subtle.importKey('jwk',body.publicKey,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
     challenge=nextChallenge();expiresAt=new Date(Date.now()+expireMs).toISOString();
-    return {ok:true,sessionId,challenge,expiresAt};
+    return {ok:true,sessionId,challenge,expiresAt,
+      draftScope:Buffer.alloc(32,83).toString('base64url'),
+      draftKey:Buffer.alloc(32,75).toString('base64url')};
    }
    assert.equal(body.action,'check');
    assert.equal(body.ticket,undefined,'Launch ticket must not be replayed for checks');
