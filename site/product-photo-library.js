@@ -78,12 +78,12 @@ async function apply(photo){
  if(!applied)throw Error('The selected product card changed. Please retry.');
  if(typeof edited==='function')edited('Saved product photo applied to '+(selected.product.barcode||selected.product.model)+'.');
 }
-async function uploadFile(file,replacing=null){
+async function uploadFile(file,replacing=null,alreadyApplied=false){
  const selected=selection();
  if(!selected||!selected.product.productKey)throw Error('Select a product with a barcode or exact brand and model.');
  if(!file||!TYPES.has(file.type)||!file.size||file.size>12*1024*1024)
   throw Error('Upload a product PNG, JPG or WebP under 12 MB.');
- if(!replacing){
+ if(!replacing&&!alreadyApplied){
   if(typeof attachUploadedPhoto!=='function')throw Error('Product card image editor is not available.');
   if(!await attachUploadedPhoto(selected.offer,file))throw Error('Product selection changed during upload.');
   if(typeof edited==='function')edited('Product photo imported.');
@@ -218,6 +218,48 @@ function init(){
   if(!file)return;
   try{await uploadFile(file);}catch(err){notice('Flyer import or library save: '+err.message);}
  };
+ // Only native PRODUCT-CARD uploads are eligible for automatic sharing.
+ // Never hook #photos, #onePhoto, #freebiePhoto, #logo, front/back artwork,
+ // Shared Assets, or other inputs: those can contain customer/private media.
+ const nativeCardPhoto=$('cardPhotoUpload');
+ if(nativeCardPhoto){
+  const wrap=document.createElement('label');wrap.id='smartPhotoNativeShareLabel';
+  wrap.style.cssText='display:flex;gap:6px;align-items:center;margin:6px 0;font:12px/1.4 Segoe UI,Arial,sans-serif;color:#2348c7';
+  const opt=document.createElement('input');opt.type='checkbox';opt.checked=true;opt.id='smartPhotoNativeShare';
+  const text=document.createTextNode('Save product-card uploads to shared Photo Library');
+  wrap.append(opt,text);
+  const saved=document.createElement('small');saved.id='smartPhotoNativeSaved';
+  saved.style.cssText='display:block;color:#2348c7;font-size:11px';
+  nativeCardPhoto.parentElement?.append(wrap,saved);
+  opt.onchange=()=>{$('smartPhotoShare').checked=opt.checked;};
+  $('smartPhotoShare').onchange=()=>{opt.checked=$('smartPhotoShare').checked;};
+  nativeCardPhoto.addEventListener('change',event=>{
+   const file=event.target.files?.[0],selected=selection();
+   if(!file||!selected?.product.productKey)return;
+   const before=selected.offer.photo,offer=selected.offer,key=selected.product.productKey;
+   const optedIn=opt.checked;
+   if(!optedIn){saved.textContent='Private flyer upload only. Not added to shared library.';return;}
+   void (async()=>{
+    // Wait for the EXISTING photo importer to succeed. Never race it or
+    // silently share a failed upload. Stay on exactly the same product card.
+    for(let n=0;n<28;n++){
+     await new Promise(resolve=>setTimeout(resolve,250));
+     const current=selection();
+     if(!current||current.offer!==offer||current.product.productKey!==key)return;
+     if(!offer.photo||offer.photo===before)continue;
+     if(!opt.checked){saved.textContent='Shared saving excluded.';return;}
+     saved.textContent='Saving product photo to shared library…';
+     try{await uploadFile(file,null,true);
+      saved.textContent='Product photo saved in shared library.';
+     }catch(error){
+      saved.textContent='Flyer image retained; library save unavailable: '+error.message;
+     }
+     return;
+    }
+    saved.textContent='Photo was not shared (editor import not confirmed).';
+   })();
+  },true);
+ }
  $('smartPhotoReplacement').onchange=async e=>{
   const file=e.target.files?.[0],id=e.target.dataset.id;e.target.value='';
   if(!file)return;
