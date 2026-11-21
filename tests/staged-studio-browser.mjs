@@ -57,7 +57,7 @@ try{
  assert.equal(new URL(page.url()).hash,'');
  await page.frameLocator('#studio-editor-frame').locator('#editor-ready').waitFor({timeout:15000});
  assert.equal(await page.locator('#studio-editor-frame').getAttribute('sandbox'),
-   'allow-scripts allow-downloads','Editor must have an opaque origin (never allow-same-origin)');
+   'allow-scripts allow-downloads allow-modals','Editor must have an opaque origin (never allow-same-origin)');
  const access=await page.frameLocator('#studio-editor-frame').locator('body').evaluate(()=>{
    try{window.parent.localStorage.getItem('ptg-session');return 'EXPOSED';}
    catch(error){return error.name;}
