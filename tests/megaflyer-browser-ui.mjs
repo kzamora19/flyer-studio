@@ -29,10 +29,16 @@ try{
  assert.equal(await page.locator('.flyer-tab-shell').count(),1);
  const buttons=await page.locator('.flyer-tab-shell>.toolbar>button').allTextContents();
  for(const label of ['Front','Back','Arrange rows','Arrange sections',
-  '+ Add Section','+ Add Header','Manage sections','PNG · current side',
-  'PDF · both sides','✦ Studio+ Tools','○ Connect PTG','☁ Cloud','+ ADD Assets']){
+  '+ Add Section','+ Add Header','Manage sections',
+  '✦ Studio+ Tools','○ Connect PTG','☁ Cloud','+ ADD Assets']){
   assert.ok(buttons.some(text=>text.trim()===label),'Missing tab '+label);
  }
+ assert.equal(await page.locator('.flyer-tab-shell #png, .flyer-tab-shell #pdf').count(),0,
+   'Export/download buttons must not be duplicated in top tabs');
+ await page.locator('#studioNav [data-nav="review"]').click();
+ assert.equal(await page.locator('#panel-review #png:visible').count(),1);
+ assert.equal(await page.locator('#panel-review #printPdf:visible').count(),1);
+ await page.locator('#studioNav [data-nav="cards"]').click();
  const tabBar=await page.locator('.flyer-tab-shell>.toolbar').evaluate(el=>({
    scrollWidth:el.scrollWidth,clientWidth:el.clientWidth,wrap:getComputedStyle(el).flexWrap
  }));

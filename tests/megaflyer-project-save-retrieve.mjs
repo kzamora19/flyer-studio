@@ -72,7 +72,12 @@ try{
  const page=await context.newPage();
  const pageErrors=[];page.on('pageerror',e=>pageErrors.push(e.message));
  await page.goto('http://127.0.0.1:'+server.address().port+'/',{waitUntil:'load'});
- await page.locator('#quickSaveProject').waitFor({timeout:20000});
+ await page.locator('#quickSaveProject').waitFor({state:'attached',timeout:20000});
+ assert.equal(await page.locator('.flyer-tab-shell #quickSaveProject, .flyer-tab-shell #quickRetrieveProject').count(),0,
+   'Save/Retrieve should not appear in top tab toolbar');
+ await page.locator('#studioNav [data-nav="backup"]').click();
+ assert.equal(await page.locator('#panel-backup #projectCloudActions #quickSaveProject:visible').count(),1);
+ assert.equal(await page.locator('#panel-backup #projectCloudActions #quickRetrieveProject:visible').count(),1);
  await page.waitForFunction(()=>!!document.getElementById('cloudAccount')?.textContent.includes('flyer-test@example.invalid'));
  assert.equal(await page.locator('#quickRetrieveProject').count(),1);
  await page.locator('#quickSaveProject').click();
@@ -131,6 +136,7 @@ try{
  const signedOut=await browserInstance.newContext();
  const p=await signedOut.newPage();
  await p.goto('http://127.0.0.1:'+server.address().port+'/',{waitUntil:'load'});
+ await p.locator('#studioNav [data-nav="backup"]').click();
  await p.locator('#quickSaveProject').click();
  assert.equal(await p.locator('#quickProjectSignedOut').isVisible(),true,'Sign-in guidance for cloud projects');
  await p.locator('#quickProjectSignIn').click();

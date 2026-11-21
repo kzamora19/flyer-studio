@@ -2674,7 +2674,7 @@ body.modalOpen{overflow:auto!important}
 <label>Review note <textarea id="reviewNote" maxlength="400" rows="2"></textarea></label>
 <div class="row"><button id="submit" class="primary">Submit for review</button><button id="approve">Approve</button><button id="changes">Request changes</button></div>
 <ol id="activity"></ol>
-<button type="button" id="printPdf" class="primary">Download print PDF</button>
+<div class="row" id="flyerExportActions"><button type="button" id="png">Download PNG · current side</button><button type="button" id="printPdf" class="primary">Download print PDF · both sides</button></div>
 <p class="muted" id="printInfo">Open the downloaded PDF to print both sides. Drafts include a watermark.</p>
 <p id="printStatus" class="muted" role="status" hidden></p>
 </details>
@@ -2688,7 +2688,6 @@ body.modalOpen{overflow:auto!important}
 <div class="row toolbar">
 <button id="front" aria-pressed="true">Front</button><button id="back" aria-pressed="false">Back</button>
 <button id="arrangeRows" aria-pressed="false" title="Drag a product row to change its position">Arrange rows</button>
-<button id="png">PNG · current side</button><button id="pdf" class="primary">PDF · both sides</button>
 </div>
 <p class="muted" id="arrangeHelp" hidden>Drag a product row to a new position. Products move with their row.</p>
 <canvas id="preview" class="paper" width="800" height="1131" aria-label="Front flyer preview"></canvas>
@@ -4696,7 +4695,7 @@ async function png300(blob) {
   return new Blob(parts,{type:'image/png'});
 }
 async function exportFile(format) {
-  const controls=['png','pdf','printPdf'].map($);
+  const controls=['png','printPdf'].map($);
   const printStatus=$('printStatus');
   controls.forEach(button=>button.disabled=true);
   if(format==='pdf') {
@@ -4919,7 +4918,6 @@ function bind() {
     showTarget();refresh();
   };
   $('png').onclick=()=>exportFile('png');
-  $('pdf').onclick=()=>exportFile('pdf');
   $('printPdf').onclick=()=>exportFile('pdf');
   $('submit').onclick=()=>transition('In review');
   $('approve').onclick=()=>transition('Approved');
@@ -6924,15 +6922,19 @@ function quickProjectInit(){
  <p id="quickProjectNotice" role="status" aria-live="polite"></p>
  </div></div>`;
  document.body.append(dialog);
- const toolbar=document.querySelector('.stage .toolbar');
- if(toolbar){
+ const backupPanel=$c('panel-backup');
+ if(backupPanel){
+  const projectActions=document.createElement('div');
+  projectActions.id='projectCloudActions';projectActions.className='row';
   const save=cloudMakeButton('💾 Save Project',()=>void quickProjectOpen('save'));
   save.id='quickSaveProject';save.title='Save the current flyer or create a named cloud project';
   const retrieve=cloudMakeButton('📂 Retrieve Project',()=>void quickProjectOpen('retrieve'));
   retrieve.id='quickRetrieveProject';retrieve.title='Open previously saved cloud projects';
-  const back=$c('back');
-  if(back&&back.parentElement===toolbar)back.after(save,retrieve);
-  else toolbar.prepend(save,retrieve);
+  projectActions.append(save,retrieve);
+  const projectInfo=document.createElement('p');projectInfo.className='panelIntro';
+  projectInfo.textContent='Save and retrieve named projects using your private Cloud account. Use Download project below for an offline backup.';
+  backupPanel.prepend(projectInfo);
+  projectInfo.after(projectActions);
  }
  $c('quickProjectClose').onclick=quickProjectClose;
  $c('quickProjectSignIn').onclick=quickProjectSignIn;

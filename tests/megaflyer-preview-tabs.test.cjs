@@ -14,7 +14,10 @@ assert.ok(html.indexOf('<script src="./toolbar-tabs.js" defer></script>')>html.i
 assert.match(html,/\['cards','Edit Flyer Cards',\[\]\]/,'No duplicate pinned side controls');
 assert.match(html,/<button id="front" aria-pressed="true">Front<\/button>/,'Front preserved');
 assert.match(html,/<button id="back" aria-pressed="false">Back<\/button>/,'Back preserved');
-for(const id of ['arrangeRows','png','pdf'])assert.ok(html.includes('id="'+id+'"'),'Toolbar action '+id+' preserved');
+for(const id of ['arrangeRows','png','printPdf'])assert.ok(html.includes('id="'+id+'"'),'Required action '+id+' preserved');
+assert.match(html,/<div class="row" id="flyerExportActions"><button type="button" id="png">Download PNG · current side<\/button><button type="button" id="printPdf" class="primary">Download print PDF · both sides<\/button><\/div>/,'PNG/PDF downloads grouped in Review & Approval');
+assert.doesNotMatch(html,/<button id="pdf"/,'Duplicate top PDF button removed');
+assert.doesNotMatch(html,/<button id="png"/,'Duplicate top PNG button removed');
 for(const id of ['arrangeSections','addSectionQuick','addHeaderQuick','manageSectionsQuick','powerLauncher','powerPTGQuick','cloudToolbar']){
   assert.ok(html.includes("'"+id+"'")||html.includes('id="'+id+'"'),'Dynamic action '+id+' preserved');
 }
