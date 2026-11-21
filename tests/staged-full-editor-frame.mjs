@@ -51,8 +51,14 @@ try{
   }
   if(url.hostname==='tzklsscoiwnmeantcefw.supabase.co'&&url.pathname==='/functions/v1/flyer-product-photos'){
    const payload=route.request().postDataJSON();photoCalls.push(payload.action);
-   assert.match(route.request().headers().authorization||'',/^Bearer synthetic-photo-test-/);
-   assert.match(route.request().headers()['x-ptg-session-id']||'',/^[a-f0-9-]{36}$/);
+   assert.equal(route.request().headers().authorization,undefined,
+    'Opaque editor photo requests cannot carry the user's PTG bearer');
+   assert.equal(route.request().headers()['x-ptg-session-id'],undefined,
+    'Opaque editor photo requests cannot carry the PTG app-session ID');
+   assert.equal(payload.studioProof?.sessionId?.length,36);
+   assert.equal(typeof payload.studioProof?.signature,'string');
+   const next=await proof.handle({action:'check',...payload.studioProof});
+   assert.equal(next.ok,true,'Every photo operation must independently verify P-256 proof');
    let value={ok:true};
    if(payload.action==='permissions')value={canView:true,canUpload:true,canManage:true};
    if(payload.action==='resolve')value={photos:savedProductPhoto?[savedProductPhoto]:[],
@@ -69,7 +75,7 @@ try{
    if(payload.action==='image')value={mime:'image/png',base64:miniPng};
    return route.fulfill({status:200,contentType:'application/json',
     headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
-    body:JSON.stringify(value)});
+    body:JSON.stringify({result:value,studioProof:next})});
   }
   return route.fulfill({status:404,body:'External service disabled in offline QA'});
  });
@@ -173,10 +179,9 @@ try{
  assert.deepEqual(errors,[],errors.join('; '));
  // Photo-library integration is tested with a fully mocked Edge endpoint.
  // The iframe must send only a named operation over its MessagePort; the
- // protected launcher attaches PTG authorization and fixed API destination.
+ // protected parent signs each photo call without an editor-visible PTG bearer.
  await frame.locator('body').evaluate(()=>{
-  ptgSession={id:'77777777-1111-4111-8111-777777777777',
-   token:'synthetic-photo-test-bearer-never-production-abcdefghijklmnopqrstuvwxyz'};
+  ptgSession=null;
   // Always edit the ACTUAL targeted product card, not the first state row.
   // Some editor templates keep the selected slot away from index zero.
   slotTarget.section='front';slotTarget.slot='1';
@@ -208,6 +213,8 @@ try{
   throw error;
  }
  assert.ok(photoCalls.includes('upload'),'Saved product photo must cross protected launcher bridge.');
+ assert.ok(photoCalls.includes('resolve'),'Photo matching must work without a PTG bearer in the iframe.');
+ assert.equal(await frame.locator('body').evaluate(()=>window.__MEGAFLYER_PRIVATE_DB__!==undefined),true);
  assert.equal(savedProductPhoto?.barcode_norm,'0000012345');
  await frame.locator('.spp-card button').first().click();
  await frame.locator('#smartPhotoNotice').getByText('Saved photo applied',{exact:false}).waitFor({timeout:15000});
