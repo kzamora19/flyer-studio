@@ -96,6 +96,15 @@ try{
  assert.equal(await page.locator('#studioNav').isVisible(),true,'Compact rail keeps icons visible');
  assert.equal(await page.locator('#studioChatTitle').textContent(),'Edit Flyer Cards');
  const compactWidth=await page.locator('#sidebarFixed').evaluate(el=>el.getBoundingClientRect().width);
+ const sidebarSizes=await page.locator('main > aside').evaluate(el=>({
+   total:el.getBoundingClientRect().width,
+   second:document.querySelector('#sidebarContent').getBoundingClientRect().width,
+   preview:document.querySelector('.stage').getBoundingClientRect().width
+ }));
+ assert.ok(sidebarSizes.total<=305 && sidebarSizes.second<=245,
+   'Compact 2nd sidebar must not crowd the flyer: '+JSON.stringify(sidebarSizes));
+ assert.ok(sidebarSizes.preview>=650,
+   'Flyer canvas retains ample desktop width: '+JSON.stringify(sidebarSizes));
  await page.locator('#editorMenuToggle').click();
  assert.equal(await page.locator('#editorMenuToggle').getAttribute('aria-expanded'),'true');
  const expandedWidth=await page.locator('#sidebarFixed').evaluate(el=>el.getBoundingClientRect().width);
