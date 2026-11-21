@@ -8,6 +8,7 @@ on:
       - "tests/private-delivery-policy.test.mjs"
       - "tests/staged-studio-launch.test.mjs"
       - "tests/staged-studio-browser.mjs"
+      - "tests/staged-full-editor-frame.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -21,6 +22,7 @@ on:
       - "tests/private-delivery-policy.test.mjs"
       - "tests/staged-studio-launch.test.mjs"
       - "tests/staged-studio-browser.mjs"
+      - "tests/staged-full-editor-frame.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -66,3 +68,5 @@ jobs:
           npx playwright install chromium --with-deps
       - name: Verify mock PTG launcher, private editor mount and revocation
         run: node tests/staged-studio-browser.mjs
+      - name: Verify actual full editor loads inside protected mock frame
+        run: node tests/staged-full-editor-frame.mjs
