@@ -1,0 +1,34 @@
+name: MegaFlyer protected-bundle packaging (draft only)
+on:
+  push:
+    branches: [feature/ptg-private-delivery-poc-20261121]
+    paths:
+      - "scripts/build-private-flyer.mjs"
+      - "tests/private-editor-build.test.mjs"
+      - ".github/workflows/private-editor-build-ci.yml"
+      - "site/**"
+  pull_request:
+    paths:
+      - "scripts/build-private-flyer.mjs"
+      - "tests/private-editor-build.test.mjs"
+      - ".github/workflows/private-editor-build-ci.yml"
+      - "site/**"
+permissions:
+  contents: read
+jobs:
+  build-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Verify editor/private-bundle separation (no deployment)
+        run: |
+          node --check scripts/build-private-flyer.mjs
+          node --test tests/private-editor-build.test.mjs
+      - name: Enforce public-artefact non-disclosure
+        run: |
+          if test -e site/private/studio.html || test -e site/private-editor.html; then
+            echo "Protected source appeared inside the Pages site."; exit 1;
+          fi
+          test ! -e .studio-private-build/private/studio.html
