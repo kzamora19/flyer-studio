@@ -38,8 +38,12 @@ test('private/editor split contains complete artwork only in private package',()
    assert.match(publicHtml,/protected delivery gateway is not deployed/);
    assert.equal(manifest.sha256,sha(html));
    assert.equal(manifest.publicSha256,sha(publicHtml));
-   assert.equal(manifest.inlined.length,13);
+   assert.equal(manifest.inlined.length,14);
    assert.match(html,/smartPhotoPanel/);
+   assert.match(html,/studioChatHeader/,'Current ChatGPT-style menu is bundled');
+   assert.match(html,/chatMobileClosed/,'Current mobile sidebar collapse is bundled');
+   assert.doesNotMatch(html,/script.src='\.\/chat-sidebar\.js'/,'No public dynamic sidebar script');
+   assert.doesNotMatch(html,/css.href='\.\/chat-sidebar\.css'/,'No public dynamic sidebar stylesheet');
    assert.match(html,/FLYER_PRODUCT_PHOTO_CONFIG/);
    assert.doesNotMatch(publicHtml,/smartPhotoPanel|Product Photo Library/);
    assert.match(html,/__MEGAFLYER_PRIVATE_DB__/);
@@ -58,8 +62,8 @@ test('do not generate private content into GitHub Pages publish folder',()=>{
 
 test('current ChatGPT-style MegaFlyer navigation is packaged privately without public asset requests',()=>{
  const source=readFileSync(join(root,'scripts/build-private-flyer.mjs'),'utf8');
- assert.match(source,/chat-sidebar\\.js/);
- assert.match(source,/chat-sidebar\\.css/);
+ assert.ok(source.includes('chat-sidebar.js'));
+ assert.ok(source.includes('chat-sidebar.css'));
  assert.match(source,/already embeds the sidebar stylesheet/);
  assert.match(source,/latest ChatGPT-style two-level sidebar/);
 });
