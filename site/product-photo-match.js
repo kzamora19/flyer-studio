@@ -1,4 +1,4 @@
-/* Smart product photo identity rules. Staging-only: built into protected MegaFlyer. */
+/* Smart product photo identity rules. Shared MegaFlyer product identity; also used by protected bundle. */
 (function(root,factory){
   const api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
