@@ -22,7 +22,8 @@ try{
   const p=new URL(req.url,'http://localhost').pathname;
   if(p==='/'||p==='/index.html'){res.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'});res.end(html);return;}
   if(p==='/launch.js'){res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'});res.end(script);return;}
-  res.writeHead(404);res.end();
+  if(p==='/draft-vault.js'){res.writeHead(200,{'Content-Type':'application/javascript','Cache-Control':'no-store'});res.end(readFileSync(join(root,'staging/studio-access/draft-vault.js')));return;}
+ res.writeHead(404);res.end();
  });
  await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
  const origin='http://127.0.0.1:'+server.address().port;
