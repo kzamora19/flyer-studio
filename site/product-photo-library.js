@@ -5,8 +5,6 @@
 (()=>{'use strict';
 const MATCH=window.FLYER_PRODUCT_PHOTO_MATCH;
 if(!MATCH)return;
-const API='https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-product-photos';
-const KEY=window.FLYER_PRODUCT_PHOTO_CONFIG?.publishableKey||'';
 const $=id=>document.getElementById(id);
 const TYPES=new Set(['image/png','image/jpeg','image/webp']);
 let active=null,records=[],match='none',canManage=false,session='',stamp='',busy=false,allVisible=false;
@@ -29,16 +27,13 @@ function notice(text,success=false){$('smartPhotoNotice').textContent=text;$('sm
 async function request(action,extra={}){
  const account=currentSession();
  if(!account)throw Error('Connect your active PTG Team Leader or higher account.');
- if(!KEY)throw Error('Product Photo Library is not configured for this protected release.');
- const res=await fetch(API,{
-  method:'POST',cache:'no-store',referrerPolicy:'no-referrer',
-  headers:{'Content-Type':'application/json',apikey:KEY,
-   Authorization:'Bearer '+account.token,'x-ptg-session-id':account.id},
-  body:JSON.stringify({action,...extra})
- });
- const value=await res.json().catch(()=>null);
+ // The opaque iframe has Origin:null. Do not weaken server CORS by accepting
+ // null from any website. The PTG-protected launcher relays a *fixed* photo
+ // operation over a private MessagePort, then authenticates server-side.
+ const relay=window.__MEGAFLYER_PHOTO_RPC__;
+ if(typeof relay!=='function')throw Error('Protected Product Photo Library is not configured.');
+ const value=await relay(action,extra,account);
  if(currentSession()?.id!==account.id)throw Error('PTG account changed; retry after signing in.');
- if(!res.ok)throw Error(value?.error||'Product photo access unavailable ('+res.status+').');
  return value;
 }
 function toBase64(blob){return new Promise((resolve,reject)=>{
