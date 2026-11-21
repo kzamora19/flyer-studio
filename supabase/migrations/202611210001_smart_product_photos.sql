@@ -1,6 +1,4 @@
--- DEVELOPMENT / HOLD: Product photo library for protected MegaFlyer only.
--- Do not apply this migration to the existing live Flyer Supabase project before
--- coordinated owner-approved release and hosted authorization acceptance.
+-- Additive, TL+-gated private product photo library; no existing project rows altered.
 -- PTG users are in a DIFFERENT Supabase project; store their UUID as an audit
 -- identifier and do not reference flyer.auth.users.
 create extension if not exists pgcrypto;
