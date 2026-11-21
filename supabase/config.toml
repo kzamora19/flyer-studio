@@ -5,3 +5,9 @@ verify_jwt = false  # Public catalog metadata/images only; user-specific data ne
 # Staging source only — this protected editor service is NOT deployed.
 [functions.flyer-editor-delivery]
 verify_jwt = false
+
+# PTG bearer is issued by a separate Supabase project. JWT verification must
+# happen inside this Edge function against PTG Auth AND active app session.
+# No anonymous library operation is allowed; every call checks PTG live role.
+[functions.flyer-product-photos]
+verify_jwt = false
