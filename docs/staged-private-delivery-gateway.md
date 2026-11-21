@@ -66,3 +66,13 @@ The current public GitHub Pages editor is unchanged; these changes remain in a d
 5. Server-side PTG↔Studio token exchange, HTTPS origin isolation (all `kzamora19.github.io` project paths currently share a browser origin), and secure ticket replay/renewal policy. No private bucket or Edge Function should be created or deployed until these are approved.
 
 **Release boundary:** the private editor and gateway are still staged in draft PR #10. The existing GitHub Pages application, PTG production data and Supabase projects were not modified by these tests.
+
+
+## November 21 — signed PTG session continuation (staged only)
+
+- The PTG launcher still issues a 10-minute opaque ticket, but the staged MegaFlyer delivery gateway exchanges it **once** with the PTG server. The editor retains **no bearer ticket** after that initial exchange.
+- The staging launcher generates an in-memory, **non-extractable ECDSA P-256 private key** and exports only the public key. Every later `check` request signs a server-provided challenge. PTG verifies the signature, atomically consumes the challenge, and rechecks the source account/session before returning the next challenge.
+- Revalidation runs every 30 seconds, when the browser tab returns to the foreground, and before the local expiry deadline. A failed or delayed check removes the protected iframe, with best-effort IndexedDB recovery after a fresh PTG launch.
+- The proof session has a two-hour absolute cap but expires earlier if the PTG session expires, times out or is revoked. It **does not extend PTG's existing idle timeout**. A suspended tab that misses its 120-second proof challenge cannot resume silently.
+- Current tests use a mock proof backend with real WebCrypto signing and verification. The full protected editor workflows, PDF/PNG generation, local draft recovery, and revocation lock remain covered by offline Chromium tests; **live PTG, SQL transaction replay, real Google OAuth, Drive, printers and cloud synchronization remain untested**.
+- Old public GH Pages editor and caches remain publicly accessible. Signed continuation improves the staged launch flow, but **it is not a production authorization wall** until the coordinated cutover, host/origin audit and real-account tests. Do not merge/deploy PR #10.
