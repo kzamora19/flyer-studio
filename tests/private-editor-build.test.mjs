@@ -29,7 +29,10 @@ test('private/editor split contains complete artwork only in private package',()
    assert.match(publicHtml,/protected delivery gateway is not deployed/);
    assert.equal(manifest.sha256,sha(html));
    assert.equal(manifest.publicSha256,sha(publicHtml));
-   assert.equal(manifest.inlined.length,10);
+   assert.equal(manifest.inlined.length,12);
+   assert.match(html,/__MEGAFLYER_PRIVATE_DB__/);
+   assert.doesNotMatch(html,/indexedDB.open\('megasaver-flyer-studio'/);
+   assert.match(html,/megaflyer-private-storage-port/);
    assert.match(html,/const onGitHubFlyer=\(\)=>true/);
    assert.match(html,/const ptgLocalOrigin=\(\)=>true/);
  }finally{rmSync(out,{recursive:true,force:true});}
