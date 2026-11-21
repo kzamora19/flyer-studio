@@ -9,7 +9,9 @@ for(const name of ['quickProjectInit','quickProjectSaveCurrent','quickProjectSav
 }
 assert.match(html,/id='quickSaveProject'/,'Save Project toolbar control');
 assert.match(html,/id='quickRetrieveProject'/,'Retrieve Project toolbar control');
-assert.match(html,/back\.after\(save,retrieve\)/,'Save and Retrieve actions appear beside Front/Back, not hidden at the far end of the toolbar');
+assert.match(html,/const backupPanel=\$c\('panel-backup'\)/,'Save/Retrieve live in Project Backup');
+assert.match(html,/projectInfo\.after\(projectActions\)/,'Cloud actions directly below backup introduction');
+assert.doesNotMatch(html,/back\.after\(save,retrieve\)/,'No duplicate Save/Retrieve buttons in top tab bar');
 assert.match(html,/id="quickProjectName"/,'Named project input');
 assert.match(html,/id="quickProjectList"/,'Saved-project list');
 assert.match(html,/id="quickProjectSearch"/,'Project search');
