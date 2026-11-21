@@ -166,10 +166,28 @@ async function upload(body:Record<string,unknown>,user:Identity,replaceId?:strin
   await audit("replace",user,existing.id,{blob_id:existing.blob_id},{blob_id:blob.id});
   return {ok:true,photoId:existing.id,reused:blob.reused};
  }
- let {data:photo,error}=await admin!.from("flyer_product_photos").upsert({
-   ...p,blob_id:blob.id,uploaded_by_ptg:user.id,updated_by_ptg:user.id,deleted_at:null
-  },{onConflict:"product_key,blob_id"}).select("id").single();
- if(error||!photo)throw error||Error("Photo association unavailable");
+ // Ignore duplicate links instead of overwriting the original uploader,
+ // timestamps and audit identity when another employee reuses the same image.
+ const {data:inserted,error:insertError}=await admin!.from("flyer_product_photos").upsert({
+   ...p,blob_id:blob.id,uploaded_by_ptg:user.id,updated_by_ptg:user.id
+  },{onConflict:"product_key,blob_id",ignoreDuplicates:true}).select("id").maybeSingle();
+ if(insertError)throw insertError;
+ let photo=inserted;
+ if(!photo){
+  const {data:previous,error:existingError}=await admin!.from("flyer_product_photos")
+   .select("id,deleted_at").eq("product_key",p.product_key).eq("blob_id",blob.id).maybeSingle();
+  if(existingError||!previous)throw existingError||Error("Existing product photo not available");
+  if(previous.deleted_at){
+   // Explicitly reintroducing the same image restores its association, but
+   // keeps the original provenance rather than impersonating its uploader.
+   const {data:restored,error:restoreError}=await admin!.from("flyer_product_photos")
+    .update({deleted_at:null,updated_by_ptg:user.id,updated_at:new Date().toISOString()})
+    .eq("id",previous.id).not("deleted_at","is",null).select("id").maybeSingle();
+   if(restoreError)throw restoreError;
+   if(!restored)throw new Denied("Product photo changed during restore",409);
+  }
+  photo={id:previous.id};
+ }
  const {count}=await admin!.from("flyer_product_photos").select("id",{count:"exact",head:true})
    .eq("product_key",p.product_key).eq("is_primary",true).is("deleted_at",null);
  if(!count)await admin!.rpc("flyer_product_photo_set_primary",{p_product_key:p.product_key,p_photo_id:photo.id});
