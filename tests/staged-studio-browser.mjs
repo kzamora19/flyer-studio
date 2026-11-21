@@ -1,6 +1,7 @@
 // Staged launcher browser test. Every PTG/Supabase request is mocked.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
+import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -29,6 +30,9 @@ try{
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
  const ctx=await browser.newContext({viewport:{width:1200,height:800}});
  const requests=[],errors=[];
+ let tamperPackage=false;
+ const mockEditor='<!-- PRIVATE EDITOR BUNDLE. -->\\n<!doctype html><button id="editor-ready">Mock protected editor</button>';
+ const genuineHash=createHash('sha256').update(mockEditor).digest('hex');
  const proof=createProofMock();
  await ctx.route('**/*',async route=>{
   const url=new URL(route.request().url());
@@ -40,8 +44,8 @@ try{
    const result=await proof.handle(body,{denyOnCheck:true,expireMs:60_000});
    return route.fulfill({status:result.ok?200:403,contentType:'application/json',headers,
     body:JSON.stringify(body.action==='load'?{...result,
-      html:'<!-- PRIVATE EDITOR BUNDLE. -->\\n<!doctype html><button id="editor-ready">Mock protected editor</button>',
-      sha256:'a'.repeat(64)}:result)});
+      html:mockEditor,
+      sha256:tamperPackage?'0'.repeat(64):genuineHash}:result)});
   }
   return route.abort();
  });
@@ -51,6 +55,13 @@ try{
  await page.locator('#studio-editor-frame').waitFor({timeout:15000});
  assert.equal(new URL(page.url()).hash,'');
  await page.frameLocator('#studio-editor-frame').locator('#editor-ready').waitFor({timeout:15000});
+ assert.equal(await page.locator('#studio-editor-frame').getAttribute('sandbox'),
+   'allow-scripts allow-downloads','Editor must have an opaque origin (never allow-same-origin)');
+ const access=await page.frameLocator('#studio-editor-frame').locator('body').evaluate(()=>{
+   try{window.parent.localStorage.getItem('ptg-session');return 'EXPOSED';}
+   catch(error){return error.name;}
+ });
+ assert.equal(access,'SecurityError','Protected editor must not read parent PTG/Branchline storage');
  await page.waitForFunction(()=>document.getElementById('studio-editor-frame')===null,{timeout:15000});
  assert.ok((await page.locator('#status').textContent()).includes('been revoked'));
  assert.ok(requests.some(x=>x.action==='load'));
@@ -62,6 +73,13 @@ try{
  await noTicket.goto(origin,{waitUntil:'domcontentloaded'});
  await noTicket.getByText('A valid PTG authorization is required.').waitFor({timeout:8000});
  assert.equal(await noTicket.locator('#studio-editor-frame').count(),0);
+ tamperPackage=true;
+ const forged=await ctx.newPage();
+ await forged.goto(origin+'/#ptg_studio_ticket='+'Z'.repeat(43),{waitUntil:'domcontentloaded'});
+ await forged.getByText('Could not verify PTG access to MegaFlyer Studio.').waitFor({timeout:15000});
+ assert.equal(await forged.locator('#studio-editor-frame').count(),0,
+   'Hash-mismatched protected package must never execute');
+ await forged.close();
  assert.deepEqual(errors,[]);
  console.log('PASS: mock ticket login, URL fragment removal, protected iframe and revoked-session lock.');
 }finally{
