@@ -37,6 +37,7 @@ try{
  const errors=[],calls=[],photoCalls=[];
  const miniPng='iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGPcIqfMAANMDEgANwcAMW8A/bn8wfEAAAAASUVORK5CYII=';
  let savedProductPhoto=null;
+ let revokedPhotoProof=false;
  const proof=createProofMock();
  await context.route('**/*',async route=>{
   const url=new URL(route.request().url());
@@ -57,7 +58,10 @@ try{
     'Opaque editor photo requests cannot carry the PTG app-session ID');
    assert.equal(payload.studioProof?.sessionId?.length,36);
    assert.equal(typeof payload.studioProof?.signature,'string');
-   const next=await proof.handle({action:'check',...payload.studioProof});
+   const next=await proof.handle({action:'check',...payload.studioProof},{denyOnCheck:revokedPhotoProof});
+   if(!next.ok)return route.fulfill({status:403,contentType:'application/json',
+    headers:{'access-control-allow-origin':origin},
+    body:JSON.stringify({error:'PTG signed session revoked'})});
    assert.equal(next.ok,true,'Every photo operation must independently verify P-256 proof');
    let value={ok:true};
    if(payload.action==='permissions')value={canView:true,canUpload:true,canManage:true};
@@ -254,6 +258,18 @@ try{
  assert.equal(photoCalls.filter(x=>x==='upload').length,nativeUploadsBefore+1,
    'Native product-card opt-out cannot save into shared library');
  console.log('PASS: actual protected editor product image upload, barcode recall, reuse and opt-out using synthetic PTG and cloud responses.');
+
+ // Once PTG revokes a Studio proof, the next PHOTO operation must unmount
+ // the entire editor instead of borrowing the stale token or keeping photos open.
+ revokedPhotoProof=true;
+ await frame.locator('body').evaluate(()=>{
+  void window.__MEGAFLYER_PHOTO_RPC__('permissions',{},
+   {id:'ptg-proof-session',token:'signed-studio-proof'}).catch(()=>{});
+ });
+ await page.locator('#studio-editor-frame').waitFor({state:'detached',timeout:12000});
+ assert.match(await page.locator('#status').textContent(),/expired or was revoked/);
+ assert.ok(photoCalls.filter(x=>x==='permissions').length>=2,
+  'Revocation must be checked even after earlier photo operations succeeded');
 
  assert.ok(calls.includes('load'));
  console.log('PASS: full 1MB+ MegaFlyer bundle loads in ticket-gated srcdoc; editor controls and asset dialog work under mock gateway.');
