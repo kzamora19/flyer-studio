@@ -231,7 +231,7 @@ try{
  await frame.locator('#cardPhotoUpload').setInputFiles({
    name:'native-card-product.png',mimeType:'image/png',buffer:Buffer.from(secondPng,'base64')
  });
- await frame.locator('#smartPhotoNativeSaved').getByText('saved in shared library',{exact:false}).waitFor({timeout:12000});
+ await frame.locator('#smartPhotoNativeSaved').getByText('saved in shared library',{exact:false}).waitFor({state:'attached',timeout:12000});
  assert.equal(photoCalls.filter(x=>x==='upload').length,nativeUploadsBefore+1,
    'A successful native product-card photo import should be shared exactly once');
  // The UI must separately allow exclusion of the next native upload.
@@ -243,7 +243,7 @@ try{
  await frame.locator('#cardPhotoUpload').setInputFiles({
    name:'excluded-native.png',mimeType:'image/png',buffer:Buffer.from(thirdPng,'base64')
  });
- await frame.locator('#smartPhotoNativeSaved').getByText('not added to shared library',{exact:false}).waitFor({timeout:5000});
+ await frame.locator('#smartPhotoNativeSaved').getByText('not added to shared library',{exact:false}).waitFor({state:'attached',timeout:5000});
  assert.equal(photoCalls.filter(x=>x==='upload').length,nativeUploadsBefore+1,
    'Native product-card opt-out cannot save into shared library');
  console.log('PASS: actual protected editor product image upload, barcode recall, reuse and opt-out using synthetic PTG and cloud responses.');
