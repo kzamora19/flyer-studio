@@ -44,9 +44,8 @@
  // trusted PTG launcher. It never persists credentials or exposes arbitrary URLs.
  async function photo(action,fields={},account){
   if(!["permissions","resolve","search","image","upload","replace","setPrimary","remove"].includes(action)||
-     !account||typeof account.token!=="string"||account.token.length<24||
-     typeof account.id!=="string"||!/^[-a-f0-9]{36}$/i.test(account.id))
-    throw Error("PTG photo operation not authorized.");
+     account?.id!=="ptg-proof-session"||account?.token!=="signed-studio-proof")
+    throw Error("Protected Studio photo operation not authorized.");
   const payload=JSON.stringify({action,...fields});
   if(payload.length>3_500_000)throw Error("Product photo request is too large.");
   await Promise.race([ready,new Promise((_,reject)=>setTimeout(()=>
@@ -55,8 +54,9 @@
    const id=++nextId,timer=setTimeout(()=>{pending.delete(id);
     reject(Error("Protected photo service timed out."));},45000);
    pending.set(id,{resolve,reject,timer,kind:"photo"});
-   try{port.postMessage({id,action:"product-photo",token:account.token,
-     appSession:account.id,payload});}
+   // Only the parent holds the non-extractable P-256 signing key. No PTG
+   // access token, app-session ID or signed proof is sent to this iframe.
+   try{port.postMessage({id,action:"product-photo",payload});}
    catch{clearTimeout(timer);pending.delete(id);
     reject(Error("Could not request private product photo."));}
   });
