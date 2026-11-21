@@ -8,6 +8,7 @@ import {resolve,join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {chromium} from 'playwright';
+import {createProofMock} from './staged-proof-mock.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const tmp=mkdtempSync(join(tmpdir(),'megaflyer-local-expiry-'));
 let server,browser;
@@ -28,19 +29,17 @@ try{
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
  const context=await browser.newContext({viewport:{width:1260,height:900}});
  const calls=[];
+ const proof=createProofMock();
  await context.route('**/*',async route=>{
   const u=new URL(route.request().url());
   if(u.origin===origin)return route.continue();
   if(u.hostname==='tzklsscoiwnmeantcefw.supabase.co'&&u.pathname==='/functions/v1/flyer-editor-delivery'){
    const req=route.request().postDataJSON();
-   calls.push({action:req.action,token:req.ticket[0]});
-   if(req.action==='load')return route.fulfill({status:200,contentType:'application/json',
+   calls.push({action:req.action,token:req.ticket?.[0]});
+   const result=await proof.handle(req,{expireMs:req.ticket?.[0]==='E'?8000:600000});
+   return route.fulfill({status:200,contentType:'application/json',
      headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
-     body:JSON.stringify({ok:true,html:bundle,sha256:sha,
-       expiresAt:new Date(Date.now()+(req.ticket[0]==='E'?8000:600000)).toISOString()})});
-   if(req.action==='check')return route.fulfill({status:200,contentType:'application/json',
-     headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
-     body:JSON.stringify({ok:true,expiresAt:new Date(Date.now()+600000).toISOString()})});
+     body:JSON.stringify(req.action==='load'?{...result,html:bundle,sha256:sha}:result)});
   }
   return route.fulfill({status:404,body:'All external access is blocked during QA'});
  });
@@ -78,6 +77,7 @@ try{
  assert.equal(errors.length,0,errors.join('; '));
  assert.ok(calls.some(x=>x.action==='load'&&x.token==='E'));
  assert.ok(calls.some(x=>x.action==='load'&&x.token==='N'));
+ assert.ok(calls.filter(x=>x.action==='check').every(x=>!x.token));
  console.log('PASS: protected editor expires locally and restores saved IndexedDB draft on a fresh mock PTG login.');
 }finally{
  await browser?.close();
