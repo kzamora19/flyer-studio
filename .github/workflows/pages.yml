@@ -25,6 +25,10 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: ./site
+      # GitHub's artifact API can briefly report no upload immediately after finalization.
+      # Allow indexing before deploy-pages resolves the single artifact in this run.
+      - name: Allow Pages artifact indexing
+        run: sleep 12
       - name: Publish
         id: deployment
         uses: actions/deploy-pages@v4
