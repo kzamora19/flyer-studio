@@ -17,6 +17,15 @@ test('private/editor split contains complete artwork only in private package',()
    const publicHtml=readFileSync(join(out,'public','index.html'),'utf8');
    const manifest=JSON.parse(readFileSync(join(out,'manifest.json'),'utf8'));
    assert.match(html,/MegaFlyer Studio/);
+   assert.match(html,/<title>MegaFlyer Studio · Promotional Flyer &amp; Sale Artwork Generator<\/title>/);
+   assert.match(html,/<strong>MegaFlyer Studio<\/strong><small>Promotional Flyer &amp; Sale Artwork Generator<\/small>/);
+   assert.match(html,/--branchline-navy:#1d2836/);
+   assert.match(html,/--branchline-blue:#355ee8/);
+   assert.match(html,/--branchline-blue-dark:#2348c7/);
+   assert.match(html,/--branchline-blue-soft:#eef2ff/);
+   assert.match(html,/body>main>aside button\.primary/);
+   assert.ok(!html.includes('<strong>MegaFlyer Studio</strong><small>First Megasaver</small>'));
+
    assert.match(html,/sharedAssetLauncher/);
    assert.match(html,/data:image\/svg\+xml;base64,/);
    assert.match(html,/data:image\/png;base64,/);

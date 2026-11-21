@@ -56,6 +56,16 @@ try{
  const frame=page.frameLocator('#studio-editor-frame');
  await frame.locator('#sharedAssetLauncher').waitFor({timeout:30000});
  assert.match(await frame.locator('title').textContent(),/MegaFlyer Studio/);
+ assert.equal((await frame.locator('body>header .brandIdentity strong').textContent()).trim(),'MegaFlyer Studio');
+ assert.equal((await frame.locator('body>header .brandIdentity small').textContent()).trim(),
+  'Promotional Flyer & Sale Artwork Generator');
+ const ui=await frame.locator('body>header').evaluate(el=>({
+  color:getComputedStyle(el).backgroundColor,
+  subtitle:getComputedStyle(el.querySelector('.brandIdentity small')).color
+ }));
+ assert.equal(ui.color,'rgb(29, 40, 54)','Header must use actual Branchline navy');
+ assert.equal(ui.subtitle,'rgb(220, 230, 255)');
+
  assert.equal(new URL(page.url()).hash,'');
  assert.equal(await frame.locator('#printPdf').count(),1);
  assert.equal(await frame.locator('#png').count(),1);
@@ -97,6 +107,15 @@ try{
  assert.match(pdf,/^%PDF-1\.4/);
  assert.match(pdf,/\/Count 2\b/);
  assert.equal((pdf.match(/\/Subtype \/Image/g)||[]).length,2);
+
+ await page.setViewportSize({width:390,height:800});
+ const narrow=await frame.locator('body>header').evaluate(el=>({
+  subtitle:el.querySelector('.brandIdentity small')?.textContent?.trim(),
+  width:el.getBoundingClientRect().width,
+  viewport:document.documentElement.clientWidth,
+ }));
+ assert.equal(narrow.subtitle,'Promotional Flyer & Sale Artwork Generator');
+ assert.ok(narrow.width<=narrow.viewport+2,'MegaFlyer mobile header must not overflow');
  assert.deepEqual(errors,[],errors.join('; '));
  assert.ok(calls.includes('load'));
  console.log('PASS: full 1MB+ MegaFlyer bundle loads in ticket-gated srcdoc; editor controls and asset dialog work under mock gateway.');

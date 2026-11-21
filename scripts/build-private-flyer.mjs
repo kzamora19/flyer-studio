@@ -19,6 +19,65 @@ function replaceOne(from,to,label){
  if(count!==1)throw Error('Unexpected '+label+' matches: '+count);
  html=html.replace(from,to);originals.push(label);
 }
+// Branchline design system from actual Branchline Workspace source:
+// navy #1d2836, blue #355ee8, blue-dark #2348c7, soft #eef2ff.
+// Apply ONLY to the protected editor interface, never flyer artwork or outputs.
+function replaceBrandSingle(from,to,label){
+ const count=html.split(from).length-1;
+ if(count!==1)throw Error('Unexpected protected '+label+' matches: '+count);
+ html=html.replace(from,to);
+}
+replaceBrandSingle('<title>MegaFlyer Studio · First Megasaver</title>',
+ '<title>MegaFlyer Studio · Promotional Flyer &amp; Sale Artwork Generator</title>',
+ 'document title');
+replaceBrandSingle('<strong>MegaFlyer Studio</strong><small>First Megasaver</small>',
+ '<strong>MegaFlyer Studio</strong><small>Promotional Flyer &amp; Sale Artwork Generator</small>',
+ 'approved header/subtitle');
+const unifiedStyle=String.raw`
+/* BRANCHLINE protected-studio UI only: never style printable flyer canvases. */
+:root{
+ --branchline-navy:#1d2836;
+ --branchline-blue:#355ee8;
+ --branchline-blue-dark:#2348c7;
+ --branchline-blue-soft:#eef2ff;
+ --branchline-line:#e9edf1;
+}
+body>header{
+ height:auto;min-height:70px;
+ background:var(--branchline-navy);
+ border-bottom:2px solid var(--branchline-blue);
+ color:#fff;
+}
+body>header .brandIdentity strong{
+ color:#fff;
+ font:800 18px/1.2 "Segoe UI",Arial,sans-serif;
+ letter-spacing:-.02em;
+}
+body>header .brandIdentity small{
+ display:block;max-width:43ch;margin-top:4px;
+ color:#dce6ff;
+ font:700 11px/1.3 "Segoe UI",Arial,sans-serif;
+ letter-spacing:.01em;
+}
+body>header .brandIdentity .brandAppIcon{box-shadow:0 3px 10px #101a3690}
+body>main>aside{border-right-color:var(--branchline-line)}
+body>main>aside button.primary,
+body>main>aside button[aria-pressed="true"]{
+ background:var(--branchline-blue);
+ border-color:var(--branchline-blue);
+ color:#fff;
+}
+body>main>aside button.primary:hover:not(:disabled){background:var(--branchline-blue-dark)}
+body>main>aside button:focus-visible{outline:2px solid var(--branchline-blue);outline-offset:2px}
+@media(max-width:720px){
+ body>header{min-height:78px;padding:10px 13px;gap:10px}
+ body>header .brandIdentity{min-width:0}
+ body>header .brandIdentity strong{font-size:16px}
+ body>header .brandIdentity small{font-size:10px;max-width:30ch}
+}
+`;
+replaceBrandSingle('</style>',unifiedStyle+'</style>','scoped Branchline UI stylesheet');
+
 const media={
  './icons/flyer-studio.svg':'image/svg+xml',
  './icons/flyer-studio-192.png':'image/png',
