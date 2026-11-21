@@ -1,6 +1,6 @@
 // DEVELOPMENT ONLY: generate the editor-free GitHub Pages cutover artifact.
 // The normal deployed site/ directory is NEVER mutated by this script.
-import {copyFileSync,mkdirSync,rmSync,writeFileSync} from "node:fs";
+import {copyFileSync,mkdirSync,rmSync,writeFileSync,readFileSync} from "node:fs";
 import {join,resolve,relative,sep,dirname} from "node:path";
 import {fileURLToPath} from "node:url";
 const root=resolve(dirname(fileURLToPath(import.meta.url)),"..");
@@ -47,4 +47,22 @@ writeFileSync(join(target,"manifest.webmanifest"),manifest);
 writeFileSync(join(target,".nojekyll"),"");
 for(const file of ["flyer-studio-192.png","flyer-studio-512.png","flyer-studio.svg"])
  copyFileSync(join(root,"site","icons",file),join(target,"icons",file));
+// GitHub Pages serves the ticket loader, never the protected Flyer editor.
+const publishableKey=process.env.MEGAFLYER_STUDIO_PUBLISHABLE_KEY||"";
+if(process.env.PTG_STUDIO_PRODUCTION_RELEASE==="1" &&
+ !/^sb_publishable_[A-Za-z0-9_-]{20,}$/.test(publishableKey))
+ throw Error("Production cutover requires explicit MegaFlyer publishable key");
+const source=readFileSync(join(root,"staging","studio-access","index.html"),"utf8");
+if(!/publishableKey:"sb_publishable_[A-Za-z0-9_-]+"/.test(source))
+ throw Error("Protected Flyer launcher configuration drift");
+const launcher=source
+ .replace("— Protected launch prototype","— protected Branchline access")
+ .replace(/publishableKey:"sb_publishable_[A-Za-z0-9_-]+"/,"publishableKey:"+JSON.stringify(publishableKey));
+if(/PRIVATE EDITOR BUNDLE|id="quickSaveProject"|id="png"|<canvas/.test(launcher))
+ throw Error("Private editor source cannot appear in public launcher");
+mkdirSync(join(target,"studio"),{recursive:true});
+writeFileSync(join(target,"studio","index.html"),launcher);
+for(const asset of ["launch.js","draft-vault.js"])
+ copyFileSync(join(root,"staging","studio-access",asset),join(target,"studio",asset));
+
 console.log("STAGED editor-free Pages cutover preview generated; no production update.");

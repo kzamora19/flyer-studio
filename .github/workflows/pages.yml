@@ -30,7 +30,10 @@ jobs:
         run: |
           node --check scripts/build-cutover-pages.mjs
           node --test tests/staged-cutover-pages.test.mjs
-      - name: Build approved editor-free historical Pages output
+      - name: Build editor-free Pages with protected PTG launcher
+        env:
+          PTG_STUDIO_PRODUCTION_RELEASE: "1"
+          MEGAFLYER_STUDIO_PUBLISHABLE_KEY: ${{ vars.MEGAFLYER_STUDIO_PUBLISHABLE_KEY }}
         run: PTG_STUDIO_CUTOVER_PREVIEW=1 node scripts/build-cutover-pages.mjs staging/.cutover-release
       - name: Upload editor-free Pages artifact only
         uses: actions/upload-pages-artifact@v4
