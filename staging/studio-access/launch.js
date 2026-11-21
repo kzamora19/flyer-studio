@@ -5,6 +5,14 @@ const status=document.getElementById('status'),mount=document.getElementById('mo
 const portal='https://kzamora19.github.io/first-megasaver-ptg/studios/';
 let timer=null,expiryTimer=null,active=false,checking=false,expiresAt=0,absoluteCutoff=0,expiryWarned=false;
 let privateKey=null,sessionId='',challenge='',draftPort=null;
+let proofQueue=Promise.resolve();
+// Background revocation checks and protected photo operations consume the
+// SAME rotating one-use PTG challenge. Always serialize them in the parent.
+function withProof(fn){
+ const next=proofQueue.then(fn);
+ proofQueue=next.catch(()=>{});
+ return next;
+}
 function note(message,link=false){
  status.textContent=message;
  if(link){const a=document.createElement('a');a.href=portal;a.rel='noreferrer';a.textContent='Open from PTG Creative Studios';status.append(document.createTextNode(' '),a);}
@@ -72,9 +80,12 @@ async function check(){
  if(Date.now()>=expiresAt){lock('PTG access expired. Open the Studio again from PTG.');return;}
  checking=true;
  try{
-  const result=await gateway(await signedRequest());
-  if(!active)return;
-  recordAuth(result);warnIfExpiring();
+  await withProof(async()=>{
+   if(!active||Date.now()>=expiresAt)return;
+   const result=await gateway(await signedRequest());
+   if(!active)return;
+   recordAuth(result);warnIfExpiring();
+  });
  }catch{lock('PTG access has expired, been revoked, or cannot be verified. Open the Studio again from PTG.');}
  finally{checking=false;}
 }
@@ -116,31 +127,46 @@ async function open(){
    if(!active||Date.now()>=expiresAt||mount.querySelector('iframe')!==frame||
       !message||!Number.isSafeInteger(message.id))return;
    if(message.action==='product-photo'){
-    // Fixed destination and fixed action allowlist. Do not proxy arbitrary
-    // URLs or place the PTG bearer in shared-origin local/session storage.
     const actions=new Set(['permissions','resolve','search','image','upload','replace','setPrimary','remove']);
     try{
-     if(typeof message.token!=='string'||message.token.length<24||
-        typeof message.appSession!=='string'||
-        !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(message.appSession)||
-        typeof message.payload!=='string'||message.payload.length>3500000)throw Error('Invalid request');
+     if(typeof message.payload!=='string'||message.payload.length>3500000)
+      throw Error('Invalid product photo request');
      const payload=JSON.parse(message.payload);
-     if(!payload||typeof payload!=='object'||Array.isArray(payload)||!actions.has(payload.action))
-      throw Error('Invalid action');
-     const res=await fetch('https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-product-photos',{
-      method:'POST',cache:'no-store',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',
-      headers:{'Content-Type':'application/json',apikey:cfg.publishableKey||'',
-       Authorization:'Bearer '+message.token,'x-ptg-session-id':message.appSession},
-      body:message.payload
+     if(!payload||typeof payload!=='object'||Array.isArray(payload)||
+        !actions.has(payload.action)||Object.hasOwn(payload,'studioProof'))
+      throw Error('Invalid photo action');
+     // The P-256 signer remains in this parent. An opaque editor never sees
+     // either a PTG bearer or the one-use proof. Every photo call independently
+     // revalidates PTG account/role/revocation through the server-only gateway.
+     const photoResult=await withProof(async()=>{
+      if(!active||Date.now()>=expiresAt)throw Error('Session expired');
+      const signed=await signedRequest();
+      const res=await fetch('https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-product-photos',{
+       method:'POST',cache:'no-store',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',
+       headers:{'Content-Type':'application/json',apikey:cfg.publishableKey||''},
+       body:JSON.stringify({...payload,studioProof:{
+        sessionId:signed.sessionId,challenge:signed.challenge,signature:signed.signature
+       }})
+      });
+      const data=await res.json().catch(()=>null);
+      // Proofs rotate even when storage operations fail. Missing rotation is
+      // an authorization failure, not a signal to reuse a spent challenge.
+      if(!data?.studioProof||!validSession({...data.studioProof,ok:true}))
+       throw Error('PTG proof was rejected');
+      if(!active)throw Error('Studio locked');
+      recordAuth({...data.studioProof,ok:true});
+      return {ok:res.ok,data};
      });
-     const result=await res.json().catch(()=>null);
      if(!active||Date.now()>=expiresAt)return;
-     if(!res.ok)channel.port1.postMessage({id:message.id,ok:false,
-       error:typeof result?.error==='string'?result.error:'Product photo access denied.'});
-     else channel.port1.postMessage({id:message.id,ok:true,value:result});
+     if(photoResult.ok)channel.port1.postMessage({id:message.id,ok:true,
+      value:photoResult.data.result});
+     else channel.port1.postMessage({id:message.id,ok:false,
+      error:typeof photoResult.data?.error==='string'?photoResult.data.error:
+       'Product photo access denied.'});
     }catch{
-     if(active&&Date.now()<expiresAt)channel.port1.postMessage({
-      id:message.id,ok:false,error:'Private product photo service unavailable.'});
+     // An unverifiable proof immediately locks the protected editor. Do not
+     // silently fall back to ambient browser tokens or Origin:null CORS.
+     if(active)lock('PTG photo authorization expired or was revoked. Reopen the Studio from PTG.');
     }
     return;
    }
