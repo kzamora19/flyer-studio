@@ -20,7 +20,10 @@ on:
       - "supabase/functions/_shared/studio-private-policy.mjs"
       - "supabase/config.toml"
       - ".github/workflows/private-editor-build-ci.yml"
-      - "site/**"\n      - "supabase/functions/flyer-product-photos/**"\n      - "supabase/migrations/202611210001_smart_product_photos.sql"\n      - "tests/smart-product-photo-library.test.mjs"
+      - "site/**"
+      - "supabase/functions/flyer-product-photos/**"
+      - "supabase/migrations/202611210001_smart_product_photos.sql"
+      - "tests/smart-product-photo-library.test.mjs"
   pull_request:
     paths:
       - "scripts/build-private-flyer.mjs"
@@ -40,7 +43,10 @@ on:
       - "supabase/functions/_shared/studio-private-policy.mjs"
       - "supabase/config.toml"
       - ".github/workflows/private-editor-build-ci.yml"
-      - "site/**"\n      - "supabase/functions/flyer-product-photos/**"\n      - "supabase/migrations/202611210001_smart_product_photos.sql"\n      - "tests/smart-product-photo-library.test.mjs"
+      - "site/**"
+      - "supabase/functions/flyer-product-photos/**"
+      - "supabase/migrations/202611210001_smart_product_photos.sql"
+      - "tests/smart-product-photo-library.test.mjs"
 permissions:
   contents: read
 jobs:
