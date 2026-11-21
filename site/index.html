@@ -2561,10 +2561,10 @@ body.modalOpen{overflow:auto!important}
 
 </style>
 <link rel="stylesheet" href="./toolbar-tabs.css">
-<header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>MegaFlyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status">Draft</span></header>
+<header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>MegaFlyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status" role="status" aria-live="polite" aria-label="Project status: Draft" title="This flyer has not yet been approved. Unapproved exports contain a DRAFT watermark.">Status: Draft</span></header>
 <main>
 <aside aria-label="Flyer editor">
-<h1>Sale flyer</h1>
+<h1>MegaFlyer Studio</h1>
 <p class="muted">Edits and photos are saved in this browser. Export a project backup to move it to another device.</p>
 <details open id="campaignPanel"><summary>Campaign &amp; branding</summary>
 <details id="headlineArtwork"><summary>Sale headline artwork</summary>
@@ -3129,7 +3129,17 @@ function refresh() {
     $(face+'ArtworkClear').disabled=!uploaded&&!preset;
     $(face+'ArtworkStatus').textContent=uploaded?'Image uploaded':preset?'Built-in artwork (542×144 px — use a higher-res upload for sharp print)':'Uses editable headline';
   }
-  $('status').textContent=state.status;
+  // This is the actual approval state, not a decorative badge; clarify its meaning.
+  const statusBadge=$('status');
+  statusBadge.textContent='Status: '+state.status;
+  statusBadge.setAttribute('aria-label','Project status: '+state.status);
+  const statusHelp={
+    'Draft':'This flyer has not yet been approved. Unapproved exports contain a DRAFT watermark.',
+    'In review':'This flyer is awaiting approval. Unapproved exports contain a DRAFT watermark.',
+    'Changes requested':'Changes have been requested. Edit and resubmit the flyer for approval.',
+    'Approved':'This flyer has been approved. Exports no longer contain a DRAFT watermark.'
+  };
+  statusBadge.title=statusHelp[state.status]||'Current flyer review status.';
   const paper=state.campaign.paper==='letter'?'US Letter':'A4';
   const printSize=Number(state.campaign.bleed)>0?paper+' with 3 mm bleed':paper;
   $('printInfo').textContent=printSize+' · Open the PDF to print. '+(state.status==='Approved'?'The PDF includes front and back.':'Drafts include a watermark.');
@@ -5090,7 +5100,7 @@ function initStudioUI(){
   const aside=document.querySelector('main > aside'),stage=document.querySelector('main > .stage');
   const old=[...aside.children];
   const fixed=document.createElement('div');fixed.id='sidebarFixed';
-  fixed.innerHTML='<div class="editorMenuHeading"><h1>Sale flyer</h1><button type="button" id="editorMenuToggle" aria-controls="studioNav" aria-expanded="true">Hide menu ▴</button></div><p class="muted" id="editorMenuHint">Choose a section to edit. Your campaign and photos stay saved in this browser.</p><nav id="studioNav" aria-label="Flyer editor sections"></nav><div id="sidebarActions"><button type="button" id="layoutSettings">⚙ Layout &amp; Appearance</button></div>';
+  fixed.innerHTML='<div class="editorMenuHeading"><h1>MegaFlyer Studio</h1><button type="button" id="editorMenuToggle" aria-controls="studioNav" aria-expanded="true">Hide menu ▴</button></div><p class="muted" id="editorMenuHint">Choose a section to edit. Your campaign and photos stay saved in this browser.</p><nav id="studioNav" aria-label="Flyer editor sections"></nav><div id="sidebarActions"><button type="button" id="layoutSettings">⚙ Layout &amp; Appearance</button></div>';
   const content=document.createElement('div');content.id='sidebarContent';
   aside.prepend(fixed,content);
   initEditorMenuCollapse();
