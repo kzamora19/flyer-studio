@@ -2561,10 +2561,10 @@ body.modalOpen{overflow:auto!important}
 
 </style>
 <link rel="stylesheet" href="./toolbar-tabs.css">
-<header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>MegaFlyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status">Draft</span></header>
+<header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>MegaFlyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status" role="status" aria-live="polite" aria-label="Flyer status: Draft" title="This flyer has not yet been approved. Unapproved exports contain a DRAFT watermark.">Flyer Status: Draft</span></header>
 <main>
 <aside aria-label="Flyer editor">
-<h1>Sale flyer</h1>
+<h1>MegaFlyer Studio</h1>
 <p class="muted">Edits and photos are saved in this browser. Export a project backup to move it to another device.</p>
 <details open id="campaignPanel"><summary>Campaign &amp; branding</summary>
 <details id="headlineArtwork"><summary>Sale headline artwork</summary>
@@ -3129,7 +3129,17 @@ function refresh() {
     $(face+'ArtworkClear').disabled=!uploaded&&!preset;
     $(face+'ArtworkStatus').textContent=uploaded?'Image uploaded':preset?'Built-in artwork (542×144 px — use a higher-res upload for sharp print)':'Uses editable headline';
   }
-  $('status').textContent=state.status;
+  // This is the actual approval state, not a decorative badge; clarify its meaning.
+  const statusBadge=$('status');
+  statusBadge.textContent='Flyer Status: '+state.status;
+  statusBadge.setAttribute('aria-label','Flyer status: '+state.status);
+  const statusHelp={
+    'Draft':'This flyer has not yet been approved. Unapproved exports contain a DRAFT watermark.',
+    'In review':'This flyer is awaiting approval. Unapproved exports contain a DRAFT watermark.',
+    'Changes requested':'Changes have been requested. Edit and resubmit the flyer for approval.',
+    'Approved':'This flyer has been approved. Exports no longer contain a DRAFT watermark.'
+  };
+  statusBadge.title=statusHelp[state.status]||'Current flyer review status.';
   const paper=state.campaign.paper==='letter'?'US Letter':'A4';
   const printSize=Number(state.campaign.bleed)>0?paper+' with 3 mm bleed':paper;
   $('printInfo').textContent=printSize+' · Open the PDF to print. '+(state.status==='Approved'?'The PDF includes front and back.':'Drafts include a watermark.');
@@ -4118,14 +4128,22 @@ function techCard(ctx,offer,asset,x,y,w,h,style=null) {
   }else{
     // A placeholder never monopolizes half the card. The enlarged text panel
     // accommodates full model names such as REDMI 17 5G 4+128GB.
-    const photoFraction=asset?.image?.width?.valueOf()? .34:.22;
+    // Give the actual product photograph substantially more room.
+    const photoFraction=asset?.image?.width?.valueOf()? .50:.36;
     photoX=x+inset;photoY=y+19;
     photoWidth=Math.max(0,inner*photoFraction*photoScale);
-    photoHeight=Math.max(0,h-24);
+    photoHeight=Math.max(0,Math.min(h-24,copyBottom-photoY-3));
     detailX=photoX+photoWidth+gap;
     detailWidth=Math.max(1,x+w-inset-detailX);textTop=y+20;
   }
   let copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,copyBottom-textTop),12);
+  if(!imageOnTop&&asset&&copy.size<7&&photoWidth>inner*.43){
+    // Keep unusually long model descriptions legible without reverting to a tiny photograph.
+    photoWidth=inner*.43*photoScale;
+    detailX=photoX+photoWidth+gap;
+    detailWidth=Math.max(1,x+w-inset-detailX);
+    copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,copyBottom-textTop),12);
+  }
   // Prefer larger, readable words over an oversized image when possible.
   if(imageOnTop&&copy.size<7&&photoHeight>10){
     const smallerPhoto=Math.max(8,photoHeight-(7-copy.size)*5);
@@ -4138,10 +4156,11 @@ function techCard(ctx,offer,asset,x,y,w,h,style=null) {
     line(ctx,'NO PHOTO',photoX+2,photoY+photoHeight/2+2,Math.max(1,photoWidth-4),7,'#506584');
   }
   drawCardCopy(ctx,copy,detailX,textTop,detailWidth);
-  const align=style?.priceAlign||'left',priceX=align==='center'?detailX+detailWidth/2:align==='right'?detailX+detailWidth:detailX;
+  // Price occupies its own full-width footer, not the narrower description column.
+  const align=style?.priceAlign||'left',priceX=align==='center'?x+inset+inner/2:align==='right'?x+inset+inner:x+inset;
   ctx.save();ctx.textAlign=align==='center'?'center':align==='right'?'right':'left';
-  fit(ctx,prices.promo,priceX,priceY,detailWidth,priceSize,style?.priceColor||'#b51d22');ctx.restore();
-  prices.secondary.forEach(([text,color],index)=>line(ctx,text,detailX,priceY+(index+1)*secondaryStep,detailWidth,Math.min(9,Math.max(4,h*.085)),color,600));
+  fit(ctx,prices.promo,priceX,priceY,inner,priceSize,style?.priceColor||'#b51d22');ctx.restore();
+  prices.secondary.forEach(([text,color],index)=>line(ctx,text,x+inset,priceY+(index+1)*secondaryStep,inner,Math.min(9,Math.max(4,h*.085)),color,600));
   if(offer.badge&&photoWidth>6){
     ctx.font='700 9px Arial';const badgeWidth=Math.min(photoWidth,ctx.measureText(offer.badge).width+10),badgeX=photoX+photoWidth-badgeWidth;
     fill(ctx,'#ffe07c',badgeX,photoY,badgeWidth,13);
@@ -4170,23 +4189,46 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null) {
   const showModel=!(bundle&&offer.bundleBarcode)&&!descriptionIncludesModel([title],offer.model);
   const variant=offer.items||(showModel?offer.model:'');
   const contentSpace=Math.max(.5,copyBottom-imageY);
-  let photoHeight=Math.max(0,Math.min(h*.38,contentSpace*.53));
-  let copyTop=imageY+photoHeight+3;
-  let copy=fitCardCopy(ctx,title,variant,inner,Math.max(.5,copyBottom-copyTop),bundle?9:11);
-  if(copy.size<5.5&&photoHeight>6){
-    photoHeight=Math.max(5,photoHeight-(5.5-copy.size)*4);
+  // Short front/back cards need a photo column rather than a tiny strip above the text.
+  const compactPhoto= !bundle && w>=95 && h<=135;
+  const photoScale=(style?.photoScale??100)/100;
+  let photoHeight,copyTop,copy,photoWidth,photoX,copyX=x+inset,copyWidth=inner;
+  if(compactPhoto){
+    const availableWidth=Math.max(1,w-photoInset*2);
+    const photoFraction=asset?.image?.width?.valueOf()? .48:.37;
+    photoWidth=availableWidth*photoFraction*photoScale;
+    photoX=x+photoInset;
+    photoHeight=Math.max(0,copyBottom-imageY-2);
+    copyX=photoX+photoWidth+Math.max(3,w*.025);
+    copyWidth=Math.max(1,x+w-inset-copyX);
+    copyTop=imageY;
+    copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,photoHeight),11);
+    if(asset&&copy.size<6.7&&photoWidth>availableWidth*.42){
+      photoWidth=availableWidth*.42*photoScale;
+      copyX=photoX+photoWidth+Math.max(3,w*.025);
+      copyWidth=Math.max(1,x+w-inset-copyX);
+      copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,photoHeight),11);
+    }
+  }else{
+    const desiredFraction=asset?.image?.width?.valueOf()? .49:.38;
+    photoHeight=Math.max(0,Math.min(h*desiredFraction,contentSpace*.61));
     copyTop=imageY+photoHeight+3;
     copy=fitCardCopy(ctx,title,variant,inner,Math.max(.5,copyBottom-copyTop),bundle?9:11);
+    if(copy.size<5.5&&photoHeight>6){
+      photoHeight=Math.max(5,photoHeight-(5.5-copy.size)*4);
+      copyTop=imageY+photoHeight+3;
+      copy=fitCardCopy(ctx,title,variant,inner,Math.max(.5,copyBottom-copyTop),bundle?9:11);
+    }
+    photoWidth=Math.max(0,(w-photoInset*2)*photoScale);
+    photoX=x+(w-photoWidth)/2;
   }
-  const photoWidth=Math.max(0,(w-photoInset*2)*(style?.photoScale??100)/100);
-  const photoX=x+(w-photoWidth)/2;
   if(asset&&quantity&&photoHeight>0)promoBundlePhoto(ctx,asset,{x:photoX,y:imageY,width:photoWidth,height:photoHeight},quantity);
   else if(asset&&photoHeight>0)photo(ctx,asset.image,photoX,imageY,photoWidth,photoHeight,asset.frame);
   else if(photoHeight>0){
     fill(ctx,'#edf2fa',photoX,imageY,photoWidth,photoHeight);
     line(ctx,'PHOTO NEEDED',photoX+3,imageY+photoHeight/2+3,Math.max(1,photoWidth-6),Math.min(9,h*.11),'#506584');
   }
-  drawCardCopy(ctx,copy,x+inset,copyTop,inner);
+  drawCardCopy(ctx,copy,copyX,copyTop,copyWidth);
   const align=style?.priceAlign||'left',priceX=align==='center'?x+w/2:align==='right'?x+w-inset:x+inset;
   ctx.textAlign=align==='center'?'center':align==='right'?'right':'left';
   fit(ctx,prices.promo,priceX,priceY,inner,promoSize,style?.priceColor||'#b51d22');
@@ -5058,7 +5100,7 @@ function initStudioUI(){
   const aside=document.querySelector('main > aside'),stage=document.querySelector('main > .stage');
   const old=[...aside.children];
   const fixed=document.createElement('div');fixed.id='sidebarFixed';
-  fixed.innerHTML='<div class="editorMenuHeading"><h1>Sale flyer</h1><button type="button" id="editorMenuToggle" aria-controls="studioNav" aria-expanded="true">Hide menu ▴</button></div><p class="muted" id="editorMenuHint">Choose a section to edit. Your campaign and photos stay saved in this browser.</p><nav id="studioNav" aria-label="Flyer editor sections"></nav><div id="sidebarActions"><button type="button" id="layoutSettings">⚙ Layout &amp; Appearance</button></div>';
+  fixed.innerHTML='<div class="editorMenuHeading"><h1>MegaFlyer Studio</h1><button type="button" id="editorMenuToggle" aria-controls="studioNav" aria-expanded="true">Hide menu ▴</button></div><p class="muted" id="editorMenuHint">Choose a section to edit. Your campaign and photos stay saved in this browser.</p><nav id="studioNav" aria-label="Flyer editor sections"></nav><div id="sidebarActions"><button type="button" id="layoutSettings">⚙ Layout &amp; Appearance</button></div>';
   const content=document.createElement('div');content.id='sidebarContent';
   aside.prepend(fixed,content);
   initEditorMenuCollapse();
