@@ -69,6 +69,8 @@ Deno.serve(async req=>{
    auth=await ptg("prove",{sessionId:body.sessionId,challenge:body.challenge,signature:body.signature});
   }
   if(!auth)return json(origin,{ok:false,error:"PTG Studio authorization required."},403);
+  if(body.action==="load"&&(!studioTicketOk(auth.draftScope)||!studioTicketOk(auth.draftKey)))
+    return json(origin,{ok:false,error:"Account-scoped draft recovery unavailable."},503);
   if(body.action==="check")return json(origin,auth);
   const admin=createClient(FLYER_URL,FLYER_SERVICE,{auth:{persistSession:false,autoRefreshToken:false}});
   const {data,error}=await admin.storage.from(BUNDLE_BUCKET).download(BUNDLE_PATH);
