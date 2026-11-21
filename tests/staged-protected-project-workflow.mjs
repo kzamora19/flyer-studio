@@ -7,6 +7,7 @@ import {tmpdir} from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright';
+import {createProofMock} from './staged-proof-mock.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const temp=mkdtempSync(join(tmpdir(),'megaflyer-secure-cloud-'));
@@ -29,6 +30,7 @@ const server=createServer((req,res)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const user={id:'11111111-2222-4333-8444-555555555555',email:'flyer-test@example.invalid'};
 const projects=[],revisions=[];
+const proof=createProofMock();
 let conflictNextPatch=false;
 const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l6cAAAAASUVORK5CYII=';
 let browserInstance;
@@ -51,9 +53,9 @@ try{
   const req=route.request(),url=new URL(req.url()),method=req.method(),path=url.pathname;
   if(path==='/functions/v1/flyer-editor-delivery'){
    const body=req.postDataJSON();
-   if(body.action==='load')return status(route,{ok:true,html:privateHtml,sha256:privateManifest.sha256,
-      expiresAt:new Date(Date.now()+600_000).toISOString()});
-   if(body.action==='check')return status(route,{ok:true,expiresAt:new Date(Date.now()+600_000).toISOString()});
+   const result=await proof.handle(body);
+   if(body.action==='load')return status(route,{...result,html:privateHtml,sha256:privateManifest.sha256});
+   if(body.action==='check')return status(route,result);
    throw Error('Unexpected protected delivery action: '+body.action);
   }
   if(path==='/auth/v1/user')return status(route,user);
