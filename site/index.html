@@ -2561,7 +2561,7 @@ body.modalOpen{overflow:auto!important}
 
 </style>
 <link rel="stylesheet" href="./toolbar-tabs.css">
-<header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>MegaFlyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status" role="status" aria-live="polite" aria-label="Project status: Draft" title="This flyer has not yet been approved. Unapproved exports contain a DRAFT watermark.">Status: Draft</span></header>
+<header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>MegaFlyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status" role="status" aria-live="polite" aria-label="Flyer status: Draft" title="This flyer has not yet been approved. Unapproved exports contain a DRAFT watermark.">Flyer Status: Draft</span></header>
 <main>
 <aside aria-label="Flyer editor">
 <h1>MegaFlyer Studio</h1>
@@ -3131,8 +3131,8 @@ function refresh() {
   }
   // This is the actual approval state, not a decorative badge; clarify its meaning.
   const statusBadge=$('status');
-  statusBadge.textContent='Status: '+state.status;
-  statusBadge.setAttribute('aria-label','Project status: '+state.status);
+  statusBadge.textContent='Flyer Status: '+state.status;
+  statusBadge.setAttribute('aria-label','Flyer status: '+state.status);
   const statusHelp={
     'Draft':'This flyer has not yet been approved. Unapproved exports contain a DRAFT watermark.',
     'In review':'This flyer is awaiting approval. Unapproved exports contain a DRAFT watermark.',
