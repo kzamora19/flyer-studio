@@ -62,7 +62,7 @@ if(/PRIVATE EDITOR BUNDLE|id="quickSaveProject"|id="png"|<canvas/.test(launcher)
  throw Error("Private editor source cannot appear in public launcher");
 mkdirSync(join(target,"studio"),{recursive:true});
 writeFileSync(join(target,"studio","index.html"),launcher);
-for(const asset of ["launch.js","draft-vault.js"])
+for(const asset of ["launch.js","draft-vault.js","drive-backup.js"])
  copyFileSync(join(root,"staging","studio-access",asset),join(target,"studio",asset));
 
 console.log("STAGED editor-free Pages cutover preview generated; no production update.");
