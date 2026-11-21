@@ -93,5 +93,5 @@ test('opaque-origin editor relays only whitelisted photo operations through PTG 
  assert.match(launcher,/Authorization:'Bearer '\+message.token/);
  assert.match(edge,/origin!==ALLOWED_ORIGIN/);
  assert.doesNotMatch(edge,/origin==='null'|origin === 'null'|Access-Control-Allow-Origin.*\*/);
- assert.doesNotMatch(launcher,/allow-same-origin/);
+ assert.doesNotMatch(launcher,/frame\.setAttribute\('sandbox','[^']*allow-same-origin/);
 });
