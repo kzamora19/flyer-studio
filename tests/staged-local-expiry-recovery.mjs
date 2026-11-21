@@ -51,20 +51,31 @@ try{
  const frame=page.frameLocator('#studio-editor-frame');
  await frame.locator('#quickSaveProject').waitFor({state:'attached',timeout:24000});
  const expected='QA draft is safe after PTG expiry';
- const stored=await frame.locator('body').evaluate(async (_body,label)=>{
+ await frame.locator('body').evaluate((_body,label)=>{
   state.campaign.subtitle=label;
-  save();
-  return await new Promise((resolve,reject)=>{
-   const open=indexedDB.open('megasaver-flyer-studio',1);
+  save(); // IndexedDB compatibility adapter must forward to the encrypted launcher.
+ },expected);
+ const stableScope=Buffer.alloc(32,83).toString('base64url');
+ await page.waitForFunction(async scope=>{
+  const record=await new Promise((resolve,reject)=>{
+   const open=indexedDB.open('megaflyer-protected-draft-v1',1);
    open.onerror=()=>reject(open.error);
    open.onsuccess=()=>{
-    const get=open.result.transaction('projects').objectStore('projects').get('current');
-    get.onsuccess=()=>resolve(get.result?.campaign?.subtitle);
-    get.onerror=()=>reject(get.error);
+    const db=open.result;
+    const req=db.transaction('drafts').objectStore('drafts').get(scope+':p:current');
+    req.onsuccess=()=>{db.close();resolve(req.result)};
+    req.onerror=()=>{db.close();reject(req.error)};
    };
   });
- },expected);
- assert.equal(stored,expected,'Draft must be written to IndexedDB before expiry');
+  return record?.format==='AES-GCM-v1'&&record.iv instanceof Uint8Array&&
+         record.encrypted instanceof ArrayBuffer&&record.encrypted.byteLength>100;
+ },stableScope,{timeout:15000});
+ // Parent can read only ciphertext. The opaque iframe cannot access this DB.
+ const originAccess=await frame.locator('body').evaluate(()=>{
+  try{indexedDB.open('megaflyer-protected-draft-v1');return 'EXPOSED';}
+  catch(error){return error.name;}
+ });
+ assert.equal(originAccess,'SecurityError','Editor must not open parent IndexedDB directly');
  await page.waitForFunction(()=>!document.querySelector('#studio-editor-frame'),{timeout:20000});
  assert.match(await page.locator('#status').textContent(),/PTG access expired/);
  assert.equal(new URL(page.url()).hash,'');
@@ -79,7 +90,7 @@ try{
  assert.ok(calls.some(x=>x.action==='load'&&x.token==='E'));
  assert.ok(calls.some(x=>x.action==='load'&&x.token==='N'));
  assert.ok(calls.filter(x=>x.action==='check').every(x=>!x.token));
- console.log('PASS: protected editor expires locally and restores saved IndexedDB draft on a fresh mock PTG login.');
+ console.log('PASS: opaque editor encrypted local photo/draft recovery on a fresh mock PTG login.');
 }finally{
  await browser?.close();
  if(server)await new Promise(ok=>server.close(ok));
