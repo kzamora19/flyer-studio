@@ -19,11 +19,12 @@ try{
   if(!pathname.startsWith("/flyer-studio/")){res.writeHead(404);res.end();return}
   const path=pathname.slice("/flyer-studio/".length)||"index.html";
   if(!["index.html","manifest.webmanifest","icons/flyer-studio.svg",
-   "icons/flyer-studio-192.png","icons/flyer-studio-512.png"].includes(path)){
+   "icons/flyer-studio-192.png","icons/flyer-studio-512.png",
+   "studio/index.html","studio/launch.js","studio/draft-vault.js"].includes(path)){
    res.writeHead(404,{"Cache-Control":"no-store"});res.end("Legacy editor not published");return
   }
   const type=path.endsWith(".svg")?"image/svg+xml":path.endsWith(".png")?"image/png":
-   path.endsWith(".webmanifest")?"application/manifest+json":"text/html";
+   path.endsWith(".webmanifest")?"application/manifest+json":path.endsWith(".js")?"application/javascript":"text/html";
   res.writeHead(200,{"Content-Type":type,"Cache-Control":"no-store"});
   res.end(readFileSync(join(target,path)));
  });
@@ -50,6 +51,12 @@ try{
  assert.equal(r.status(),200);
  assert.doesNotMatch(await r.text(),/<script|sharedAssetLauncher|printPdf/);
  assert.deepEqual(errs,[],"Cutover preview must have no browser runtime errors");
+ await page.goto(origin+"/flyer-studio/studio/index.html",{waitUntil:"domcontentloaded"});
+ await page.getByText("A valid PTG authorization is required.").waitFor({timeout:20000});
+ assert.equal(await page.locator("iframe").count(),0,"Direct Studio access without a ticket cannot mount editor");
+ const protectedHtml=await context.request.get(origin+"/flyer-studio/studio/index.html");
+ assert.equal(protectedHtml.status(),200);
+ assert.doesNotMatch(await protectedHtml.text(),/PRIVATE EDITOR BUNDLE|id="quickSaveProject"/);
  console.log("PASS: MegaFlyer editor-free Pages preview serves only the approved identity and PTG link, denies historical editor URLs, and fits mobile.");
 }finally{
  await browser?.close();
