@@ -16,6 +16,7 @@ on:
       - "tests/staged-protected-project-workflow.mjs"
       - "tests/staged-local-expiry-recovery.mjs"
       - "tests/cloud-backup-browser.test.mjs"
+      - "tests/cloud-launcher-browser.test.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -108,3 +109,4 @@ jobs:
         run: |
           node tests/staged-local-expiry-recovery.mjs
           node tests/cloud-backup-browser.test.mjs
+          node tests/cloud-launcher-browser.test.mjs
