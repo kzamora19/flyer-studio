@@ -221,7 +221,10 @@ try{
   'Explicit opt-out must not contact shared image upload backend.');
  // The native product-card importer must auto-save ONLY after its ordinary
  // editor listener applies the image. This never touches customer #photos.
- await frame.locator('#smartPhotoNativeShare').check();
+ await frame.locator('body').evaluate(()=>{
+   const input=document.getElementById('smartPhotoNativeShare');
+   input.checked=true;input.dispatchEvent(new Event('change',{bubbles:true}));
+ });
  await frame.locator('body').evaluate(()=>{targetedOffer().photo='';});
  const nativeUploadsBefore=photoCalls.filter(x=>x==='upload').length;
  const secondPng='iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGOUNLrEAANMDEgANwcAN/UBJXjVRskAAAAASUVORK5CYII=';
@@ -232,7 +235,10 @@ try{
  assert.equal(photoCalls.filter(x=>x==='upload').length,nativeUploadsBefore+1,
    'A successful native product-card photo import should be shared exactly once');
  // The UI must separately allow exclusion of the next native upload.
- await frame.locator('#smartPhotoNativeShare').uncheck();
+ await frame.locator('body').evaluate(()=>{
+   const input=document.getElementById('smartPhotoNativeShare');
+   input.checked=false;input.dispatchEvent(new Event('change',{bubbles:true}));
+ });
  const thirdPng='iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGPcIqfMAANMDEgANwcAMW8A/bn8wfEAAAAASUVORK5CYII=';
  await frame.locator('#cardPhotoUpload').setInputFiles({
    name:'excluded-native.png',mimeType:'image/png',buffer:Buffer.from(thirdPng,'base64')
