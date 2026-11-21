@@ -10,6 +10,7 @@ on:
       - "tests/staged-studio-browser.mjs"
       - "tests/staged-full-editor-frame.mjs"
       - "tests/staged-protected-project-workflow.mjs"
+      - "tests/staged-local-expiry-recovery.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -25,6 +26,7 @@ on:
       - "tests/staged-studio-browser.mjs"
       - "tests/staged-full-editor-frame.mjs"
       - "tests/staged-protected-project-workflow.mjs"
+      - "tests/staged-local-expiry-recovery.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -74,3 +76,5 @@ jobs:
         run: node tests/staged-full-editor-frame.mjs
       - name: Verify cloud Save/Retrieve and PNG download inside protected frame
         run: node tests/staged-protected-project-workflow.mjs
+      - name: Verify local draft recovery after PTG ticket expiry and relaunch
+        run: node tests/staged-local-expiry-recovery.mjs
