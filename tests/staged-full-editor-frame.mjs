@@ -34,7 +34,9 @@ try{
  const origin='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
  const context=await browser.newContext({viewport:{width:1440,height:900}});
- const errors=[],calls=[];
+ const errors=[],calls=[],photoCalls=[];
+ const miniPng='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l6cAAAAASUVORK5CYII=';
+ let savedProductPhoto=null;
  const proof=createProofMock();
  await context.route('**/*',async route=>{
   const url=new URL(route.request().url());
@@ -46,6 +48,28 @@ try{
     headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
     body:JSON.stringify(payload.action==='load'?
       {...result,html:privateHtml,sha256:manifest.sha256}:result)});
+  }
+  if(url.hostname==='tzklsscoiwnmeantcefw.supabase.co'&&url.pathname==='/functions/v1/flyer-product-photos'){
+   const payload=route.request().postDataJSON();photoCalls.push(payload.action);
+   assert.match(route.request().headers().authorization||'',/^Bearer synthetic-photo-test-/);
+   assert.match(route.request().headers()['x-ptg-session-id']||'',/^[a-f0-9-]{36}$/);
+   let value={ok:true};
+   if(payload.action==='permissions')value={canView:true,canUpload:true,canManage:true};
+   if(payload.action==='resolve')value={photos:savedProductPhoto?[savedProductPhoto]:[],
+     match:savedProductPhoto?'barcode':'none'};
+   if(payload.action==='upload'){
+    assert.equal(payload.product.barcode,'0000012345');
+    assert.equal(payload.mime,'image/webp');
+    assert.ok(payload.base64.length>20);
+    savedProductPhoto={id:'11111111-2222-4333-8444-555555555555',
+     barcode_norm:'0000012345',product_key:'b:0000012345',
+     is_primary:true,description:'LG T123 TV'};
+    value={ok:true,photoId:savedProductPhoto.id,reused:false};
+   }
+   if(payload.action==='image')value={mime:'image/png',base64:miniPng};
+   return route.fulfill({status:200,contentType:'application/json',
+    headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*'},
+    body:JSON.stringify(value)});
   }
   return route.fulfill({status:404,body:'External service disabled in offline QA'});
  });
@@ -147,6 +171,37 @@ try{
  assert.equal(narrow.subtitle,'Promotional Flyer & Sale Artwork Generator');
  assert.ok(narrow.width<=narrow.viewport+2,'MegaFlyer mobile header must not overflow');
  assert.deepEqual(errors,[],errors.join('; '));
+ // Photo-library integration is tested with a fully mocked Edge endpoint.
+ // The iframe must send only a named operation over its MessagePort; the
+ // protected launcher attaches PTG authorization and fixed API destination.
+ await frame.locator('body').evaluate(()=>{
+  ptgSession={id:'77777777-1111-4111-8111-777777777777',
+   token:'synthetic-photo-test-bearer-never-production-abcdefghijklmnopqrstuvwxyz'};
+  state.offers[0].sku='0000012345';
+  state.offers[0].brand='LG';
+  state.offers[0].model='T123';
+  state.offers[0].name='LG T123 TV';
+  slotTarget.section='front';slotTarget.slot='1';
+  window.dispatchEvent(new Event('megaflyer:ptg-session-changed'));
+ });
+ await frame.locator('#smartPhotoOpen').click();
+ await frame.locator('#smartPhotoFile').setInputFiles({
+  name:'test-product.png',mimeType:'image/png',buffer:Buffer.from(miniPng,'base64')});
+ await frame.locator('#smartPhotoNotice[data-ok="true"]').getByText('Product photo saved',{exact:false}).waitFor({timeout:20000});
+ assert.ok(photoCalls.includes('upload'),'Saved product photo must cross protected launcher bridge.');
+ assert.equal(savedProductPhoto?.barcode_norm,'0000012345');
+ await frame.locator('.spp-card button').first().click();
+ await frame.locator('#smartPhotoNotice').getByText('Saved photo applied',{exact:false}).waitFor({timeout:15000});
+ assert.ok(photoCalls.includes('image'),'Saved photo must be reloaded through authenticated parent proxy.');
+ const uploadsBefore=photoCalls.filter(x=>x==='upload').length;
+ await frame.locator('#smartPhotoShare').uncheck();
+ await frame.locator('#smartPhotoFile').setInputFiles({
+  name:'private-product.png',mimeType:'image/png',buffer:Buffer.from(miniPng,'base64')});
+ await frame.locator('#smartPhotoNotice').getByText('not shared',{exact:false}).waitFor({timeout:15000});
+ assert.equal(photoCalls.filter(x=>x==='upload').length,uploadsBefore,
+  'Explicit opt-out must not contact shared image upload backend.');
+ console.log('PASS: actual protected editor product image upload, barcode recall, reuse and opt-out using synthetic PTG and cloud responses.');
+
  assert.ok(calls.includes('load'));
  console.log('PASS: full 1MB+ MegaFlyer bundle loads in ticket-gated srcdoc; editor controls and asset dialog work under mock gateway.');
 }finally{
