@@ -9,6 +9,7 @@ on:
       - "tests/staged-studio-launch.test.mjs"
       - "tests/staged-studio-browser.mjs"
       - "tests/staged-full-editor-frame.mjs"
+      - "tests/staged-protected-project-workflow.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -23,6 +24,7 @@ on:
       - "tests/staged-studio-launch.test.mjs"
       - "tests/staged-studio-browser.mjs"
       - "tests/staged-full-editor-frame.mjs"
+      - "tests/staged-protected-project-workflow.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -70,3 +72,5 @@ jobs:
         run: node tests/staged-studio-browser.mjs
       - name: Verify actual full editor loads inside protected mock frame
         run: node tests/staged-full-editor-frame.mjs
+      - name: Verify cloud Save/Retrieve and PNG download inside protected frame
+        run: node tests/staged-protected-project-workflow.mjs
