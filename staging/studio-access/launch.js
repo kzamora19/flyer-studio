@@ -109,7 +109,7 @@ async function open(){
   // about:srcdoc WITHOUT an opaque sandbox inherits the shared github.io origin.
   // Disallow allow-same-origin: editor scripts must never read PTG/Branchline storage.
   // Cloud OAuth and IndexedDB require a separate secure compatibility bridge.
-  frame.setAttribute('sandbox','allow-scripts allow-downloads');
+  frame.setAttribute('sandbox','allow-scripts allow-downloads allow-modals');
   const channel=new MessageChannel();
   draftPort=channel.port1;
   channel.port1.onmessage=async ({data:message})=>{
