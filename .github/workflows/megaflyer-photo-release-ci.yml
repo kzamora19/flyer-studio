@@ -60,3 +60,23 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202611210001_smart_product_photos.sql
       - name: Assert no public access, valid primary switching and per-product isolation
         run: psql -v ON_ERROR_STOP=1 -f tests/megaflyer-smart-photo-db.sql
+      - name: Verify deployed photo gateway denies anonymous and foreign origins
+        env:
+          PHOTO_GATEWAY: https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-product-photos
+          FLYER_PUBLIC_KEY: sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK
+        run: |
+          set -euo pipefail
+          anon=$(curl --silent --show-error --max-time 20 --output /tmp/photo-anon.json --write-out '%{http_code}' \
+            -X POST "$PHOTO_GATEWAY" \
+            -H 'Origin: https://kzamora19.github.io' \
+            -H "apikey: $FLYER_PUBLIC_KEY" -H 'Content-Type: application/json' \
+            --data '{"action":"permissions"}')
+          echo "No PTG session: HTTP $anon"
+          test "$anon" = "401"
+          wrong=$(curl --silent --show-error --max-time 20 --output /tmp/photo-origin.json --write-out '%{http_code}' \
+            -X POST "$PHOTO_GATEWAY" \
+            -H 'Origin: https://untrusted.example' \
+            -H "apikey: $FLYER_PUBLIC_KEY" -H 'Content-Type: application/json' \
+            --data '{"action":"permissions"}')
+          echo "Wrong origin: HTTP $wrong"
+          test "$wrong" = "403"
