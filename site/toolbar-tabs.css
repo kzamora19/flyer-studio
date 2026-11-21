@@ -2,8 +2,10 @@
    Scoped to the preview toolbar; no action handlers or authoring controls change. */
 .stage{min-width:0}
 .stage .flyer-tab-shell{
+  position:sticky;top:0;z-index:15; /* desktop: inside the independently scrolling preview */
   display:flex;align-items:stretch;width:100%;max-width:100%;min-width:0;
   margin:0 0 13px;background:#e8eff8;border-bottom:3px solid #098bd1;
+  box-shadow:0 4px 10px rgba(12,49,89,.12);
 }
 .stage .flyer-tab-shell > .toolbar{
   flex:1 1 auto;min-width:0;display:flex;flex-wrap:nowrap;gap:0;
@@ -46,6 +48,7 @@
 }
 .stage .flyer-tab-shell > .flyer-tab-scroll:disabled{opacity:.4;cursor:default}
 @media(max-width:700px){
+  .stage .flyer-tab-shell{top:60px} /* mobile: below the sticky app header */
   .stage .flyer-tab-shell > .toolbar > button{padding:7px 10px;min-height:40px}
   .stage .flyer-tab-shell > .flyer-tab-scroll{flex-basis:25px;min-width:25px}
 }

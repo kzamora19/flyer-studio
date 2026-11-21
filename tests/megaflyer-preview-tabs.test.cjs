@@ -25,6 +25,8 @@ assert.ok(shared.includes("launcher.id='sharedAssetLauncher'"),'Shared Asset ent
 assert.match(css,/\.flyer-tab-shell\s*>\s*\.toolbar/,'Toolbar CSS scoped');
 assert.match(css,/overflow-x:auto/,'Single-row overflow scrolling retained');
 assert.match(css,/flex-wrap:nowrap/,'No unwanted second row');
+assert.match(css,/\.stage \.flyer-tab-shell\{\s*position:sticky;top:0;z-index:15;/,'Desktop preview toolbar pinned while scrolling');
+assert.match(css,/@media\(max-width:700px\)\{\s*\.stage \.flyer-tab-shell\{top:60px\}/,'Mobile toolbar pinned beneath sticky app header');
 assert.match(js,/MutationObserver/,'Late-added controls trigger arrow refresh');
 assert.match(js,/setAttribute\('role','toolbar'\)/,'Toolbar aria semantics');
 new Function(js);
