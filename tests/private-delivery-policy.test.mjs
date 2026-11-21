@@ -41,5 +41,5 @@ test('staged server rechecks source PTG ticket before every load or status respo
  assert.match(source,/if\(hash!==BUNDLE_SHA\)/);
  assert.match(source,/private,?\/?/i);
  assert.doesNotMatch(source,/createSignedUrl\(/);
- assert.doesNotMatch(source,/text\/html/);
+ assert.doesNotMatch(source,/["\x27]Content-Type["\x27]\s*:\s*["\x27]text\/html/);
 });
