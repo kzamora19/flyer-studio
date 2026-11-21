@@ -68,7 +68,7 @@ try{
  await page.waitForFunction(()=>!document.querySelector('#studio-editor-frame'),{timeout:20000});
  assert.match(await page.locator('#status').textContent(),/PTG access expired/);
  assert.equal(new URL(page.url()).hash,'');
- await page.goto(origin+'/#ptg_studio_ticket='+'N'.repeat(43),{waitUntil:'domcontentloaded'});
+ await page.goto(origin+'/?relaunch=1#ptg_studio_ticket='+'N'.repeat(43),{waitUntil:'domcontentloaded'});
  await page.locator('#studio-editor-frame').waitFor({timeout:20000});
  await frame.locator('#quickSaveProject').waitFor({state:'attached',timeout:24000});
  await page.waitForTimeout(450);
