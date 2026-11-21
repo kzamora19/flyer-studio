@@ -57,6 +57,8 @@ try{
    'Section actions must not become a child of the horizontal tab bar');
  assert.equal(await page.locator('.stage > #selectedSectionControls').count(),1,
    'Section actions occupy their own row underneath the tabs');
+ await page.locator('#selectedSectionControls').evaluate(el=>el.scrollIntoView({block:'center'}));
+ await page.waitForTimeout(100);
  const placement=await page.evaluate(()=>{
    const bar=document.querySelector('.flyer-tab-shell').getBoundingClientRect();
    const panel=document.querySelector('#selectedSectionControls').getBoundingClientRect();

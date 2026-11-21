@@ -60,6 +60,33 @@ try{
  await frame.locator('#sharedAssetModal').waitFor({state:'visible',timeout:10000});
  await frame.locator('#sharedAssetClose').click();
  assert.equal(await frame.locator('#sharedAssetModal').isHidden(),true);
+ // Verify the latest Project Backup controls are actually usable in srcdoc.
+ await frame.locator('#studioNav [data-nav="backup"]').click();
+ await frame.locator('#quickSaveProject').click({timeout:12000});
+ await frame.locator('#quickProjectSignedOut').waitFor({state:'visible',timeout:12000});
+ await frame.locator('#quickProjectClose').click();
+ // Create a real print-resolution PNG from the protected editor.
+ await frame.locator('#studioNav [data-nav="review"]').click();
+ const [pngDownload]=await Promise.all([
+  page.waitForEvent('download',{timeout:90000}),
+  frame.locator('#png').click({timeout:16000})
+ ]);
+ const png=readFileSync(await pngDownload.path());
+ assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+ assert.ok(png.readUInt32BE(16)>=2000&&png.readUInt32BE(20)>=2800,'A4 PNG must be 300-ppi sized');
+ // A second authorised load isolates the heavyweight PDF export from PNG buffers.
+ await page.goto(origin+'/#ptg_studio_ticket='+'R'.repeat(43),{waitUntil:'domcontentloaded'});
+ await page.locator('#studio-editor-frame').waitFor({timeout:30000});
+ await frame.locator('#printPdf').waitFor({state:'attached',timeout:30000});
+ await frame.locator('#studioNav [data-nav="review"]').click();
+ const [pdfDownload]=await Promise.all([
+  page.waitForEvent('download',{timeout:100000}),
+  frame.locator('#printPdf').click({timeout:20000})
+ ]);
+ const pdf=readFileSync(await pdfDownload.path()).toString('latin1');
+ assert.match(pdf,/^%PDF-1\.4/);
+ assert.match(pdf,/\/Count 2\b/);
+ assert.equal((pdf.match(/\/Subtype \/Image/g)||[]).length,2);
  assert.deepEqual(errors,[],errors.join('; '));
  assert.ok(calls.includes('load'));
  console.log('PASS: full 1MB+ MegaFlyer bundle loads in ticket-gated srcdoc; editor controls and asset dialog work under mock gateway.');
