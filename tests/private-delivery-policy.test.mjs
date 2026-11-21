@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {studioTicketOk,releasePathOk,sha256Ok,exactHttpsOrigin,deliveryConfigured,validProofResponse,validSignedProof,validPtgGatewayUrl,PRODUCTION_PTG_REF}
+import {studioTicketOk,releasePathOk,sha256Ok,exactHttpsOrigin,deliveryConfigured,validProofResponse,validSignedProof,validPtgGatewayUrl,PRODUCTION_PTG_REF,validStudioBackendUrl,KNOWN_PRODUCTION_REFS}
   from '../supabase/functions/_shared/studio-private-policy.mjs';
 
 test('only exact HTTPS delivery origins are accepted',()=>{
@@ -72,4 +72,20 @@ test("studio PTG verifier is explicitly configured and never crosses production/
  assert.match(src,/return !!PTG_VERIFY_URL && /,"Misconfigured backend must fail closed before ticket redemption");
  assert.doesNotMatch(src,/const PTG_VERIFY_URL="https:/);
  assert.match(src,/redirect:"error"/,"PTG call must reject redirects");
+});
+
+test("studio backend cannot accidentally use another production Supabase project",()=>{
+ const prod="https://tzklsscoiwnmeantcefw.supabase.co";
+ const stage="https://gmrnzcrxysafqwertyui.supabase.co";
+ assert.equal(validStudioBackendUrl(prod,"production","tzklsscoiwnmeantcefw"),prod);
+ assert.equal(validStudioBackendUrl(stage,"staging","tzklsscoiwnmeantcefw"),stage);
+ assert.equal(validStudioBackendUrl(prod,"staging","tzklsscoiwnmeantcefw"),"");
+ assert.equal(validStudioBackendUrl(stage,"production","tzklsscoiwnmeantcefw"),"");
+ assert.equal(validStudioBackendUrl("http://gmrnzcrxysafqwertyui.supabase.co","staging","tzklsscoiwnmeantcefw"),"");
+ for(const ref of KNOWN_PRODUCTION_REFS){
+   assert.equal(validStudioBackendUrl("https://"+ref+".supabase.co","staging","tzklsscoiwnmeantcefw"),"");
+   assert.equal(validPtgGatewayUrl("https://"+ref+".supabase.co/functions/v1/ptg-studio-access","staging"),"");
+ }
+ const src=readFileSync(new URL("../supabase/functions/flyer-editor-delivery/index.ts",import.meta.url),"utf8");
+ assert.match(src,/!!validStudioBackendUrl\(/);
 });
