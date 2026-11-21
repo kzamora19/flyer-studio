@@ -44,6 +44,20 @@ try{
  }));
  assert.equal(tabBar.wrap,'nowrap');
  assert.ok(tabBar.scrollWidth>tabBar.clientWidth,'Tabs should overflow horizontally at desktop size');
+ // Desktop has its own independently scrolling preview; tabs stay pinned at its top.
+ const desktopPin=await page.evaluate(()=>{
+   const stage=document.querySelector('.stage'),tabs=document.querySelector('.flyer-tab-shell');
+   const max=stage.scrollHeight-stage.clientHeight;
+   stage.scrollTop=Math.min(350,max);
+   return {max,scrolled:stage.scrollTop,stageTop:stage.getBoundingClientRect().top,
+     tabTop:tabs.getBoundingClientRect().top,position:getComputedStyle(tabs).position};
+ });
+ assert.ok(desktopPin.max>200&&desktopPin.scrolled>200,
+   'Desktop flyer preview must be independently scrollable: '+JSON.stringify(desktopPin));
+ assert.equal(desktopPin.position,'sticky','Preview tabs use sticky layout');
+ assert.ok(desktopPin.tabTop>=desktopPin.stageTop-2 && desktopPin.tabTop<=desktopPin.stageTop+23,
+   'Tabs stay pinned near top of desktop preview while scrolling: '+JSON.stringify(desktopPin));
+ await page.evaluate(()=>document.querySelector('.stage').scrollTop=0);
  await page.locator('.flyer-tab-scroll[aria-label="Scroll tabs right"]').click();
  await page.waitForFunction(()=>document.querySelector('.flyer-tab-shell>.toolbar').scrollLeft>35);
  await page.locator('#back').click();
@@ -168,6 +182,18 @@ try{
  }));
  assert.equal(mobile.wrap,'nowrap');
  assert.ok(mobile.scrollWidth>mobile.clientWidth,'Mobile tabs remain horizontally scrollable');
+ // Mobile scrolls the page, not the preview pane. Pin beneath the 60px app header.
+ const mobilePin=await page.evaluate(()=>{
+   const stage=document.querySelector('.stage'),tabs=document.querySelector('.flyer-tab-shell');
+   const stageY=stage.getBoundingClientRect().top+scrollY;
+   scrollTo(0,stageY+160);
+   return {scrollY,stageY,top:tabs.getBoundingClientRect().top,
+     position:getComputedStyle(tabs).position};
+ });
+ assert.ok(mobilePin.scrollY>100,'Mobile page should scroll: '+JSON.stringify(mobilePin));
+ assert.equal(mobilePin.position,'sticky','Mobile tab bar remains sticky');
+ assert.ok(Math.abs(mobilePin.top-60)<=4,
+   'Tabs pin below 60px app header on mobile: '+JSON.stringify(mobilePin));
  assert.deepEqual(pageErrors,[],'Page must not throw runtime JS errors');
  console.log('PASS: Chromium toolbar, scrolling arrows, Front/Back, no duplicates, menu Show/Hide, floating Studio+/Assets, mobile layout');
 } finally {
