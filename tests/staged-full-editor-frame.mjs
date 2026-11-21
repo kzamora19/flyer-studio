@@ -73,6 +73,15 @@ try{
  assert.equal(photoHooks.attach,'function');
  assert.equal(photoHooks.select,'function');
  console.log('SMART_PRODUCT_PHOTO_CARD_HOOKS',JSON.stringify(photoHooks));
+ const smartState=await frame.locator('body').evaluate(()=>({
+  accountType:typeof ptgSession,
+  accountPresent:typeof ptgSession!=='undefined'&&!!ptgSession,
+  firstOfferKeys:Object.keys(state.offers?.[0]||{}).slice(0,35),
+  slotTarget:typeof slotTarget==='undefined'?null:slotTarget,
+  offerSelected:typeof targetedOffer==='function'?!!targetedOffer():false,
+  photoInputExists:!!document.getElementById('cardPhotoUpload')
+ }));
+ console.log('SMART_PRODUCT_PHOTO_RUNTIME',JSON.stringify(smartState));
  await frame.locator('#smartPhotoClose').click();
  assert.equal(await frame.locator('#smartPhotoPanel').isHidden(),true);
 
