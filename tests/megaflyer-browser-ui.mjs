@@ -90,11 +90,32 @@ try{
  const navLabels=await page.locator('#studioNav>[data-nav]').allTextContents();
  assert.deepEqual(navLabels.map(x=>x.trim()),[
    'Campaign & Branding','Edit Flyer Cards','Bulk Import','Review & Approval','Project Backup']);
+ // The original controls are still wired, but the main menu stays visible as icons.
+ await page.locator('#studioChatHeader').waitFor();
+ assert.equal(await page.locator('#editorMenuToggle').getAttribute('aria-expanded'),'false');
+ assert.equal(await page.locator('#studioNav').isVisible(),true,'Compact rail keeps icons visible');
+ assert.equal(await page.locator('#studioChatTitle').textContent(),'Edit Flyer Cards');
+ const compactWidth=await page.locator('#sidebarFixed').evaluate(el=>el.getBoundingClientRect().width);
+ const sidebarSizes=await page.locator('main > aside').evaluate(el=>({
+   total:el.getBoundingClientRect().width,
+   second:document.querySelector('#sidebarContent').getBoundingClientRect().width,
+   preview:document.querySelector('.stage').getBoundingClientRect().width
+ }));
+ assert.ok(sidebarSizes.total<=305 && sidebarSizes.second<=245,
+   'Compact 2nd sidebar must not crowd the flyer: '+JSON.stringify(sidebarSizes));
+ assert.ok(sidebarSizes.preview>=650,
+   'Flyer canvas retains ample desktop width: '+JSON.stringify(sidebarSizes));
+ await page.locator('#editorMenuToggle').click();
+ assert.equal(await page.locator('#editorMenuToggle').getAttribute('aria-expanded'),'true');
+ const expandedWidth=await page.locator('#sidebarFixed').evaluate(el=>el.getBoundingClientRect().width);
+ assert.ok(expandedWidth>compactWidth+70,'Rail can expand to show menu names');
  await page.locator('#editorMenuToggle').click();
  assert.equal(await page.locator('#editorMenuToggle').getAttribute('aria-expanded'),'false');
- assert.equal(await page.locator('#studioNav').isVisible(),false);
- await page.locator('#editorMenuToggle').click();
  assert.equal(await page.locator('#studioNav').isVisible(),true);
+ await page.locator('#studioNav [data-nav="bulk"]').click();
+ assert.equal(await page.locator('#studioChatTitle').textContent(),'Bulk Import');
+ assert.equal(await page.locator('#studioSubnav .navChildren[data-submenu="bulk"] button').count(),2);
+ await page.locator('#studioNav [data-nav="cards"]').click();
  assert.equal(await page.locator('#studioNav #layoutSettings').count(),1,'Settings belongs in menu');
  // Every editor dialog should open centered, without blocking pointer input behind it.
  async function checkEditorCentered(wrapper,content,label){

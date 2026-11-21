@@ -55,3 +55,11 @@ test('do not generate private content into GitHub Pages publish folder',()=>{
    cwd:root,encoding:'utf8',stdio:'pipe'
  }),error=>/Private package output must not be inside/.test(error.stderr||''));
 });
+
+test('current ChatGPT-style MegaFlyer navigation is packaged privately without public asset requests',()=>{
+ const source=readFileSync(join(root,'scripts/build-private-flyer.mjs'),'utf8');
+ assert.match(source,/chat-sidebar\\.js/);
+ assert.match(source,/chat-sidebar\\.css/);
+ assert.match(source,/already embeds the sidebar stylesheet/);
+ assert.match(source,/latest ChatGPT-style two-level sidebar/);
+});

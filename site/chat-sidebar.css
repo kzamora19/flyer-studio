@@ -1,0 +1,143 @@
+/* Chat-style two-level studio navigation. Additive: original menu buttons and
+   panel IDs remain in place so the existing editors and PTG permissions work. */
+body.flyerChatLayout main {display:grid;grid-template-columns: 300px minmax(0,1fr);}
+body.flyerChatLayout.chatRailWide main {grid-template-columns: 410px minmax(0,1fr);}
+body.flyerChatLayout main>aside {
+  display:flex; flex-direction:row; padding:0; overflow:hidden; min-width:0;
+  background:#fff; border-right:1px solid #d8e2f1;
+}
+body.flyerChatLayout #sidebarFixed {
+  width:178px; flex:0 0 178px; height:100%; min-height:0;
+  padding:12px 7px; overflow-y:auto; scrollbar-width:thin;
+  background:#f2f5fa; border-right:1px solid #dfe6f0; border-bottom:0;
+  box-shadow:none; gap:10px;
+}
+body.flyerChatLayout #sidebarFixed.menuCollapsed {width:60px;flex-basis:60px;padding:10px 6px;}
+body.flyerChatLayout #sidebarFixed .editorMenuHeading {
+  display:flex; flex-direction:column-reverse; align-items:stretch; gap:7px;
+}
+body.flyerChatLayout #sidebarFixed .editorMenuHeading h1 {
+  margin:0; font-size:11px; letter-spacing:.06em; color:#71809b;
+  padding:6px 8px; text-transform:uppercase; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+body.flyerChatLayout #sidebarFixed.menuCollapsed .editorMenuHeading h1,
+body.flyerChatLayout #sidebarFixed #editorMenuHint {display:none!important;}
+body.flyerChatLayout #editorMenuToggle {
+  display:flex; align-items:center; justify-content:center;
+  height:43px; min-height:43px; width:100%; padding:0; border:0;
+  background:transparent; font-size:0!important; color:#183f81;
+  border-radius:10px; box-shadow:none;
+}
+body.flyerChatLayout #editorMenuToggle::before {content:"☰";font-size:22px;line-height:1;}
+body.flyerChatLayout #editorMenuToggle:hover,
+body.flyerChatLayout #editorMenuToggle:focus-visible {background:#e2eaf6;outline:2px solid #6c96d8;}
+body.flyerChatLayout #studioNav,
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav {display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:3px;}
+body.flyerChatLayout #studioNav>[data-nav],
+body.flyerChatLayout #studioNav #sidebarActions button {
+  border:0!important; border-radius:9px; box-shadow:none;
+  background:transparent; color:#243d65; min-height:44px;
+  display:flex; align-items:center; gap:11px; padding:10px!important;
+  font:600 12px/1.25 'Segoe UI',sans-serif; white-space:normal;
+  overflow:hidden; text-align:left; margin:0;
+}
+body.flyerChatLayout #studioNav>[data-nav]::before,
+body.flyerChatLayout #studioNav #sidebarActions button::before {
+  content:"◫"; font:normal 21px/1 'Segoe UI Symbol','Segoe UI',sans-serif;
+  width:23px;min-width:23px;text-align:center;
+}
+body.flyerChatLayout #studioNav [data-nav="campaign"]::before {content:"✎";}
+body.flyerChatLayout #studioNav [data-nav="cards"]::before {content:"▦";}
+body.flyerChatLayout #studioNav [data-nav="bulk"]::before {content:"⇧";}
+body.flyerChatLayout #studioNav [data-nav="review"]::before {content:"✓";}
+body.flyerChatLayout #studioNav [data-nav="backup"]::before {content:"▣";}
+body.flyerChatLayout #studioNav #sidebarActions button::before {content:"⚙";}
+body.flyerChatLayout #studioNav #sidebarActions {
+  display:block!important; width:100%; padding:8px 0 0;
+  margin:8px 0 0; border-top:1px solid #d9e3ef; background:none;
+}
+body.flyerChatLayout #studioNav>[data-nav]:hover,
+body.flyerChatLayout #studioNav #sidebarActions button:hover {background:#e5edf8;}
+body.flyerChatLayout #studioNav>[data-nav].active {color:#0c428e;background:#dceafd;box-shadow:inset 3px 0 #2779db!important;}
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav>[data-nav],
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav #sidebarActions button {
+  justify-content:flex-start; width:45px; min-height:45px;
+  padding:10px!important; font-size:0!important; white-space:nowrap;gap:0;
+}
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav>[data-nav]::before,
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav #sidebarActions button::before {font-size:22px;}
+body.flyerChatLayout #sidebarContent {flex:1 1 auto;min-width:0;padding:0 10px 28px;overflow-y:auto;scrollbar-gutter:stable;}
+body.flyerChatLayout #studioChatHeader {
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin:0 -10px 10px; padding:15px 10px 11px; border-bottom:1px solid #e4eaf3;
+  background:#fff; position:sticky; top:0; z-index:3;
+}
+body.flyerChatLayout #studioChatTitle {font-size:15px;font-weight:750;color:#18345e;line-height:1.25;}
+body.flyerChatLayout #studioChatMobileClose {display:none;}
+body.flyerChatLayout #studioSubnav {display:block;margin:0 0 12px;padding:0 0 12px;border-bottom:1px solid #e5eaf3;}
+body.flyerChatLayout #studioSubnav:not([hidden])>.navChildren:not([hidden]) {
+  display:flex;flex-direction:column;gap:2px;width:100%;padding:0;margin:0;
+}
+body.flyerChatLayout #studioSubnav .navChildren button {
+  width:100%;min-height:40px;display:block;text-align:left;font-size:12px;
+  font-weight:500;background:transparent!important;border:0!important;border-radius:8px;
+  color:#314d73;padding:10px 13px!important;box-shadow:none;
+}
+body.flyerChatLayout #studioSubnav .navChildren button:hover {background:#edf3fc!important;}
+body.flyerChatLayout #studioSubnav .navChildren button.active {
+  color:#16478d;background:#e5efff!important;box-shadow:inset 3px 0 #327edc;
+  font-weight:700;
+}
+body.flyerChatLayout #sidebarContent .panelIntro {line-height:1.5;}
+body.flyerChatLayout #sidebarContent [data-panel] {min-width:0;}
+body.flyerChatLayout #sidebarContent input,
+body.flyerChatLayout #sidebarContent select,
+body.flyerChatLayout #sidebarContent textarea,
+body.flyerChatLayout #sidebarContent button {max-width:100%;box-sizing:border-box;}
+body.flyerChatLayout #sidebarContent button {white-space:normal;overflow-wrap:anywhere;}
+body.flyerChatLayout #sidebarContent .fields {grid-template-columns:minmax(0,1fr);}
+@media(max-width:980px) and (min-width:701px) {
+ body.flyerChatLayout main {grid-template-columns:288px minmax(0,1fr);}
+ body.flyerChatLayout.chatRailWide main {grid-template-columns:385px minmax(0,1fr);}
+}
+@media(max-width:700px) {
+ body.flyerChatLayout main,body.flyerChatLayout.chatRailWide main {display:flex;flex-direction:column;overflow:visible;height:auto;}
+ body.flyerChatLayout main>aside {
+   width:100%;height:min(55dvh,440px);min-height:250px;flex:none;
+   display:flex;flex-direction:column;overflow:hidden;
+   border-right:0;border-bottom:1px solid #d8e2f1;
+ }
+ body.flyerChatLayout #sidebarFixed,
+ body.flyerChatLayout #sidebarFixed.menuCollapsed {
+   width:100%!important;flex:0 0 60px;height:60px;min-height:60px;
+   padding:5px 9px;display:flex;flex-direction:row;align-items:center;gap:5px;
+   overflow:visible;border-right:0;border-bottom:1px solid #dfe6f0;
+ }
+ body.flyerChatLayout #sidebarFixed .editorMenuHeading {flex:none;}
+ body.flyerChatLayout #sidebarFixed .editorMenuHeading h1{display:none;}
+ body.flyerChatLayout #editorMenuToggle {width:41px;height:44px;min-height:44px;}
+ body.flyerChatLayout #studioNav,
+ body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav {
+   display:flex!important;flex-direction:row;flex:1;min-width:0;
+   gap:3px;overflow-x:auto;scrollbar-width:thin;
+ }
+ body.flyerChatLayout #studioNav>[data-nav],
+ body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav>[data-nav],
+ body.flyerChatLayout #studioNav #sidebarActions button,
+ body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav #sidebarActions button {
+   flex:0 0 44px;width:44px;min-width:44px;min-height:44px;
+   padding:9px!important;font-size:0!important;
+ }
+ body.flyerChatLayout #studioNav #sidebarActions {border:0;margin:0;padding:0;flex:none;width:44px;}
+ body.flyerChatLayout #studioNav #sidebarActions button{width:44px;}
+ body.flyerChatLayout #sidebarContent {flex:1 1 auto;min-height:0;padding:0 10px 18px;}
+ body.flyerChatLayout #studioChatMobileClose {
+   display:inline-flex;align-items:center;justify-content:center;
+   height:32px;width:32px;padding:0;border:0;border-radius:7px;background:#f0f4fa;
+   color:#1b4784;font-size:19px;
+ }
+ body.flyerChatLayout main>aside.chatMobileClosed {height:60px;min-height:60px;}
+ body.flyerChatLayout main>aside.chatMobileClosed #sidebarContent {display:none!important;}
+ body.flyerChatLayout .stage {height:auto;overflow:visible;}
+}
