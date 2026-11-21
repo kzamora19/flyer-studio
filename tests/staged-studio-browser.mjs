@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright';
+import {createProofMock} from './staged-proof-mock.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../staging/studio-access');
 const pageHTML=readFileSync(resolve(root,'index.html'),'utf8');
 const marker='publishableKey:"sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK"';
@@ -28,6 +29,7 @@ try{
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
  const ctx=await browser.newContext({viewport:{width:1200,height:800}});
  const requests=[],errors=[];
+ const proof=createProofMock();
  await ctx.route('**/*',async route=>{
   const url=new URL(route.request().url());
   if(url.origin===origin){await route.continue();return;}
@@ -35,10 +37,11 @@ try{
    const body=route.request().postDataJSON();
    requests.push(body);
    const headers={'access-control-allow-origin':origin,'access-control-allow-headers':'*'};
-   if(body.action==='load')return route.fulfill({status:200,contentType:'application/json',headers,
-    body:JSON.stringify({ok:true,html:'<!-- PRIVATE EDITOR BUNDLE. -->\n<!doctype html><button id="editor-ready">Mock protected editor</button>',sha256:'a'.repeat(64),expiresAt:new Date(Date.now()+60_000).toISOString()})});
-   if(body.action==='check')return route.fulfill({status:403,contentType:'application/json',headers,
-    body:JSON.stringify({ok:false,error:'Revoked'})});
+   const result=await proof.handle(body,{denyOnCheck:true,expireMs:60_000});
+   return route.fulfill({status:result.ok?200:403,contentType:'application/json',headers,
+    body:JSON.stringify(body.action==='load'?{...result,
+      html:'<!-- PRIVATE EDITOR BUNDLE. -->\\n<!doctype html><button id="editor-ready">Mock protected editor</button>',
+      sha256:'a'.repeat(64)}:result)});
   }
   return route.abort();
  });
@@ -52,7 +55,9 @@ try{
  assert.ok((await page.locator('#status').textContent()).includes('been revoked'));
  assert.ok(requests.some(x=>x.action==='load'));
  assert.ok(requests.some(x=>x.action==='check'));
- assert.ok(requests.every(x=>x.ticket==='T'.repeat(43)));
+ assert.ok(requests.filter(x=>x.action==='load').every(x=>x.ticket==='T'.repeat(43)));
+ assert.ok(requests.filter(x=>x.action==='check').every(x=>!('ticket' in x)));
+ assert.ok(requests.filter(x=>x.action==='check').every(x=>typeof x.signature==='string'));
  const noTicket=await ctx.newPage();
  await noTicket.goto(origin,{waitUntil:'domcontentloaded'});
  await noTicket.getByText('A valid PTG authorization is required.').waitFor({timeout:8000});
