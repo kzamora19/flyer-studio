@@ -65,13 +65,18 @@ jobs:
           node --check scripts/build-private-flyer.mjs
           node --check staging/editor-storage-bridge.js
           node --check staging/studio-access/draft-vault.js
-          node --check site/product-photo-match.js\n          node --check site/product-photo-library.js\n          node --test tests/smart-product-photo-library.test.mjs\n          node --test tests/private-editor-build.test.mjs
+          node --check site/product-photo-match.js
+          node --check site/product-photo-library.js
+          node --test tests/smart-product-photo-library.test.mjs
+          node --test tests/private-editor-build.test.mjs
           node --test tests/private-delivery-policy.test.mjs
           node --test tests/staged-studio-launch.test.mjs
       - uses: denoland/setup-deno@v2
         with: {deno-version: v2.x}
       - name: Typecheck staged server-only delivery function
-        run: |\n          deno check supabase/functions/flyer-editor-delivery/index.ts\n          deno check supabase/functions/flyer-product-photos/index.ts
+        run: |
+          deno check supabase/functions/flyer-editor-delivery/index.ts
+          deno check supabase/functions/flyer-product-photos/index.ts
       - name: Enforce public-artefact non-disclosure
         run: |
           if test -e site/private/studio.html || test -e site/private-editor.html; then
