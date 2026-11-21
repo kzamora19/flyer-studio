@@ -67,6 +67,7 @@ try{
  // Regression: changing section layout must not put the selection toolbar inside the tab strip.
  await page.locator('#arrangeSections').click();
  await page.locator('#selectedSectionControls:visible').waitFor();
+ await page.evaluate(()=>document.querySelector('.stage').scrollTop=0);
  assert.equal(await page.locator('.flyer-tab-shell #selectedSectionControls').count(),0,
    'Section actions must not become a child of the horizontal tab bar');
  assert.equal(await page.locator('.stage > #selectedSectionControls').count(),1,
