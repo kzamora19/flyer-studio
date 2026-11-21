@@ -30,7 +30,7 @@ test("cutover preview publishes only identity assets and one PTG access page",()
   assert.doesNotMatch(html,/<script|<iframe|sharedAssetLauncher|function render\(|printPdf|id="png"|supabase.*\.co|service_role/i);
   assert.doesNotMatch(readdirSync(target).join(" "),/toolbar-tabs|floating-panels|shared-asset|editor/);
   assert.deepEqual(readdirSync(join(target,"studio")).sort(),
-   ["draft-vault.js","index.html","launch.js"]);
+   ["draft-vault.js","drive-backup.js","index.html","launch.js"]);
   const secure=readFileSync(join(target,"studio","index.html"),"utf8");
   assert.match(secure,/flyer-editor-delivery/);
   assert.match(secure,/protected Branchline access/);
