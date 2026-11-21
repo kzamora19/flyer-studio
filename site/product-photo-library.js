@@ -10,6 +10,11 @@ const TYPES=new Set(['image/png','image/jpeg','image/webp']);
 let active=null,records=[],match='none',canManage=false,session='',stamp='',busy=false,allVisible=false;
 let requestVersion=0;
 function currentSession(){
+ // A protected opaque-origin Studio gets NO PTG bearer or app-session ID.
+ // Its parent holds a P-256 signed continuation, which is checked against
+ // active PTG role/session state for every image operation.
+ if(window.__MEGAFLYER_PRIVATE_DB__&&typeof window.__MEGAFLYER_PHOTO_RPC__==='function')
+  return {id:'ptg-proof-session',token:'signed-studio-proof'};
  const p=typeof ptgSession!=='undefined'?ptgSession:null;
  return p?.token&&p?.id?{token:p.token,id:String(p.id)}:null;
 }
