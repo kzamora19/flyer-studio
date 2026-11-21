@@ -63,7 +63,7 @@ test('private package is the ONLY editor bundle with smart photo UI',()=>{
 test('backend refuses unverified reads, keeps images private and audits modifications',()=>{
  const server=file('supabase/functions/flyer-product-photos/index.ts');
  const migration=file('supabase/migrations/202611210001_smart_product_photos.sql');
- assert.match(server,/await identity\(req\)/);
+ assert.match(server,/await identity\(req,body\)/);
  assert.match(server,/action==="image"/);
  assert.match(server,/PTG_ORIGIN\+"\/auth\/v1\/user"/);
  assert.match(server,/action==="remove"/);
