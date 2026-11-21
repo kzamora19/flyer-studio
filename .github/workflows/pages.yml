@@ -14,7 +14,7 @@ jobs:
   deploy:
     # Main-branch pushes must NOT republish the public editor after integration.
     # Only explicitly authorized coordinated cutover may publish the safe stub.
-    if: vars.MEGAFLYER_CUTOVER_APPROVED == 'true'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && vars.MEGAFLYER_CUTOVER_APPROVED == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
