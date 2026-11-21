@@ -56,6 +56,16 @@ try{
    if(body.action==='check')return status(route,result);
    throw Error('Unexpected protected delivery action: '+body.action);
   }
+  if(path==='/functions/v1/flyer-product-photos'){
+   const body=req.postDataJSON();
+   assert.equal(req.headers().authorization,undefined,
+    'Cloud project test must never expose PTG bearer to protected photo endpoint');
+   assert.ok(body.studioProof?.signature,'Protected photo request must carry a P-256 proof');
+   const next=await proof.handle({action:'check',...body.studioProof});
+   const result=body.action==='permissions'?{canView:true,canUpload:true,canManage:false}:
+    {photos:[],match:'none'};
+   return status(route,{result,studioProof:next});
+  }
   if(path==='/auth/v1/user')return status(route,user);
   if(path==='/auth/v1/token')return status(route,{
     access_token:'offline-test-access-token',refresh_token:'offline-test-refresh-token',
