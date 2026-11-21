@@ -75,7 +75,11 @@ Deno.serve(async req=>{
   if(!auth)return json(origin,{ok:false,error:"PTG Studio authorization required."},403);
   if(body.action==="load"&&(!studioTicketOk(auth.draftScope)||!studioTicketOk(auth.draftKey)))
     return json(origin,{ok:false,error:"Account-scoped draft recovery unavailable."},503);
-  if(body.action==="check")return json(origin,auth);
+  // Strip service-only PTG actor details: the public launch response needs only the
+  // signed session's rotating challenge, never a role decision trusted by JS.
+  if(body.action==="check")return json(origin,{
+    ok:true,sessionId:auth.sessionId,challenge:auth.challenge,expiresAt:auth.expiresAt
+  });
   const admin=createClient(FLYER_URL,FLYER_SERVICE,{auth:{persistSession:false,autoRefreshToken:false}});
   const {data,error}=await admin.storage.from(BUNDLE_BUCKET).download(BUNDLE_PATH);
   if(error||!data)throw Error("Private release object unavailable");
@@ -85,7 +89,9 @@ Deno.serve(async req=>{
   const hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(html))),
     b=>b.toString(16).padStart(2,"0")).join("");
   if(hash!==BUNDLE_SHA)throw Error("Private editor bundle hash mismatch");
-  return json(origin,{...auth,html,sha256:hash});
+  return json(origin,{ok:true,sessionId:auth.sessionId,
+    challenge:auth.challenge,expiresAt:auth.expiresAt,
+    draftScope:auth.draftScope,draftKey:auth.draftKey,html,sha256:hash});
  }catch(error){
   console.error("Private Studio delivery blocked:",error instanceof Error?error.name:"unknown");
   return json(origin,{ok:false,error:"Private editor delivery unavailable."},503);
