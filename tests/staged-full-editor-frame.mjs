@@ -52,7 +52,7 @@ try{
   if(url.hostname==='tzklsscoiwnmeantcefw.supabase.co'&&url.pathname==='/functions/v1/flyer-product-photos'){
    const payload=route.request().postDataJSON();photoCalls.push(payload.action);
    assert.equal(route.request().headers().authorization,undefined,
-    'Opaque editor photo requests cannot carry the user's PTG bearer');
+    "Opaque editor photo requests cannot carry a user PTG bearer");
    assert.equal(route.request().headers()['x-ptg-session-id'],undefined,
     'Opaque editor photo requests cannot carry the PTG app-session ID');
    assert.equal(payload.studioProof?.sessionId?.length,36);
