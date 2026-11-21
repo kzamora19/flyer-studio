@@ -2,6 +2,7 @@
 (()=>{'use strict';
 const cfg=window.STUDIO_ACCESS_CONFIG||{};
 const status=document.getElementById('status'),mount=document.getElementById('mount');
+const cloudPanel=document.getElementById('cloudPanel'),cloudNote=document.getElementById('cloudMessage');
 const portal='https://kzamora19.github.io/first-megasaver-ptg/studios/';
 let timer=null,expiryTimer=null,active=false,checking=false,expiresAt=0,absoluteCutoff=0,expiryWarned=false;
 let privateKey=null,sessionId='',challenge='',draftPort=null;
@@ -25,7 +26,7 @@ function lock(message){
  timer=null;expiryTimer=null;
  // The editor is origin-isolated: never reach into its DOM or storage.
  // Local backup must be completed before expiry, or via a future scoped bridge.
- mount.replaceChildren();note(message,true);
+ mount.replaceChildren();if(cloudPanel)cloudPanel.hidden=true;note(message,true);
 }
 function validSession(data){
  return data?.ok===true && typeof data.sessionId==='string' &&
@@ -94,6 +95,60 @@ document.addEventListener('visibilitychange',()=>{
  if(Date.now()>=expiresAt)lock('PTG access expired. Open the Studio again from PTG.');
  else void check();
 });
+// Manual PTG-account AES-GCM cloud backup. Never automatically synchronize
+// customer photos; the protected parent signs every cloud call in memory.
+async function cloudOperation(operation,fields={}){
+ return withProof(async()=>{
+  if(!active||Date.now()>=expiresAt)throw Error('PTG Studio session expired.');
+  try{
+   const signed=await signedRequest();
+   const data=await gateway({...signed,action:'cloud',operation,...fields});
+   recordAuth(data);
+   if(!data.cloud||typeof data.cloud.status!=='string')
+    throw Error('PTG encrypted cloud service unavailable.');
+   return data.cloud;
+  }catch(error){
+   lock('PTG cloud session could not be verified. Reopen the Studio from PTG.');
+   throw error;
+  }
+ });
+}
+function setupCloud(vault){
+ if(!cloudPanel||!cloudNote)return;
+ let busy=false;
+ const tell=message=>{cloudNote.textContent=message;};
+ const wrap=fn=>async()=>{
+  if(busy||!active)return;
+  busy=true;
+  for(const button of cloudPanel.querySelectorAll('button'))button.disabled=true;
+  try{await fn();}catch(error){tell(error?.message||'Encrypted cloud project unavailable.');}
+  finally{busy=false;for(const button of cloudPanel.querySelectorAll('button'))button.disabled=false;}
+ };
+ document.getElementById('cloudBackup').onclick=wrap(async()=>{
+  const record=await vault.cloudExport('p:current');
+  if(!record)throw Error('Save the current project locally before backing up to cloud.');
+  const list=await cloudOperation('list');
+  if(list.status!=='ok')throw Error('Encrypted cloud archive unavailable.');
+  const found=(list.items||[]).find(x=>x.record_key==='p:current');
+  if(found&&!window.confirm('Replace the existing encrypted cloud backup of this project?'))return;
+  const response=await cloudOperation('write',{
+   recordKey:'p:current',...record,expectedVersion:found?.version||0
+  });
+  if(response.status==='conflict')throw Error('A different device updated this project. Retrieve or retry after reviewing the cloud version.');
+  if(response.status!=='ok')throw Error('Cloud archive could not save this project. Keep your local backup.');
+  tell('Encrypted cloud project saved. No automatic customer-photo uploads.');
+ });
+ document.getElementById('cloudRestore').onclick=wrap(async()=>{
+  const local=await vault.read('p:current');
+  if(local&&!window.confirm('Replace the current local project with your encrypted cloud version?'))return;
+  const response=await cloudOperation('read',{recordKey:'p:current'});
+  if(response.status!=='ok'||!response.record)throw Error('No cloud project is available to retrieve.');
+  await vault.cloudImport('p:current',response.record);
+  tell('Encrypted project retrieved to this device. Reopen MegaFlyer through PTG to load the restored project.');
+ });
+ cloudPanel.hidden=false;
+ tell('Cloud backup is optional and encrypted. Save locally first. Large image projects may require local export.');
+}
 async function open(){
  try{
   // An in-memory non-extractable private key avoids a reusable browser bearer.
@@ -187,6 +242,7 @@ async function open(){
     frame.contentWindow.postMessage({kind:'megaflyer-private-storage-port'},'*',[channel.port2]);
   },{once:true});
   frame.srcdoc=data.html;mount.replaceChildren(frame);active=true;status.hidden=true;
+  setupCloud(vault);
   const interval=Number.isInteger(cfg.checkIntervalMs)&&cfg.checkIntervalMs>=100?cfg.checkIntervalMs:30000;
   timer=setInterval(()=>{void check();},interval);warnIfExpiring();
  }catch{ticket='';lock('Could not verify PTG access to MegaFlyer Studio.');}
