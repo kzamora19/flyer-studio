@@ -127,6 +127,16 @@ for(const name of ['floating-panels.js','shared-asset-ui.js','toolbar-tabs.js'])
  // Escape a literal closing script sequence if a future JS module contains one.
  replaceOne(target,'<script>'+code.replace(/<\/script/gi,'<\\/script')+'</script>',name);
 }
+// The Smart Product Photo Library is private-bundle-only. Do NOT add either
+// script to site/index.html, the public Pages artifact, or generic asset uploads.
+const matchScript=readFileSync(join(site,'product-photo-match.js'),'utf8');
+const photoLibraryScript=readFileSync(join(site,'product-photo-library.js'),'utf8');
+if(!html.includes('</body>'))throw Error('Protected MegaFlyer body closing tag missing');
+html=html.replace('</body>',
+ '<script>window.FLYER_PRODUCT_PHOTO_CONFIG={publishableKey:window.FLYER_SHARED_ASSET_CONFIG?.publishableKey||""};</script>'+
+ '<script>'+matchScript.replace(/<\\/script/gi,'<\\\\/script')+'</script>'+
+ '<script>'+photoLibraryScript.replace(/<\\/script/gi,'<\\\\/script')+'</script></body>');
+originals.push('private Smart Product Photo Library client');
 if(/<(script|link|img)[^>]+(?:src|href)="(?:\.\/|assets\/)/i.test(html))
  throw Error('Protected HTML still references a local public script/image/stylesheet.');
 if(!html.includes('MegaFlyer Studio')||!html.includes('sharedAssetLauncher'))
