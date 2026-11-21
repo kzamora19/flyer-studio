@@ -36,7 +36,7 @@ function configReady(){
 }
 // Service-only PTG call. A launch ticket is exchanged ONCE; subsequent
 // checks must contain a fresh ECDSA signature bound to a single-use challenge.
-async function ptg(action:"exchange"|"prove"|"cloud",body:Record<string,unknown>){
+async function ptg(action:"exchange"|"prove"|"cloud"|"drive",body:Record<string,unknown>){
  const check=await fetch(PTG_VERIFY_URL,{method:"POST",cache:"no-store",redirect:"error",headers:{
    "Content-Type":"application/json","x-ptg-studio-secret":VERIFY_SECRET,
  },body:JSON.stringify({action,studio:"flyer",...body}),signal:AbortSignal.timeout(8000)});
@@ -60,9 +60,27 @@ Deno.serve(async req=>{
   const raw=await req.text();
   if(raw.length>1_700_000)return json(origin,{ok:false,error:"Request too large."},413);
   const body=JSON.parse(raw);
-  if(!body||typeof body!=="object"||Array.isArray(body)||!["load","check","cloud"].includes(body.action)||
-     (body.action!=="cloud"&&raw.length>3072))
+  if(!body||typeof body!=="object"||Array.isArray(body)||!["load","check","cloud","drive"].includes(body.action)||
+     (!["cloud","drive"].includes(body.action)&&raw.length>3072))
    return json(origin,{ok:false,error:"Invalid request."},400);
+  if(body.action==="drive"){
+    // This is the central OWNER Google Drive account. Never return an OAuth
+    // token to staff or let the browser select a different Google account.
+    if(typeof body.sessionId!=="string"||!/^[0-9a-f-]{36}$/i.test(body.sessionId)||
+       !studioTicketOk(body.challenge)||typeof body.signature!=="string"||
+       !/^[A-Za-z0-9_-]{80,96}$/.test(body.signature)||
+       !["list","read","write"].includes(body.operation))
+      return json(origin,{ok:false,error:"Invalid signed Drive operation."},400);
+    const verified=await ptg("drive",{
+      sessionId:body.sessionId,challenge:body.challenge,signature:body.signature,
+      operation:body.operation,recordKey:body.recordKey,fileId:body.fileId,
+      iv:body.iv,encrypted:body.encrypted
+    });
+    if(!verified||!verified.drive)
+      return json(origin,{ok:false,error:"PTG owner Drive authorization required."},403);
+    return json(origin,{ok:true,sessionId:verified.sessionId,
+      challenge:verified.challenge,expiresAt:verified.expiresAt,drive:verified.drive});
+  }
   if(body.action==="cloud"){
     // Separate PTG account scope, never Studio Auth uid or browser-provided actor.
     // Prove the SAME one-use P-256 challenge as regular session refresh.
