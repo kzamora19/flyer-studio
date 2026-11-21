@@ -35,7 +35,7 @@ try{
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
  const context=await browser.newContext({viewport:{width:1440,height:900}});
  const errors=[],calls=[],photoCalls=[];
- const miniPng='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l6cAAAAASUVORK5CYII=';
+ const miniPng='iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGPcIqfMAANMDEgANwcAMW8A/bn8wfEAAAAASUVORK5CYII=';
  let savedProductPhoto=null;
  const proof=createProofMock();
  await context.route('**/*',async route=>{
@@ -177,11 +177,15 @@ try{
  await frame.locator('body').evaluate(()=>{
   ptgSession={id:'77777777-1111-4111-8111-777777777777',
    token:'synthetic-photo-test-bearer-never-production-abcdefghijklmnopqrstuvwxyz'};
-  state.offers[0].sku='0000012345';
-  state.offers[0].brand='LG';
-  state.offers[0].model='T123';
-  state.offers[0].name='LG T123 TV';
+  // Always edit the ACTUAL targeted product card, not the first state row.
+  // Some editor templates keep the selected slot away from index zero.
   slotTarget.section='front';slotTarget.slot='1';
+  const product=targetedOffer();
+  if(!product)throw Error('No selected product offer');
+  product.sku='0000012345';
+  product.brand='LG';
+  product.model='T123';
+  product.name='LG T123 TV';
   window.dispatchEvent(new Event('megaflyer:ptg-session-changed'));
  });
  await frame.locator('#smartPhotoOpen').click();
