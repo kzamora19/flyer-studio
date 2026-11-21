@@ -59,6 +59,9 @@ try{
  await frame.locator('#smartPhotoOpen').click();
  await frame.locator('#smartPhotoPanel').waitFor({state:'visible'});
  assert.equal(await frame.locator('#smartPhotoShare').isChecked(),true);
+ assert.equal(await frame.locator('#smartPhotoNativeShare').count(),1,'Native card photo import requires a clear shared-library opt-out');
+ assert.equal(await frame.locator('#smartPhotoNativeShare').isChecked(),true);
+ assert.equal(await frame.locator('#smartPhotoNativeShareLabel').count(),1);
  assert.ok(await frame.locator('#smartPhotoCount').count()===1);
  const photoHooks=await frame.locator('body').evaluate(()=>({
   attach:typeof attachUploadedPhoto,
