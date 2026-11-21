@@ -44,3 +44,25 @@ GitHub Actions [run 44860294219](https://github.com/kzamora19/flyer-studio/actio
 - **Not yet covered:** actual PNG/PDF downloads from the protected iframe, cloud OAuth callback and project save/restore inside it, image catalog endpoints, renewal beyond the PTG ten-minute ticket lifetime, direct-URL/PWA-cache cutover, and real account revocation. Do not interpret basic editor mounting as completion of these workflows.
 
 The current public GitHub Pages editor is unchanged; these changes remain in a draft, non-deployed pull request.
+
+
+## November 21, 2026 — Step 1/2 protected-flow acceptance progress
+
+**Automated results (mock services only):**
+
+- The latest approved MegaFlyer Save Project, Retrieve Project, backup/export controls and sticky-tab version were merged into this **development** branch without altering `main`.
+- The complete editor inside the protected iframe successfully performs named cloud project Save, Save Changes, Save As New, search, retrieval, image round-trip and revision conflict protection using mocked Supabase services. It also generates actual full-resolution A4 PNG and two-page PDF downloads inside the authorized frame. See `tests/staged-protected-project-workflow.mjs` and `tests/staged-full-editor-frame.mjs`.
+- The private bundle now explicitly chooses the Supabase flyer-catalog route and permits the separate PTG connection workflow instead of relying on the `about:srcdoc` location to identify GitHub Pages. CI covers these routes.
+- The launcher now has a hard local cutoff for the PTG ticket's server-provided expiry, a two-minute warning, revalidation after returning to a suspended browser tab, and a best-effort local draft save before locking. It **does not** silently auto-renew the 10-minute bearer ticket.
+- The Chromium expiry-recovery test uses actual editor IndexedDB storage, simulates a ticket expiring, and verifies that a previously saved unfinished campaign can be loaded with a **fresh PTG authorization**. Passing fixture results are in GitHub Actions for the staged branch, not live account acceptance.
+- The user-facing release therefore still requires **manual PTG re-entry** before each new short-lived ticket. Automatic renewal with a reusable bearer token would increase replay risk; implement a properly bound renewable session only after explicit architecture/security review.
+
+**Mandatory non-mock acceptance before coordinated cutover:**
+
+1. Real active Team Leader, Branch Admin, System Admin, ordinary Branch User and revoked/disabled/forced-logout PTG accounts, including direct-URL attempts and idle timeout.
+2. Google Drive OAuth sign-in, actual backup export/restore, photo catalog import and remote cloud save across distinct devices, tested against disposable fixtures. The signed-in cloud-project mocks **are not** proof of real Google OAuth callback handling in `srcdoc`.
+3. Confirm safe behavior of OAuth redirect and email confirmation URLs from the framed editor. `location.href='about:srcdoc'` means top-level redirect behavior needs explicit adaptation and real browser tests; do not enable this release without them.
+4. Physical 300-ppi flyer print check, installed PWA behavior, public-editor redirect-only cutover and stale service-worker/cached-copy disclosures.
+5. Server-side PTG↔Studio token exchange, HTTPS origin isolation (all `kzamora19.github.io` project paths currently share a browser origin), and secure ticket replay/renewal policy. No private bucket or Edge Function should be created or deployed until these are approved.
+
+**Release boundary:** the private editor and gateway are still staged in draft PR #10. The existing GitHub Pages application, PTG production data and Supabase projects were not modified by these tests.
