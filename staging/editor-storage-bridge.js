@@ -19,7 +19,8 @@
    if(!item)return;
    pending.delete(data.id);clearTimeout(item.timer);
    if(data.ok===true)item.resolve(data.value??null);
-   else item.reject(Error("Encrypted project storage is unavailable."));
+   else item.reject(Error(item.kind==="photo"&&typeof data.error==="string"?
+     data.error:"Encrypted project storage is unavailable."));
   };
   port.start();
   readyResolve();
@@ -37,6 +38,27 @@
    pending.set(id,{resolve,reject,timer});
    try {port.postMessage({id,action,key,record:action==="write"?record:undefined});}
    catch{clearTimeout(timer);pending.delete(id);reject(Error("Cannot send protected draft record."));}
+  });
+ }
+ // This private-frame bridge forwards only the named photo operations to the
+ // trusted PTG launcher. It never persists credentials or exposes arbitrary URLs.
+ async function photo(action,fields={},account){
+  if(!["permissions","resolve","search","image","upload","replace","setPrimary","remove"].includes(action)||
+     !account||typeof account.token!=="string"||account.token.length<24||
+     typeof account.id!=="string"||!/^[-a-f0-9]{36}$/i.test(account.id))
+    throw Error("PTG photo operation not authorized.");
+  const payload=JSON.stringify({action,...fields});
+  if(payload.length>3_500_000)throw Error("Product photo request is too large.");
+  await Promise.race([ready,new Promise((_,reject)=>setTimeout(()=>
+   reject(Error("Protected photo bridge did not connect.")),10000))]);
+  return new Promise((resolve,reject)=>{
+   const id=++nextId,timer=setTimeout(()=>{pending.delete(id);
+    reject(Error("Protected photo service timed out."));},45000);
+   pending.set(id,{resolve,reject,timer,kind:"photo"});
+   try{port.postMessage({id,action:"product-photo",token:account.token,
+     appSession:account.id,payload});}
+   catch{clearTimeout(timer);pending.delete(id);
+    reject(Error("Could not request private product photo."));}
   });
  }
  function database(){
@@ -74,4 +96,5 @@
   }});
  }
  window.__MEGAFLYER_PRIVATE_DB__=Object.freeze({request,database});
+ window.__MEGAFLYER_PHOTO_RPC__=photo;
 })();
