@@ -10,6 +10,10 @@ test('staged Studio launcher strips ticket before making requests',()=>{
  assert.match(source,/referrerPolicy:'no-referrer'/);
  assert.match(source,/gateway\('load'\)/);
  assert.match(source,/gateway\('check'\)/);
+ assert.match(source,/recordExpiry\(data\.expiresAt\)/);
+ assert.match(source,/setTimeout\(\(\)=>lock\(/);
+ assert.match(source,/visibilitychange/);
+ assert.match(source,/Math\.min\(expiresAt,when\)/);
  assert.match(source,/mount\.replaceChildren\(\)/);
  assert.doesNotMatch(source,/localStorage|sessionStorage/);
  assert.match(html,/Protected launch prototype/);
