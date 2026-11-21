@@ -26,7 +26,8 @@ function lock(message){
  timer=null;expiryTimer=null;
  // The editor is origin-isolated: never reach into its DOM or storage.
  // Local backup must be completed before expiry, or via a future scoped bridge.
- mount.replaceChildren();if(cloudPanel)cloudPanel.hidden=true;note(message,true);
+ mount.replaceChildren();if(cloudPanel)cloudPanel.hidden=true;
+ window.BRANCHLINE_GOOGLE_DRIVE_BACKUP?.lock();note(message,true);
 }
 function validSession(data){
  return data?.ok===true && typeof data.sessionId==='string' &&
@@ -243,6 +244,24 @@ async function open(){
   },{once:true});
   frame.srcdoc=data.html;mount.replaceChildren(frame);active=true;status.hidden=true;
   setupCloud(vault);
+  if(window.BRANCHLINE_GOOGLE_DRIVE_BACKUP){
+   void window.BRANCHLINE_GOOGLE_DRIVE_BACKUP.setup({
+    studio:"flyer",scope:data.draftScope,
+    clientId:cfg.googleDriveClientId||"",vault,
+    verify:async()=>{
+     if(!active||Date.now()>=expiresAt)throw Error("PTG Studio session expired.");
+     try{
+      await withProof(async()=>{
+       const signed=await signedRequest();
+       const result=await gateway(signed);
+       if(!active)throw Error("Studio session ended.");
+       recordAuth(result);
+      });
+     }catch(error){lock("PTG access could not be verified for Google Drive.");throw error;}
+    }
+   }).catch(()=>{const n=document.getElementById("driveMessage");
+    if(n)n.textContent="Google Drive backup could not initialize.";});
+  }
   const interval=Number.isInteger(cfg.checkIntervalMs)&&cfg.checkIntervalMs>=100?cfg.checkIntervalMs:30000;
   timer=setInterval(()=>{void check();},interval);warnIfExpiring();
  }catch{ticket='';lock('Could not verify PTG access to MegaFlyer Studio.');}
