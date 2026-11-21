@@ -1,11 +1,11 @@
-// DEVELOPMENT / HOLD. Smart Product Photo Library (private, shared PTG TL+).
-// Never deploy until combined four-app security and hosted-account acceptance.
+// Private Smart Product Photo Library (shared PTG TL+).
+// Standalone use requires live PTG authentication; private-editor cutover remains separately gated.
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
 
 const URL_FLYER=Deno.env.get("SUPABASE_URL")||"";
 const SERVICE=Deno.env.get("SUPABASE_SECRET_KEY")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
-const PTG_PUBLIC=Deno.env.get("FLYER_PTG_PUBLISHABLE_KEY")||"";
-const ALLOWED_ORIGIN=Deno.env.get("FLYER_PRODUCT_PHOTO_ALLOWED_ORIGIN")||"";
+const PTG_PUBLIC=Deno.env.get("FLYER_PTG_PUBLISHABLE_KEY")||"sb_publishable_kv2q3dnNQt4ij0mgkOLbQQ_S2MO9FvG";
+const ALLOWED_ORIGIN=Deno.env.get("FLYER_PRODUCT_PHOTO_ALLOWED_ORIGIN")||"https://kzamora19.github.io";
 const PTG_REF="agknxlowackphvwyvxge";
 const PTG_ORIGIN="https://"+PTG_REF+".supabase.co";
 const PHOTO_BUCKET="flyer-product-photos";
