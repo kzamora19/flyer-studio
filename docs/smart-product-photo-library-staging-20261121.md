@@ -25,6 +25,13 @@ Part of the Branchline / PTG / MegaFrame / MegaFlyer coordinated four-app releas
 - The hosted function requires `FLYER_PRODUCT_PHOTO_ALLOWED_ORIGIN=https://kzamora19.github.io` and a secure server-side `FLYER_PTG_PUBLISHABLE_KEY`. It uses the existing Flyer project's server secret and PTG's current Auth+session gateway. Do not put service or gateway keys in public Pages code.
 - `verify_jwt=false` is intentional for this cross-project Edge function: a token from PTG is not a Flyer Auth JWT, so the function verifies that bearer *against PTG Auth and session state* every time. Function must fail closed when env is missing.
 
+
+## Opaque-frame photo gateway (staged security design)
+
+The protected MegaFlyer editor deliberately uses an **opaque-origin** sandbox. It cannot call the Supabase photo Edge endpoint directly using a GitHub Pages origin, and the backend **does not accept `Origin: null`**. A new narrow `window.__MEGAFLYER_PHOTO_RPC__` interface in `staging/editor-storage-bridge.js` relays only allowlisted photo operations over its existing in-memory MessagePort to the protected `staging/studio-access/launch.js` parent. The parent sends requests exclusively to the existing Flyer Supabase Edge photo endpoint, forwarding the *current* PTG bearer/app-session in HTTP headers. The server independently confirms both PTG Auth identity and active PTG app-session on **every** operation, including preview/full-size image reads.
+
+No PTG bearer is written to parent localStorage, sessionStorage, IndexedDB or Public Pages. No arbitrary remote URL or action can be requested through this photo bridge. When the protected Studio expires or is revoked, the parent closes the MessagePort and unmounts the iframe. Real hosted OAuth and revocation acceptance are still required before activation.
+
 ## Testing and acceptance
 
 Automated source, packaging, Deno and browser tests are run in the draft MegaFlyer protected-bundle workflow, with no deployment.
