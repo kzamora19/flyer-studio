@@ -30,9 +30,9 @@
   <output id="cloudMessage" role="status" aria-live="polite"></output>
  </section>
 <section id="drivePanel" hidden aria-label="Manual Google Drive encrypted project backups">
-  <strong>Google Drive Backups</strong>
-  <small>Additional, opt-in storage in your own Google Drive. Supabase saving is unchanged. Encrypted projects may include customer photos.</small>
-  <button type="button" id="driveConnect">Connect Google Drive</button>
+  <strong>Company Google Drive Backups</strong>
+  <small>Centralized encrypted backups in the approved owner Google Drive. Staff sign in with PTG only. Supabase saving is unchanged.</small>
+  <button type="button" id="driveConnect" hidden>Owner authorization (admin only)</button>
   <button type="button" id="driveDisconnect" hidden>Disconnect</button>
   <button type="button" id="driveRefresh">Refresh Drive backups</button>
   <label id="driveLocalWrap">Local project <select id="driveLocalProject"></select></label>
@@ -41,4 +41,4 @@
   <button type="button" id="driveRestore">Retrieve from Google Drive</button>
   <output id="driveMessage" role="status" aria-live="polite"></output>
 </section>
-<div id="mount"></div></main><script>window.STUDIO_ACCESS_CONFIG={endpoint:"https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-editor-delivery",publishableKey:"sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK",googleDriveClientId:"873550026587-clo2e2vrthc8621unnmjio3des0nehfm.apps.googleusercontent.com"};</script><script src="./draft-vault.js" defer></script><script src="./drive-backup.js" defer></script><script src="./launch.js" defer></script></body></html>
+<div id="mount"></div></main><script>window.STUDIO_ACCESS_CONFIG={endpoint:"https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-editor-delivery",publishableKey:"sb_publishable_djhRIa3KhHbG0tOzQnXrIA_Ou-fJnmK",googleDriveClientId:"873550026587-clo2e2vrthc8621unnmjio3des0nehfm.apps.googleusercontent.com"};</script><script src="./draft-vault.js" defer></script><script src="./central-drive.js" defer></script><script src="./launch.js" defer></script></body></html>
