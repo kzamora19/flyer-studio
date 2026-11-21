@@ -49,7 +49,7 @@ try{
  await page.goto(origin+'/#ptg_studio_ticket='+'E'.repeat(43),{waitUntil:'domcontentloaded'});
  await page.locator('#studio-editor-frame').waitFor({timeout:20000});
  const frame=page.frameLocator('#studio-editor-frame');
- await frame.locator('#quickSaveProject').waitFor({timeout:24000});
+ await frame.locator('#quickSaveProject').waitFor({state:'attached',timeout:24000});
  const expected='QA draft is safe after PTG expiry';
  const stored=await frame.locator('body').evaluate(async label=>{
   state.campaign.subtitle=label;save();
@@ -69,7 +69,7 @@ try{
  assert.equal(new URL(page.url()).hash,'');
  await page.goto(origin+'/#ptg_studio_ticket='+'N'.repeat(43),{waitUntil:'domcontentloaded'});
  await page.locator('#studio-editor-frame').waitFor({timeout:20000});
- await frame.locator('#quickSaveProject').waitFor({timeout:24000});
+ await frame.locator('#quickSaveProject').waitFor({state:'attached',timeout:24000});
  await page.waitForTimeout(450);
  const actual=await frame.locator('body').evaluate(()=>state.campaign.subtitle);
  assert.equal(actual,expected,'Editor must restore local IndexedDB draft on authorized relaunch');
