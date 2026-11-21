@@ -70,7 +70,7 @@ test('backend refuses unverified reads, keeps images private and audits modifica
  assert.match(server,/!user.canManage/);
  assert.match(server,/sha256/);
  assert.doesNotMatch(server,/createSignedUrl|publicUrl/);
- assert.match(migration,/public,false/);
+ assert.match(migration,/flyer-product-photos','flyer-product-photos',false/);
  assert.match(migration,/enable row level security/g);
  assert.match(migration,/revoke all on public\.flyer_product_photo/);
  assert.match(migration,/flyer_product_photo_audit/);
