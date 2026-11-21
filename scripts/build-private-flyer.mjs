@@ -134,8 +134,8 @@ const photoLibraryScript=readFileSync(join(site,'product-photo-library.js'),'utf
 if(!html.includes('</body>'))throw Error('Protected MegaFlyer body closing tag missing');
 html=html.replace('</body>',
  '<script>window.FLYER_PRODUCT_PHOTO_CONFIG={publishableKey:window.FLYER_SHARED_ASSET_CONFIG?.publishableKey||""};</script>'+
- '<script>'+matchScript.replace(/<\\/script/gi,'<\\\\/script')+'</script>'+
- '<script>'+photoLibraryScript.replace(/<\\/script/gi,'<\\\\/script')+'</script></body>');
+ '<script>'+matchScript.replace(/<\/script/gi,'<\\/script')+'</script>'+
+ '<script>'+photoLibraryScript.replace(/<\/script/gi,'<\\/script')+'</script></body>');
 originals.push('private Smart Product Photo Library client');
 if(/<(script|link|img)[^>]+(?:src|href)="(?:\.\/|assets\/)/i.test(html))
  throw Error('Protected HTML still references a local public script/image/stylesheet.');
