@@ -114,8 +114,37 @@ async function open(){
   draftPort=channel.port1;
   channel.port1.onmessage=async ({data:message})=>{
    if(!active||Date.now()>=expiresAt||mount.querySelector('iframe')!==frame||
-      !message||!Number.isSafeInteger(message.id)||
-      !['read','write','delete'].includes(message.action)||
+      !message||!Number.isSafeInteger(message.id))return;
+   if(message.action==='product-photo'){
+    // Fixed destination and fixed action allowlist. Do not proxy arbitrary
+    // URLs or place the PTG bearer in shared-origin local/session storage.
+    const actions=new Set(['permissions','resolve','search','image','upload','replace','setPrimary','remove']);
+    try{
+     if(typeof message.token!=='string'||message.token.length<24||
+        typeof message.appSession!=='string'||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(message.appSession)||
+        typeof message.payload!=='string'||message.payload.length>3500000)throw Error('Invalid request');
+     const payload=JSON.parse(message.payload);
+     if(!payload||typeof payload!=='object'||Array.isArray(payload)||!actions.has(payload.action))
+      throw Error('Invalid action');
+     const res=await fetch('https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-product-photos',{
+      method:'POST',cache:'no-store',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',
+      headers:{'Content-Type':'application/json',apikey:cfg.publishableKey||'',
+       Authorization:'Bearer '+message.token,'x-ptg-session-id':message.appSession},
+      body:message.payload
+     });
+     const result=await res.json().catch(()=>null);
+     if(!active||Date.now()>=expiresAt)return;
+     if(!res.ok)channel.port1.postMessage({id:message.id,ok:false,
+       error:typeof result?.error==='string'?result.error:'Product photo access denied.'});
+     else channel.port1.postMessage({id:message.id,ok:true,value:result});
+    }catch{
+     if(active&&Date.now()<expiresAt)channel.port1.postMessage({
+      id:message.id,ok:false,error:'Private product photo service unavailable.'});
+    }
+    return;
+   }
+   if(!['read','write','delete'].includes(message.action)||
       typeof message.key!=='string'||!/^p:[A-Za-z0-9_-]{1,96}$/.test(message.key))return;
    try{
     const result=message.action==='read'?await vault.read(message.key):
