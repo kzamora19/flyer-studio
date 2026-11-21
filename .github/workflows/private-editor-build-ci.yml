@@ -15,6 +15,7 @@ on:
       - "tests/staged-full-editor-frame.mjs"
       - "tests/staged-protected-project-workflow.mjs"
       - "tests/staged-local-expiry-recovery.mjs"
+      - "tests/cloud-backup-browser.test.mjs"
       - "staging/studio-access/**"
       - "supabase/functions/flyer-editor-delivery/**"
       - "supabase/functions/_shared/studio-private-policy.mjs"
@@ -104,4 +105,6 @@ jobs:
       - name: Verify cloud Save/Retrieve and PNG download inside protected frame
         run: node tests/staged-protected-project-workflow.mjs
       - name: Verify local draft recovery after PTG ticket expiry and relaunch
-        run: node tests/staged-local-expiry-recovery.mjs
+        run: |
+          node tests/staged-local-expiry-recovery.mjs
+          node tests/cloud-backup-browser.test.mjs
