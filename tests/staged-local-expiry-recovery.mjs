@@ -52,7 +52,18 @@ try{
  await frame.locator('#quickSaveProject').waitFor({state:'attached',timeout:24000});
  const expected='QA draft is safe after PTG expiry';
  const stored=await frame.locator('body').evaluate(async label=>{
-  state.campaign.subtitle=label;save();
+  state.campaign.subtitle=label;
+  try{save();}catch(error){
+   const domPaths=[],seen=new WeakSet();let visits=0;
+   const scan=(val,path,depth)=>{
+    if(val instanceof Node){domPaths.push(path+':'+val.nodeName);return;}
+    if(!val||typeof val!=='object'||depth>8||visits++>8000||seen.has(val))return;
+    seen.add(val);
+    for(const [key,value] of Object.entries(val))scan(value,path+'.'+key,depth+1);
+   };
+   scan(state,'state',0);
+   throw Error('Local draft clone rejected: '+error.message+' DOM paths='+domPaths.join(','));
+  }
   return await new Promise((resolve,reject)=>{
    const open=indexedDB.open('megasaver-flyer-studio',1);
    open.onerror=()=>reject(open.error);
