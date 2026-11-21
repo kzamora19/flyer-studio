@@ -6,7 +6,12 @@ let sequence=0;
 const nextChallenge=()=>Buffer.alloc(32,(++sequence)%255||1).toString('base64url');
 export function createProofMock(){
  let key=null,challenge='',expiresAt='',sessionId='d151a9b1-4c42-4dd2-a20b-4b9cfef1a650';
+ let recoveryAccount=83;
  return {
+  setRecoveryAccount(value){
+   if(!Number.isSafeInteger(value)||value<1||value>240)throw Error('Invalid mock account');
+   recoveryAccount=value;
+  },
   async handle(body,{expireMs=600000,denyOnCheck=false}={}){
    if(body.action==='load'){
     assert.equal(typeof body.ticket,'string');
@@ -15,8 +20,8 @@ export function createProofMock(){
     key=await webcrypto.subtle.importKey('jwk',body.publicKey,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
     challenge=nextChallenge();expiresAt=new Date(Date.now()+expireMs).toISOString();
     return {ok:true,sessionId,challenge,expiresAt,
-      draftScope:Buffer.alloc(32,83).toString('base64url'),
-      draftKey:Buffer.alloc(32,75).toString('base64url')};
+      draftScope:Buffer.alloc(32,recoveryAccount).toString('base64url'),
+      draftKey:Buffer.alloc(32,recoveryAccount-8>0?recoveryAccount-8:recoveryAccount+8).toString('base64url')};
    }
    assert.equal(body.action,'check');
    assert.equal(body.ticket,undefined,'Launch ticket must not be replayed for checks');
