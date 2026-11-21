@@ -2,7 +2,7 @@
 // Returns a private editor bundle as JSON after checking a PTG-issued studio ticket.
 // GET text/html is not used: default Supabase Edge domains rewrite HTML responses.
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
-import {studioTicketOk,deliveryConfigured,exactHttpsOrigin,validProofResponse} from "../_shared/studio-private-policy.mjs";
+import {studioTicketOk,deliveryConfigured,exactHttpsOrigin,validProofResponse,validSignedProof} from "../_shared/studio-private-policy.mjs";
 
 const FLYER_URL=Deno.env.get("SUPABASE_URL")||"";
 const FLYER_SERVICE=Deno.env.get("SUPABASE_SECRET_KEY")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
@@ -64,7 +64,7 @@ Deno.serve(async req=>{
     return json(origin,{ok:false,error:"Invalid launch request."},400);
    auth=await ptg("exchange",{ticket:body.ticket,publicKey:body.publicKey});
   }else{
-   if(!validProofResponse(body))
+   if(!validSignedProof(body))
     return json(origin,{ok:false,error:"Invalid signed recheck."},400);
    auth=await ptg("prove",{sessionId:body.sessionId,challenge:body.challenge,signature:body.signature});
   }
