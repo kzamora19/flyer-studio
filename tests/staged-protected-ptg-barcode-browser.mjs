@@ -49,7 +49,7 @@ try {
      assert.equal(typeof input.signature,"string");
      assert.equal(input.q,"0000012345");
      assert.equal(input.page,1);
-     const next=await proof.handle({action:"check",...input});
+     const next=await proof.handle({...input,action:"check"});
      return route.fulfill({status:200,contentType:"application/json",
       headers:{"access-control-allow-origin":origin},
       body:JSON.stringify({...next,catalog:{status:"ok",page:1,pageSize:5,total:1,
