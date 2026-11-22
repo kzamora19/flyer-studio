@@ -26,10 +26,12 @@ try {
     PTG_STUDIO_PRODUCTION_RELEASE:"0"}
  });
  if(!existsSync(join(preview,"studio","launch.js")))throw Error("No private launcher");
- if(existsSync(join(root,"site","studio")))throw Error("Unexpected production studio directory");
+ // Live already has a PTG-protected /studio/ launcher. Keep its bytes intact;
+ // only add a new launcher on sites that do not yet have one.
+ const liveLauncher=existsSync(join(root,"site","studio"));
  rmSync(output,{recursive:true,force:true});
  cpSync(join(root,"site"),output,{recursive:true});
- cpSync(join(preview,"studio"),join(output,"studio"),{recursive:true});
+ if(!liveLauncher)cpSync(join(preview,"studio"),join(output,"studio"),{recursive:true});
  const html=readFileSync(join(output,"studio","index.html"),"utf8");
  if(!html.includes("STUDIO_ACCESS_CONFIG")||
    !html.includes(process.env.MEGAFLYER_STUDIO_PUBLISHABLE_KEY)||
