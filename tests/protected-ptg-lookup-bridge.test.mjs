@@ -44,5 +44,6 @@ test("signed-parent lookup is allowed only for branch-filtered, one-use proof se
  assert.match(server,/enableProtectedPtgLookup\(html\)/);
  assert.match(server,/if\(hash!==BUNDLE_SHA\)/);
  assert.ok(server.indexOf("if(hash!==BUNDLE_SHA)")<server.indexOf("enableProtectedPtgLookup(html)"));
- assert.doesNotMatch(parent,/allow-same-origin/);
+ assert.match(parent,/frame\.setAttribute\('sandbox','allow-scripts allow-downloads allow-modals'\)/);
+ assert.doesNotMatch(parent,/frame\.setAttribute\('sandbox'[^\n]*allow-same-origin/);
 });
