@@ -5,6 +5,8 @@ on:
     paths:
       - "scripts/build-private-flyer.mjs"
       - "scripts/build-cutover-pages.mjs"
+      - "scripts/build-shadow-pages.mjs"
+      - "tests/shadow-pages.test.mjs"
       - "tests/staged-cutover-pages.test.mjs"
       - "tests/staged-cutover-browser.mjs"
       - ".github/workflows/pages.yml"
@@ -31,6 +33,8 @@ on:
     paths:
       - "scripts/build-private-flyer.mjs"
       - "scripts/build-cutover-pages.mjs"
+      - "scripts/build-shadow-pages.mjs"
+      - "tests/shadow-pages.test.mjs"
       - "tests/staged-cutover-pages.test.mjs"
       - "tests/staged-cutover-browser.mjs"
       - ".github/workflows/pages.yml"
@@ -63,6 +67,8 @@ jobs:
         run: |
           node --check scripts/build-cutover-pages.mjs
           node --test tests/staged-cutover-pages.test.mjs
+          node --check scripts/build-shadow-pages.mjs
+          node --test tests/shadow-pages.test.mjs
       - name: Verify editor/private-bundle separation (no deployment)
         run: |
           node --check scripts/build-private-flyer.mjs
