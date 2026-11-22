@@ -17,6 +17,7 @@ on:
       - "tests/staged-studio-launch.test.mjs"
       - "tests/staged-studio-browser.mjs"
       - "tests/staged-full-editor-frame.mjs"
+      - "tests/staged-protected-ptg-barcode-browser.mjs"
       - "tests/staged-protected-project-workflow.mjs"
       - "tests/staged-local-expiry-recovery.mjs"
       - "tests/cloud-backup-browser.test.mjs"
@@ -118,6 +119,8 @@ jobs:
         run: node tests/staged-studio-browser.mjs
       - name: Verify actual full editor loads inside protected mock frame
         run: node tests/staged-full-editor-frame.mjs
+      - name: Confirm barcode form works in protected frame through signed PTG proof
+        run: node tests/staged-protected-ptg-barcode-browser.mjs
       - name: Verify cloud Save/Retrieve and PNG download inside protected frame
         run: node tests/staged-protected-project-workflow.mjs
       - name: Verify local draft recovery after PTG ticket expiry and relaunch
