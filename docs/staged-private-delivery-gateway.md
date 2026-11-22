@@ -76,3 +76,14 @@ The current public GitHub Pages editor is unchanged; these changes remain in a d
 - The proof session has a two-hour absolute cap but expires earlier if the PTG session expires, times out or is revoked. It **does not extend PTG's existing idle timeout**. A suspended tab that misses its 120-second proof challenge cannot resume silently.
 - Current tests use a mock proof backend with real WebCrypto signing and verification. The full protected editor workflows, PDF/PNG generation, local draft recovery, and revocation lock remain covered by offline Chromium tests; **live PTG, SQL transaction replay, real Google OAuth, Drive, printers and cloud synchronization remain untested**.
 - Old public GH Pages editor and caches remain publicly accessible. Signed continuation improves the staged launch flow, but **it is not a production authorization wall** until the coordinated cutover, host/origin audit and real-account tests. Do not merge/deploy PR #10.
+
+
+## Hosted MegaFlyer protected photo-proof mismatch corrected — 22 Nov 2026
+
+After deploying the additive protected `/flyer-studio/studio/` launcher for controlled real-account testing, the protected editor displayed "PTG photo authorization expired or was revoked" when its initial photo-permission bridge called the **previous live** `flyer-product-photos` v3 service. That v3 function only understood the standalone PTG bearer + app-session headers and did not recognize the new `studioProof` signed continuation. This error was a **service protocol mismatch**, not evidence that the user's account was revoked.
+
+The backwards-compatible staged `supabase/functions/flyer-product-photos/index.ts` and matching `_shared/studio-private-policy.mjs` were installed as **version 4** of the existing Flyer Supabase function. The standalone auth pathway remains, while the protected photo path requires PTG service-to-service proof revalidation and a rotated one-use challenge. No database migration, photo deletion, standalone editor release, or broad CORS relaxation occurred.
+
+[Live HTTP security check](https://github.com/kzamora19/flyer-studio/actions/runs/44981614878) **passed**: unsigned standalone denied 401, forged protected proof denied 403 with no challenge rotation, alien origin denied 403, allowed origin preflight 200. Positive signed user proof requires reopening the editor from PTG with a fresh one-time ticket; old failed tickets cannot be revived by refreshing the Studio URL.
+
+**The full four-app cutover remains on HOLD** until real-account access, photo-library permissions, Save/Retrieve, output/printing and existing local/PWA project migration are confirmed.
