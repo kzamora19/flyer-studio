@@ -62,6 +62,21 @@ try {
      headers:{"access-control-allow-origin":origin},
      body:JSON.stringify(response)});
   }
+  if(u.hostname==="tzklsscoiwnmeantcefw.supabase.co"&&
+     u.pathname==="/functions/v1/flyer-product-photos"){
+   const payload=route.request().postDataJSON();
+   assert.equal(typeof payload.studioProof?.signature,"string");
+   assert.equal(route.request().headers().authorization,undefined);
+   assert.equal(route.request().headers()["x-ptg-session-id"],undefined);
+   const next=await proof.handle({action:"check",...payload.studioProof});
+   assert.equal(next.ok,true,"Every photo request must verify signed Studio authorization");
+   const result=payload.action==="permissions"?
+     {canView:true,canUpload:true,canManage:true}:
+     payload.action==="resolve"?{photos:[],match:"none"}:{ok:true};
+   return route.fulfill({status:200,contentType:"application/json",
+     headers:{"access-control-allow-origin":origin,"access-control-allow-headers":"*"},
+     body:JSON.stringify({result,studioProof:next})});
+  }
   if(u.hostname==="agknxlowackphvwyvxge.supabase.co"){
    illegal.push(u.pathname);return route.fulfill({status:403,body:"Direct PTG token call forbidden"});
   }
