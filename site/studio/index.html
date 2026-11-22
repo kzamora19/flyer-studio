@@ -22,7 +22,7 @@
 #drivePanel label{font:600 11px system-ui;color:#34455d;display:flex;align-items:center;gap:5px}
 #driveMessage{width:100%;color:#34455d;font-size:12px}
 @media(max-width:700px){#drivePanel{padding:10px;gap:6px}#drivePanel small{width:100%}}
-</style></head><body><header><strong>MegaFlyer Studio</strong></header><main><div id="status" role="status">Checking PTG Studio authorization…</div><section id="cloudPanel" hidden aria-label="Manual encrypted cloud project backups">
+</style><style id="branchline-hide-archive-panels">#cloudPanel,#drivePanel{display:none!important}</style></head><body><header><strong>MegaFlyer Studio</strong></header><main><div id="status" role="status">Checking PTG Studio authorization…</div><section id="cloudPanel" hidden aria-label="Manual encrypted cloud project backups">
   <strong>Encrypted Cloud Project Backup</strong>
   <small>Manual only, for the current project. Projects containing large photos may need local export.</small>
   <button type="button" id="cloudBackup">Back up current project</button>
