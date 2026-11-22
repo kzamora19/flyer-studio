@@ -16,7 +16,7 @@ test('staged Studio launcher strips ticket before making requests',()=>{
  assert.match(source,/generateKey/);
  assert.match(source,/crypto\.subtle\.sign/);
  assert.match(source,/crypto\.subtle\.digest/);
- assert.match(source,/allow-scripts allow-downloads allow-modals/);
+ assert.match(source,/allow-scripts allow-forms allow-downloads allow-modals/);
  assert.doesNotMatch(source,/allow-same-origin['\"]/);
  assert.match(source,/ticket='';/);
  assert.doesNotMatch(source,/action:'check',ticket/);
