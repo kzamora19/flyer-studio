@@ -194,12 +194,45 @@ async function open(){
   // about:srcdoc WITHOUT an opaque sandbox inherits the shared github.io origin.
   // Disallow allow-same-origin: editor scripts must never read PTG/Branchline storage.
   // Cloud OAuth and IndexedDB require a separate secure compatibility bridge.
-  frame.setAttribute('sandbox','allow-scripts allow-downloads allow-modals');
+  frame.setAttribute('sandbox','allow-scripts allow-forms allow-downloads allow-modals');
   const channel=new MessageChannel();
   draftPort=channel.port1;
   channel.port1.onmessage=async ({data:message})=>{
    if(!active||Date.now()>=expiresAt||mount.querySelector('iframe')!==frame||
       !message||!Number.isSafeInteger(message.id))return;
+   if(message.action==='ptg-search'){
+    // Only the trusted parent signs a one-use PTG proof. The opaque iframe
+    // never receives a PTG token, app session ID, or reusable credentials.
+    if(typeof message.q!=='string'||!message.q.trim()||message.q.length>100||
+       !Number.isInteger(message.page)||message.page<1||message.page>20){
+      channel.port1.postMessage({id:message.id,ok:false,error:'Enter a valid barcode.'});
+      return;
+    }
+    try{
+      const catalog=await withProof(async()=>{
+        if(!active||Date.now()>=expiresAt)throw Error('Session expired');
+        const signed=await signedRequest();
+        const response=await gateway({...signed,action:'lookup',
+          q:message.q.trim(),page:message.page});
+        if(!active)throw Error('Studio session ended');
+        recordAuth(response);
+        return response.catalog;
+      });
+      if(active&&Date.now()<expiresAt){
+        if(catalog?.status==='ok'&&Array.isArray(catalog.products))
+          channel.port1.postMessage({id:message.id,ok:true,value:{
+            ok:true,products:catalog.products,total:catalog.total,
+            page:catalog.page,pageSize:catalog.pageSize
+          }});
+        else channel.port1.postMessage({id:message.id,ok:false,
+          error:'PTG product search is temporarily unavailable.'});
+      }
+    }catch{
+      // Never fall back to direct Origin:null fetch or an iframe password.
+      if(active)lock('PTG lookup authorization could not be verified. Open the Studio from PTG.');
+    }
+    return;
+   }
    if(message.action==='product-photo'){
     const actions=new Set(['permissions','resolve','search','image','upload','replace','setPrimary','remove']);
     try{
