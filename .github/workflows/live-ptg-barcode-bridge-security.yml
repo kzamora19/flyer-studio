@@ -1,0 +1,18 @@
+name: Live MegaFlyer signed barcode bridge security
+on:
+  push:
+    branches: [feature/ptg-private-delivery-poc-20261121]
+    paths:
+      - "tests/live-ptg-barcode-bridge-security.mjs"
+      - ".github/workflows/live-ptg-barcode-bridge-security.yml"
+permissions:
+  contents: read
+jobs:
+  check-live-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - run: node tests/live-ptg-barcode-bridge-security.mjs
