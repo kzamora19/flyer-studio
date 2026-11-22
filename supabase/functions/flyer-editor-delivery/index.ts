@@ -7,7 +7,7 @@ import {studioTicketOk,deliveryConfigured,exactHttpsOrigin,validProofResponse,va
 import {studioSupabaseKey} from "../_shared/studio-supabase-keys.mjs";
 
 const FLYER_URL=Deno.env.get("SUPABASE_URL")||"";
-const FLYER_SERVICE=studioSupabaseKey(name=>Deno.env.get(name),"secret");
+const FLYER_SERVICE=studioSupabaseKey((name: string)=>Deno.env.get(name),"secret");
 const VERIFY_SECRET=Deno.env.get("FLYER_PTG_STUDIO_GATEWAY_SECRET")||"";
 const ALLOWED_ORIGIN=Deno.env.get("FLYER_STUDIO_ALLOWED_ORIGIN")||"";
 // Immutable OIDC-built private release hash, verified through signed Storage upload.
