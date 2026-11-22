@@ -4,9 +4,10 @@
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
 import {enableProtectedPtgLookup} from "../_shared/flyer-protected-ptg-compat.mjs";
 import {studioTicketOk,deliveryConfigured,exactHttpsOrigin,validProofResponse,validSignedProof,validPtgGatewayUrl,validStudioBackendUrl} from "../_shared/studio-private-policy.mjs";
+import {studioSupabaseKey} from "../_shared/studio-supabase-keys.mjs";
 
 const FLYER_URL=Deno.env.get("SUPABASE_URL")||"";
-const FLYER_SERVICE=Deno.env.get("SUPABASE_SECRET_KEY")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
+const FLYER_SERVICE=studioSupabaseKey(name=>Deno.env.get(name),"secret");
 const VERIFY_SECRET=Deno.env.get("FLYER_PTG_STUDIO_GATEWAY_SECRET")||"";
 const ALLOWED_ORIGIN=Deno.env.get("FLYER_STUDIO_ALLOWED_ORIGIN")||"";
 // Immutable OIDC-built private release hash, verified through signed Storage upload.
