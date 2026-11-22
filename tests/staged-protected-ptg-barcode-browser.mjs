@@ -71,7 +71,16 @@ try {
  await page.goto(origin+"/#ptg_studio_ticket="+"G".repeat(43),{waitUntil:"domcontentloaded"});
  await page.locator("#studio-editor-frame").waitFor({timeout:30000});
  const frame=page.frameLocator("#studio-editor-frame");
- await frame.locator("#protectedPtgConnected").waitFor({state:"attached",timeout:30000});
+ const iframeDebug=await page.locator("#studio-editor-frame").evaluate(el=>({
+  srcdocLength:el.srcdoc.length,patched:el.srcdoc.includes("protectedPtgConnected"),
+  sandbox:el.getAttribute("sandbox")
+ }));
+ const frameDebug=await frame.locator("html").evaluate(el=>({
+  documentSize:el.outerHTML.length,patched:!!el.querySelector("#protectedPtgConnected"),
+  hasOriginal:!!el.querySelector("#ptgLogin"),title:el.querySelector("title")?.textContent
+ }));
+ console.log("PTG FRAME DIAGNOSTIC",JSON.stringify({iframeDebug,frameDebug,requests:requests.map(r=>r.action),illegal}));
+ await frame.locator("#protectedPtgConnected").waitFor({state:"attached",timeout:8000});
  assert.equal(await frame.locator("#ptgLogin").isVisible(),false);
  const marker=await frame.locator("body").evaluate(()=>({
   linked:ptgSession?.token,bridge:typeof window.__MEGAFLYER_PTG_RPC__,
