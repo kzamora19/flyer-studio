@@ -78,6 +78,7 @@ try {
  console.log("PTG OUTER FRAME DIAGNOSTIC",JSON.stringify({
   iframeDebug,urls:page.frames().map(f=>f.url()),requests:requests.map(r=>r.action),illegal
  }));
+ console.log("PTG LAUNCH DIAGNOSTIC",JSON.stringify({iframeDebug,status:await page.locator("#status").textContent(),frameCount:page.frames().length,frameUrls:page.frames().map(f=>f.url()),requests:requests.map(r=>r.action)}));
  const frameDebug=await frame.locator("html").evaluate(el=>({
   documentSize:el.outerHTML.length,patched:!!el.querySelector("#protectedPtgConnected"),
   hasOriginal:!!el.querySelector("#ptgLogin"),title:el.querySelector("title")?.textContent
