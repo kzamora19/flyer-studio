@@ -22,7 +22,7 @@ test("private release is verified before scoped PTG compatibility patch and brow
   assert.match(patched,/id="protectedPtgConnected"/);
   assert.match(patched,/<form id="ptgLogin" hidden>/);
   assert.match(patched,/id="backup">Download project backup \(\.json\)/);
-  assert.match(patched,/let ptgSession=window.__MEGAFLYER_PTG_RPC__\?/);
+  assert.match(patched,/const sequence=lookupSequence, session=window.__MEGAFLYER_PTG_RPC__\?/);
   assert.match(patched,/action:"ptg-search"/);
   assert.match(patched,/PTG account access is managed by the protected Studio launcher/);
   assert.doesNotMatch(patched,/<form id="ptgLogin">/);
