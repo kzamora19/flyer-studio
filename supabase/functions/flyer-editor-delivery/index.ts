@@ -8,8 +8,8 @@ const FLYER_URL=Deno.env.get("SUPABASE_URL")||"";
 const FLYER_SERVICE=Deno.env.get("SUPABASE_SECRET_KEY")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
 const VERIFY_SECRET=Deno.env.get("FLYER_PTG_STUDIO_GATEWAY_SECRET")||"";
 const ALLOWED_ORIGIN=Deno.env.get("FLYER_STUDIO_ALLOWED_ORIGIN")||"";
-const BUNDLE_PATH=Deno.env.get("FLYER_PRIVATE_BUNDLE_PATH")||"";
-const BUNDLE_SHA=Deno.env.get("FLYER_PRIVATE_BUNDLE_SHA256")||"";
+// Immutable OIDC-built private release hash, verified through signed Storage upload.\nconst BUNDLE_PATH=Deno.env.get("FLYER_PRIVATE_BUNDLE_PATH")||"releases/1c82384c40685ea2/studio.html";
+const BUNDLE_SHA=Deno.env.get("FLYER_PRIVATE_BUNDLE_SHA256")||"1c82384c40685ea2a3a2c0bc3ef7b09c081ae6bc81a6bc30b3fe63a0b69b4068";
 const BUNDLE_BUCKET="flyer-editor-release"; // Never reuse the live shared-assets bucket.
 // Never connect a staging Studio to a live PTG authorization authority.
 const DEPLOYMENT_MODE=Deno.env.get("PTG_STUDIO_DEPLOYMENT_MODE")||"";
