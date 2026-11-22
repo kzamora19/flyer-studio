@@ -34,7 +34,7 @@ try {
  });
  await new Promise(done=>server.listen(0,"127.0.0.1",done));
  const origin="http://127.0.0.1:"+server.address().port;
- browser=await chromium.launch({headless:true});
+ browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage']});
  const ctx=await browser.newContext({viewport:{width:1350,height:850}});
  const proof=createProofMock();
  const requests=[],illegal=[];
