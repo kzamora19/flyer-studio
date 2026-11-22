@@ -35,5 +35,5 @@ for(let n=0;n<8;n++){
  if(n<7)await new Promise(resolve=>setTimeout(resolve,4000));
 }
 assert.ok(launch,"Deployed protected MegaFlyer launcher must contain signed barcode bridge");
-assert.ok(!launch.includes("allow-same-origin:"),"Never inherit PTG browser origin in sandbox");
+assert.doesNotMatch(launch,/frame\.setAttribute\(\x27sandbox\x27,\x27[^\x27]*allow-same-origin/,"Never enable inherited PTG origin in sandbox attribute");
 console.log("PASS: live protected MegaFlyer PTG lookup is deployed and refuses foreign origin, unsigned, forged and direct calls.");
