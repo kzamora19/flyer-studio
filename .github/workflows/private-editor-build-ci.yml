@@ -11,6 +11,8 @@ on:
       - "tests/staged-cutover-browser.mjs"
       - ".github/workflows/pages.yml"
       - "tests/private-editor-build.test.mjs"
+      - "tests/protected-ptg-lookup-bridge.test.mjs"
+      - "supabase/functions/_shared/flyer-protected-ptg-compat.mjs"
       - "tests/private-delivery-policy.test.mjs"
       - "tests/staged-studio-launch.test.mjs"
       - "tests/staged-studio-browser.mjs"
@@ -82,6 +84,8 @@ jobs:
           node --check site/product-photo-library.js
           node --test tests/smart-product-photo-library.test.mjs
           node --test tests/private-editor-build.test.mjs
+          node --test tests/protected-ptg-lookup-bridge.test.mjs
+          node --check site/studio/launch.js
           node --test tests/private-delivery-policy.test.mjs
           node --test tests/staged-studio-launch.test.mjs
       - uses: denoland/setup-deno@v2
