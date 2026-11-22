@@ -13,7 +13,7 @@ if(output===root||output===join(root,"site")||output.startsWith(join(root,"site"
  throw Error("Refusing to overwrite production MegaFlyer editor source");
 if(!/^sb_publishable_[A-Za-z0-9_-]{20,}$/.test(process.env.MEGAFLYER_STUDIO_PUBLISHABLE_KEY||""))
  throw Error("Shadow launcher requires the actual public MegaFlyer publishable key");
-const temp=mkdtempSync(join(tmpdir(),"branchline-flyer-shadow-"));
+const temp=mkdtempSync(join(root,"staging",".shadow-build-"));
 try {
  const preview=join(temp,"cutover");
  execFileSync(process.execPath,[join(root,"scripts/build-cutover-pages.mjs"),preview],{
