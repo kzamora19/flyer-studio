@@ -40,9 +40,9 @@ export function enableProtectedPtgLookup(verifiedHtml) {
   replaceOne('item.kind==="photo"&&typeof data.error==="string"?',
     '(item.kind==="photo"||item.kind==="ptg")&&typeof data.error==="string"?',
     "PTG error display");
-  replaceOne('let ptgSession=null, lookupSequence=0;',
-    "let ptgSession=window.__MEGAFLYER_PTG_RPC__?{id:'ptg-proof-session',token:'signed-studio-proof'}:null, lookupSequence=0;",
-    "account-only PTG session marker (no bearer)");
+  replaceOne('const sequence=lookupSequence, session=ptgSession;',
+    "const sequence=lookupSequence, session=window.__MEGAFLYER_PTG_RPC__?{id:'ptg-proof-session'}:ptgSession;",
+    "scoped barcode lookup authority (no bearer)");
   replaceOne('async function ptgRequest(endpoint,body,session) {',
   String.raw`async function ptgRequest(endpoint,body,session) {
   if(window.__MEGAFLYER_PTG_RPC__) {
