@@ -87,10 +87,10 @@ try {
  await frame.locator("#protectedPtgConnected").waitFor({state:"attached",timeout:8000});
  assert.equal(await frame.locator("#ptgLogin").isVisible(),false);
  const marker=await frame.locator("body").evaluate(()=>({
-  linked:ptgSession?.token,bridge:typeof window.__MEGAFLYER_PTG_RPC__,
+  legacyTokenAbsent:ptgSession===null,bridge:typeof window.__MEGAFLYER_PTG_RPC__,
   sandbox:window.frameElement?.getAttribute("sandbox")||"opaque"
  }));
- assert.equal(marker.linked,"signed-studio-proof");
+ assert.equal(marker.legacyTokenAbsent,true);
  assert.equal(marker.bridge,"function");
  await frame.locator("body").evaluate(()=>{openCard("front",1);switchCardTab("lookup");});
  await frame.locator("#protectedPtgConnected").waitFor({state:"visible",timeout:15000});
