@@ -75,11 +75,14 @@ try {
   srcdocLength:el.srcdoc.length,patched:el.srcdoc.includes("protectedPtgConnected"),
   sandbox:el.getAttribute("sandbox")
  }));
+ console.log("PTG OUTER FRAME DIAGNOSTIC",JSON.stringify({
+  iframeDebug,urls:page.frames().map(f=>f.url()),requests:requests.map(r=>r.action),illegal
+ }));
  const frameDebug=await frame.locator("html").evaluate(el=>({
   documentSize:el.outerHTML.length,patched:!!el.querySelector("#protectedPtgConnected"),
   hasOriginal:!!el.querySelector("#ptgLogin"),title:el.querySelector("title")?.textContent
- }));
- console.log("PTG FRAME DIAGNOSTIC",JSON.stringify({iframeDebug,frameDebug,requests:requests.map(r=>r.action),illegal}));
+ }),null,{timeout:5000});
+ console.log("PTG FRAME DIAGNOSTIC",JSON.stringify({frameDebug}));
  await frame.locator("#protectedPtgConnected").waitFor({state:"attached",timeout:8000});
  assert.equal(await frame.locator("#ptgLogin").isVisible(),false);
  const marker=await frame.locator("body").evaluate(()=>({
