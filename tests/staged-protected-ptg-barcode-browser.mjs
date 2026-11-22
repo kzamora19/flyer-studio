@@ -71,7 +71,7 @@ try {
  await page.goto(origin+"/#ptg_studio_ticket="+"G".repeat(43),{waitUntil:"domcontentloaded"});
  await page.locator("#studio-editor-frame").waitFor({timeout:30000});
  const frame=page.frameLocator("#studio-editor-frame");
- await frame.locator("#protectedPtgConnected").waitFor({state:"visible",timeout:30000});
+ await frame.locator("#protectedPtgConnected").waitFor({state:"attached",timeout:30000});
  assert.equal(await frame.locator("#ptgLogin").isVisible(),false);
  const marker=await frame.locator("body").evaluate(()=>({
   linked:ptgSession?.token,bridge:typeof window.__MEGAFLYER_PTG_RPC__,
@@ -80,6 +80,7 @@ try {
  assert.equal(marker.linked,"signed-studio-proof");
  assert.equal(marker.bridge,"function");
  await frame.locator("body").evaluate(()=>{openCard("front",1);switchCardTab("lookup");});
+ await frame.locator("#protectedPtgConnected").waitFor({state:"visible",timeout:15000});
  await frame.locator("#barcode").fill("0000012345");
  await frame.locator("#ptgFind").click({timeout:15000});
  await frame.getByText(/1 PTG result\(s\)/).waitFor({timeout:30000});
