@@ -64,7 +64,12 @@ test('new UI does not change production flyer editor pricing or public asset log
  assert.match(library,/smartPhotoNativeShare/);
  assert.match(library,/attachUploadedPhoto/);
  assert.doesNotMatch(library,/SRP\s*=|promoPrice\s*=/);
- assert.match(edge,/await identity\(req\)/);
+ assert.match(edge,/await identity\(req,body\)/);
+ // Protected Studio operations use a signed server-only PTG proof. Standalone
+ // operations continue their existing live PTG bearer + app-session check.
+ assert.match(edge,/validSignedProof\(body.studioProof\)/);
+ assert.match(edge,/STUDIO_GATEWAY_SECRET/);
+ assert.match(edge,/actorId/);
  assert.match(edge,/PTG_ORIGIN\+"\/auth\/v1\/user"/);
  assert.match(edge,/!user.canManage/);
  assert.match(edge,/action==="image"/);

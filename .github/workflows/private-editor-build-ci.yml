@@ -1,0 +1,130 @@
+name: MegaFlyer protected-bundle packaging (draft only)
+on:
+  push:
+    branches: [feature/ptg-private-delivery-poc-20261121]
+    paths:
+      - "scripts/build-private-flyer.mjs"
+      - "scripts/build-cutover-pages.mjs"
+      - "scripts/build-shadow-pages.mjs"
+      - "tests/shadow-pages.test.mjs"
+      - "tests/staged-cutover-pages.test.mjs"
+      - "tests/staged-cutover-browser.mjs"
+      - ".github/workflows/pages.yml"
+      - "tests/private-editor-build.test.mjs"
+      - "tests/protected-ptg-lookup-bridge.test.mjs"
+      - "supabase/functions/_shared/flyer-protected-ptg-compat.mjs"
+      - "tests/private-delivery-policy.test.mjs"
+      - "tests/staged-studio-launch.test.mjs"
+      - "tests/staged-studio-browser.mjs"
+      - "tests/staged-full-editor-frame.mjs"
+      - "tests/staged-protected-ptg-barcode-browser.mjs"
+      - "tests/staged-protected-project-workflow.mjs"
+      - "tests/staged-local-expiry-recovery.mjs"
+      - "tests/cloud-backup-browser.test.mjs"
+      - "tests/cloud-launcher-browser.test.mjs"
+      - "tests/drive-backup.test.mjs"
+      - "staging/studio-access/**"
+      - "supabase/functions/flyer-editor-delivery/**"
+      - "supabase/functions/_shared/studio-private-policy.mjs"
+      - "supabase/config.toml"
+      - ".github/workflows/private-editor-build-ci.yml"
+      - "site/**"
+      - "supabase/functions/flyer-product-photos/**"
+      - "supabase/migrations/202611210001_smart_product_photos.sql"
+      - "tests/smart-product-photo-library.test.mjs"
+  pull_request:
+    paths:
+      - "scripts/build-private-flyer.mjs"
+      - "scripts/build-cutover-pages.mjs"
+      - "scripts/build-shadow-pages.mjs"
+      - "tests/shadow-pages.test.mjs"
+      - "tests/staged-cutover-pages.test.mjs"
+      - "tests/staged-cutover-browser.mjs"
+      - ".github/workflows/pages.yml"
+      - "tests/private-editor-build.test.mjs"
+      - "tests/private-delivery-policy.test.mjs"
+      - "tests/staged-studio-launch.test.mjs"
+      - "tests/staged-studio-browser.mjs"
+      - "tests/staged-full-editor-frame.mjs"
+      - "tests/staged-protected-project-workflow.mjs"
+      - "tests/staged-local-expiry-recovery.mjs"
+      - "staging/studio-access/**"
+      - "supabase/functions/flyer-editor-delivery/**"
+      - "supabase/functions/_shared/studio-private-policy.mjs"
+      - "supabase/config.toml"
+      - ".github/workflows/private-editor-build-ci.yml"
+      - "site/**"
+      - "supabase/functions/flyer-product-photos/**"
+      - "supabase/migrations/202611210001_smart_product_photos.sql"
+      - "tests/smart-product-photo-library.test.mjs"
+permissions:
+  contents: read
+jobs:
+  build-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Validate undeployed editor-free historical Pages cutover preview
+        run: |
+          node --check scripts/build-cutover-pages.mjs
+          node --test tests/staged-cutover-pages.test.mjs
+          node --check scripts/build-shadow-pages.mjs
+          node --test tests/shadow-pages.test.mjs
+      - name: Verify editor/private-bundle separation (no deployment)
+        run: |
+          node --check scripts/build-private-flyer.mjs
+          node --check staging/editor-storage-bridge.js
+          node --check staging/studio-access/draft-vault.js
+          node --check staging/studio-access/drive-backup.js
+          node --test tests/drive-backup.test.mjs
+          node --check staging/studio-access/central-drive.js
+          node --test tests/central-drive.test.mjs
+          node --check site/product-photo-match.js
+          node --check site/product-photo-library.js
+          node --test tests/smart-product-photo-library.test.mjs
+          node --test tests/private-editor-build.test.mjs
+          node --test tests/protected-ptg-lookup-bridge.test.mjs
+          node --check site/studio/launch.js
+          node --test tests/private-delivery-policy.test.mjs
+          node --test tests/staged-studio-launch.test.mjs
+      - uses: denoland/setup-deno@v2
+        with: {deno-version: v2.x}
+      - name: Typecheck staged server-only delivery function
+        run: |
+          deno check supabase/functions/flyer-editor-delivery/index.ts
+          deno check supabase/functions/flyer-product-photos/index.ts
+      - name: Enforce public-artefact non-disclosure
+        run: |
+          if test -e site/private/studio.html || test -e site/private-editor.html; then
+            echo "Protected source appeared inside the Pages site."; exit 1;
+          fi
+          test ! -e .studio-private-build/private/studio.html
+
+  launch-browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Install isolated Chromium browser
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.65.1
+          npx playwright install chromium --with-deps
+      - name: Test historical public Pages cutover preview on mobile Chromium
+        run: node tests/staged-cutover-browser.mjs
+      - name: Verify mock PTG launcher, private editor mount and revocation
+        run: node tests/staged-studio-browser.mjs
+      - name: Verify actual full editor loads inside protected mock frame
+        run: node tests/staged-full-editor-frame.mjs
+      - name: Confirm barcode form works in protected frame through signed PTG proof
+        run: node tests/staged-protected-ptg-barcode-browser.mjs
+      - name: Verify cloud Save/Retrieve and PNG download inside protected frame
+        run: node tests/staged-protected-project-workflow.mjs
+      - name: Verify local draft recovery after PTG ticket expiry and relaunch
+        run: |
+          node tests/staged-local-expiry-recovery.mjs
+          node tests/cloud-backup-browser.test.mjs
+          node tests/cloud-launcher-browser.test.mjs
