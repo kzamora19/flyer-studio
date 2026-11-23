@@ -141,3 +141,38 @@ body.flyerChatLayout #sidebarContent .fields {grid-template-columns:minmax(0,1fr
  body.flyerChatLayout main>aside.chatMobileClosed #sidebarContent {display:none!important;}
  body.flyerChatLayout .stage {height:auto;overflow:visible;}
 }
+
+/* BRANCHLINE UNIFIED UI STAGE — 2026-11-23: visual-only, development branch. */
+body.flyerChatLayout{
+  --branchline-navy:#09264f;--branchline-royal:#075cf5;
+  --branchline-cyan:#0dd9eb;--branchline-teal:#00e4c1;
+}
+body.flyerChatLayout #sidebarFixed{
+  background:linear-gradient(180deg,#0d3566,var(--branchline-navy));
+  border-right-color:#315a89;
+}
+body.flyerChatLayout #sidebarFixed .editorMenuHeading h1{color:#c0d8ef;}
+body.flyerChatLayout #editorMenuToggle{color:#fff;}
+body.flyerChatLayout #editorMenuToggle:hover,
+body.flyerChatLayout #editorMenuToggle:focus-visible{
+  background:#18538f;outline-color:var(--branchline-cyan);
+}
+body.flyerChatLayout #studioNav>[data-nav],
+body.flyerChatLayout #studioNav #sidebarActions button{color:#e2efff;}
+body.flyerChatLayout #studioNav>[data-nav]:hover,
+body.flyerChatLayout #studioNav #sidebarActions button:hover{background:#1a518b;color:#fff;}
+body.flyerChatLayout #studioNav>[data-nav].active{
+  color:#fff;background:#075cda;box-shadow:inset 3px 0 var(--branchline-cyan)!important;
+}
+body.flyerChatLayout #studioChatTitle{color:#0c315e;}
+body.flyerChatLayout #studioSubnav .navChildren button.active{
+  background:#e8f3ff!important;color:#084cb8;box-shadow:inset 3px 0 #0dd9eb;
+}
+body.flyerChatLayout #studioNav button:focus-visible,
+body.flyerChatLayout #studioSubnav button:focus-visible{
+  outline:3px solid var(--branchline-cyan);outline-offset:1px;
+}
+@media(max-width:700px){
+  body.flyerChatLayout #sidebarFixed{border-right:0;border-bottom-color:#315a89;}
+  body.flyerChatLayout main>aside:not(.chatMobileClosed){height:min(53dvh,440px);min-height:220px;}
+}
