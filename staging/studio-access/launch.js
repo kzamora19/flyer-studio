@@ -248,7 +248,9 @@ async function open(){
      const photoResult=await withProof(async()=>{
       if(!active||Date.now()>=expiresAt)throw Error('Session expired');
       const signed=await signedRequest();
-      const res=await fetch('https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-product-photos',{
+      // Keep photo requests on the same Supabase project as Studio delivery.
+      const photoEndpoint=new URL('flyer-product-photos',cfg.endpoint);
+      const res=await fetch(photoEndpoint,{
        method:'POST',cache:'no-store',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer',
        headers:{'Content-Type':'application/json',apikey:cfg.publishableKey||''},
        body:JSON.stringify({...payload,studioProof:{
