@@ -90,7 +90,9 @@ test('opaque-origin editor relays only whitelisted photo operations through PTG 
  assert.doesNotMatch(bridge,/token:account.token/);
  assert.match(launcher,/message.action==='product-photo'/);
  assert.match(launcher,/new Set\(\['permissions','resolve','search','image','upload','replace','setPrimary','remove'\]\)/);
- assert.match(launcher,/https:\/\/tzklsscoiwnmeantcefw\.supabase\.co\/functions\/v1\/flyer-product-photos/);
+ assert.match(launcher,/const photoEndpoint=new URL\('flyer-product-photos',cfg\.endpoint\)/);
+ assert.match(launcher,/fetch\(photoEndpoint,/);
+ assert.doesNotMatch(launcher,/https:\/\/[^'"]+\.supabase\.co\/functions\/v1\/flyer-product-photos/);
  assert.doesNotMatch(launcher,/Authorization:'Bearer '\+message.token/);
  assert.doesNotMatch(bridge,/appSession:account.id/);
  assert.match(launcher,/withProof/);
