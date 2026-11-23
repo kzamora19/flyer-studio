@@ -28,7 +28,7 @@ jobs:
           node --check scripts/build-cutover-pages.mjs
           node --check staging/studio-access/unified-navigation.js
           PTG_STUDIO_CUTOVER_PREVIEW=1 node scripts/build-cutover-pages.mjs staging/.official-nav-preview
-          node --test staging/cutover-pages.test.mjs
+          node --test tests/staged-cutover-pages.test.mjs
       - name: Install Chromium for screenshot and navigation regression
         run: |
           npm install --no-save --ignore-scripts playwright@1.56.1
