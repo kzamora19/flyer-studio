@@ -20,3 +20,11 @@ test("protected entry stamps match and fresh authorization is required after res
  assert.ok(!code.includes("location.hash"));
  assert.ok(!code.includes("contentWindow"));
 });
+
+test("protected mobile MegaFlyer uses its original menu control inside its icon and removes clipping",()=>{
+ const {apply}=require("../site/studio/device-layout.js");
+ const raw='<!doctype html><body><!-- PRIVATE EDITOR BUNDLE --><button id="editorMenuToggle">Hide menu</button></body></html>';
+ const patched=apply(raw);assert.ok(patched.includes('id="bl-flyer-device-layout"'));assert.equal(apply(patched),patched);assert.ok(patched.includes('<button id="editorMenuToggle">Hide menu</button>'));assert.equal(apply("<body>unrecognized</body>"),"<body>unrecognized</body>");
+ const launch=read("site/studio/launch.js");assert.ok(launch.indexOf("crypto.subtle.digest")<launch.indexOf("BranchlineFlyerDeviceLayout?.apply(data.html)"));
+ assert.ok(!launch.includes('allow-same-origin allow-scripts'));assert.ok(patched.includes("brand.prepend(toggle)"));
+});

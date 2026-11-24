@@ -293,7 +293,9 @@ async function open(){
    if(active&&Date.now()<expiresAt&&frame.contentWindow)
     frame.contentWindow.postMessage({kind:'megaflyer-private-storage-port'},'*',[channel.port2]);
   },{once:true});
-  frame.srcdoc=data.html;mount.replaceChildren(frame);active=true;status.hidden=true;
+  // The original response has passed SHA-256 verification. Apply the local
+  // presentation overlay without modifying authorization or sandbox flags.
+  frame.srcdoc=window.BranchlineFlyerDeviceLayout?.apply(data.html)??data.html;mount.replaceChildren(frame);active=true;status.hidden=true;
   setupCloud(vault);
   if(window.BRANCHLINE_CENTRAL_DRIVE){
     void window.BRANCHLINE_CENTRAL_DRIVE.setup({

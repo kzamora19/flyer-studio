@@ -29,6 +29,8 @@ jobs:
           npm install --no-save --ignore-scripts playwright@1.65.1
           npx playwright install chromium --with-deps
       - name: Verify toolbar and editor UX in Chromium
-        run: node tests/megaflyer-browser-ui.mjs
+        run: |
+          node tests/megaflyer-browser-ui.mjs
+          node tests/protected-mobile-layout.mjs
       - name: Verify Save / Retrieve Project using mocked Supabase
         run: node tests/megaflyer-project-save-retrieve.mjs
