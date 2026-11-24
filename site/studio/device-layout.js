@@ -86,6 +86,12 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
   }
   if(!find()){observer=new MutationObserver(()=>{if(find())observer.disconnect();});observer.observe(document.body,{childList:true,subtree:true});}
  }
+ function wireWorkspaceMenu(){
+  window.addEventListener("message",event=>{
+   if(event.source!==window.parent||event.origin!=="https://kzamora19.github.io"||event.data?.kind!=="branchline-workspace-menu"||typeof event.data.open!=="boolean")return;
+   document.documentElement.dataset.blNativeMenu=event.data.open?"open":"closed";
+  });
+ }
  function apply(html){
   if(typeof html!=="string"||!(html.includes("PRIVATE EDITOR BUNDLE")||(html.includes("editorMenuToggle")&&html.includes("sidebarFixed")&&html.includes("studioNav"))))return html;
   if(html.includes('id="bl-flyer-device-layout"'))return html;
@@ -94,7 +100,7 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
   const closing=html.match(/(?:<\/body\s*>\s*)?<\/html\s*>\s*$/i)
     ||html.match(/<\/body\s*>\s*$/i);
   const at=closing?.index??html.length;
-  const code="("+wire.toString()+")();";
+  const code="("+wire.toString()+")();("+wireWorkspaceMenu.toString()+")();";
   return html.slice(0,at)+'<style id="bl-flyer-device-layout">'+css+'</style><script>'+code+'<\/script>'+html.slice(at);
  }
  if(typeof module==="object"&&module.exports)module.exports={apply};else root.BranchlineFlyerDeviceLayout=Object.freeze({apply});
