@@ -121,7 +121,7 @@ body.bl-protected-shell>header .bl-update-bell svg{stroke:currentColor!important
 @keyframes bl-load-progress{from{transform:translateX(-10%)}to{transform:translateX(190%)}}
 @media(prefers-reduced-motion:reduce){#status[data-loading] .ldr-bar,#status[data-loading] .workspace-progress:after{animation:none}}
 #status[hidden]{display:none!important}
-</style></head><body data-bl-studio="flyer"><header><strong class="protected-shell-title">MegaFlyer Studio</strong></header><main><div id="status" role="status" data-loading><svg viewBox="0 0 512 512" width="84" height="84" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#355ee8"/><g fill="#fff"><rect class="ldr-bar b1" x="124" y="267" width="56" height="133" rx="20"/><rect class="ldr-bar b2" x="228" y="164" width="56" height="236" rx="20"/><rect class="ldr-bar b3" x="332" y="306" width="56" height="94" rx="20"/></g></svg><div class="workspace-progress" role="progressbar" aria-label="Checking access"></div><span>Checking PTG Studio authorization…</span></div><section id="cloudPanel" hidden aria-label="Manual encrypted cloud project backups">
+</style><style>@media(min-width:1001px){.bl-studio-web-r6 .bl-studio-megasaver{height:78px;max-width:580px;object-fit:cover;object-position:center;filter:grayscale(1) contrast(5);mix-blend-mode:screen}}@media(min-width:761px) and (max-width:1000px){.bl-studio-web-r6 .bl-studio-megasaver{object-fit:contain;filter:grayscale(1) contrast(5);mix-blend-mode:screen}}</style></head><body data-bl-studio="flyer"><header><strong class="protected-shell-title">MegaFlyer Studio</strong></header><main><div id="status" role="status" data-loading><svg viewBox="0 0 512 512" width="84" height="84" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#355ee8"/><g fill="#fff"><rect class="ldr-bar b1" x="124" y="267" width="56" height="133" rx="20"/><rect class="ldr-bar b2" x="228" y="164" width="56" height="236" rx="20"/><rect class="ldr-bar b3" x="332" y="306" width="56" height="94" rx="20"/></g></svg><div class="workspace-progress" role="progressbar" aria-label="Checking access"></div><span>Checking PTG Studio authorization…</span></div><section id="cloudPanel" hidden aria-label="Manual encrypted cloud project backups">
   <strong>Encrypted Cloud Project Backup</strong>
   <small>Manual only, for the current project. Projects containing large photos may need local export.</small>
   <button type="button" id="cloudBackup">Back up current project</button>
@@ -215,7 +215,7 @@ body.bl-protected-shell>header .bl-update-bell svg{stroke:currentColor!important
   if(!window.chrome?.webview){
     document.body.classList.add("bl-studio-web-r6");
     const wordmark=document.createElement("span");wordmark.className="bl-studio-wordmark";wordmark.textContent="Branchline.";
-    const mega=document.createElement("img");mega.className="bl-studio-megasaver";mega.src="/first-megasaver-ptg/legacy-ptg/price-tag-header.png";mega.alt="1st Megasaver";
+    const mega=document.createElement("img");mega.className="bl-studio-megasaver";mega.src="/first-megasaver-ptg/legacy-ptg/login-logo.png";mega.alt="1st Megasaver";
     desktopLogo.after(wordmark,mega);
     header.append(rail);
   }else document.body.prepend(rail);
