@@ -15,6 +15,7 @@ function withProof(fn){
  return next;
 }
 function note(message,link=false){
+ status.removeAttribute("data-loading");
  status.textContent=message;
  if(link){const a=document.createElement('a');a.href=portal;a.rel='noreferrer';a.textContent='Open from PTG Creative Studios';status.append(document.createTextNode(' '),a);}
  status.hidden=false;

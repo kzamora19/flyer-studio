@@ -9,11 +9,14 @@ try{
  const toggle=page.locator("header #editorMenuToggle");await toggle.waitFor();
  assert.equal(await page.locator(".editorMenuHeading").isVisible(),false);
  assert.equal(await page.locator("header .brandAppIcon").isVisible(),false);
+ assert.equal(await page.locator("#studioNav").isVisible(),false,"Mobile menu begins closed");
+ await toggle.click();
  const nav=await page.locator("#studioNav").boundingBox(),content=await page.locator("#sidebarContent").boundingBox(),last=await page.locator("#last").boundingBox();
- assert.ok(content.y>=nav.y+nav.height-1,"Menu does not cover settings");
+ assert.ok(nav.width<=width&&nav.x===0,"Menu opens as bounded left drawer");
  assert.ok(last.y+last.height<=content.y+content.height+1,"Last setting fits scroll content");
  await toggle.click();assert.equal(await page.locator("#studioNav").isVisible(),false);
  await toggle.click();assert.equal(await page.locator("#studioNav").isVisible(),true);
+ await page.locator("#studioNav [data-nav=campaign]").click();assert.equal(await page.locator("#studioNav").isVisible(),false,"Drawer closes on selection");
  assert.equal(await page.getByRole("textbox",{name:"Editable campaign"}).inputValue(),"draft");
  await page.setViewportSize({width:1200,height:800});await page.locator(".editorMenuHeading #editorMenuToggle").waitFor();
  await page.close();
