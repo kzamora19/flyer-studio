@@ -20,7 +20,18 @@ function note(message,link=false){
  if(link){const a=document.createElement('a');a.href=portal;a.rel='noreferrer';a.textContent='Open from PTG Creative Studios';status.append(document.createTextNode(' '),a);}
  status.hidden=false;
 }
+function renderWorkspaceIdentity(identity) {
+  const account = document.getElementById("workspace-account");
+  if (!account) return;
+  const name = typeof identity?.name === "string" ? identity.name.trim() : "";
+  const role = typeof identity?.role === "string" ? identity.role.trim() : "";
+  account.querySelector("strong").textContent = name;
+  account.querySelector("small").textContent = role;
+  account.hidden = !name || !role;
+  if (account.hidden) account.open = false;
+}
 function lock(message){
+ renderWorkspaceIdentity(null);
  active=false;checking=false;privateKey=null;sessionId='';challenge='';
  if(timer)clearInterval(timer);if(expiryTimer)clearTimeout(expiryTimer);
  if(draftPort){draftPort.close();draftPort=null;}
@@ -87,7 +98,7 @@ async function check(){
    if(!active||Date.now()>=expiresAt)return;
    const result=await gateway(await signedRequest());
    if(!active)return;
-   recordAuth(result);warnIfExpiring();
+   recordAuth(result);renderWorkspaceIdentity(result.workspaceIdentity);warnIfExpiring();
   });
  }catch{lock('PTG access has expired, been revoked, or cannot be verified. Open the Studio again from PTG.');}
  finally{checking=false;}
@@ -190,6 +201,7 @@ async function open(){
     throw Error('Verified PTG account encrypted recovery is unavailable.');
   const vault=window.MEGAFLYER_LOCAL_DRAFT_VAULT.session(data.draftScope,data.draftKey);
   recordAuth(data);
+  renderWorkspaceIdentity(data.workspaceIdentity);
   const frame=document.createElement('iframe');
   frame.id='studio-editor-frame';frame.referrerPolicy='no-referrer';frame.title='MegaFlyer editor (authorized PTG session)';
   // about:srcdoc WITHOUT an opaque sandbox inherits the shared github.io origin.
