@@ -38,6 +38,12 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
   body:has(#sidebarFixed #studioNav) #editorMenuToggle::before{content:"☰";font-size:22px;line-height:1}
   body:has(#sidebarFixed #studioNav) #editorMenuToggle:focus-visible{outline:2px solid #12d3e4;outline-offset:-3px}
  }
+ @media(min-width:821px){
+  body:has(#sidebarFixed #studioNav) #studioNav > [data-nav],
+  body:has(#sidebarFixed #studioNav) #studioNav #sidebarActions button{position:relative;display:grid!important;place-items:center!important;padding:0!important}
+  body:has(#sidebarFixed #studioNav) #studioNav > [data-nav]::before,
+  body:has(#sidebarFixed #studioNav) #studioNav #sidebarActions button::before{position:absolute;inset:0;display:grid;place-items:center;margin:0!important;line-height:1}
+ }
  @media(min-width:821px){body:has(#sidebarFixed #studioNav) #sidebarFixed.menuCollapsed #studioNav{display:none!important}}
  `;
  function wire(){
