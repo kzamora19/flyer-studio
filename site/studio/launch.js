@@ -70,6 +70,10 @@ if(!/^[A-Za-z0-9_-]{43}$/.test(ticket)){lock('A valid PTG authorization is requi
 if(!/^https:\/\/[a-z0-9-]+\.supabase\.co\/functions\/v1\/flyer-editor-delivery$/.test(String(cfg.endpoint||''))){
  lock('The protected Studio service is not configured.');return;
 }
+const deviceLayout=window.BranchlineFlyerDeviceLayout;
+if(typeof deviceLayout?.apply!=='function'){
+ lock('MegaFlyer workspace layout could not load. Reopen the Studio from PTG.');return;
+}
 function base64url(array){
  let raw='';for(const byte of new Uint8Array(array))raw+=String.fromCharCode(byte);
  return btoa(raw).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
@@ -308,7 +312,7 @@ async function open(){
   },{once:true});
   // The original response has passed SHA-256 verification. Apply the local
   // presentation overlay without modifying authorization or sandbox flags.
-  frame.srcdoc=window.BranchlineFlyerDeviceLayout?.apply(data.html)??data.html;mount.replaceChildren(frame);active=true;status.hidden=true;
+  frame.srcdoc=deviceLayout.apply(data.html);mount.replaceChildren(frame);active=true;status.hidden=true;
   setupCloud(vault);
   if(window.BRANCHLINE_CENTRAL_DRIVE){
     void window.BRANCHLINE_CENTRAL_DRIVE.setup({

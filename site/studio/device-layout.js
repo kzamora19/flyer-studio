@@ -88,8 +88,12 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
  }
  function apply(html){
   if(typeof html!=="string"||!(html.includes("PRIVATE EDITOR BUNDLE")||(html.includes("editorMenuToggle")&&html.includes("sidebarFixed")&&html.includes("studioNav"))))return html;
-  const at=html.toLowerCase().lastIndexOf("</body>");
-  if(at<0||html.includes('id="bl-flyer-device-layout"'))return html;
+  if(html.includes('id="bl-flyer-device-layout"'))return html;
+  // HTML permits an omitted body end tag. Protected bundles may also append
+  // scripts after the editor markup, so only match document-ending tags.
+  const closing=html.match(/(?:<\/body\s*>\s*)?<\/html\s*>\s*$/i)
+    ||html.match(/<\/body\s*>\s*$/i);
+  const at=closing?.index??html.length;
   const code="("+wire.toString()+")();";
   return html.slice(0,at)+'<style id="bl-flyer-device-layout">'+css+'</style><script>'+code+'<\/script>'+html.slice(at);
  }
