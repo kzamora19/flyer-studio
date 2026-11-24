@@ -25,6 +25,9 @@ test("protected mobile MegaFlyer uses its original menu control inside its icon 
  const {apply}=require("../site/studio/device-layout.js");
  const raw='<!doctype html><body><!-- PRIVATE EDITOR BUNDLE --><button id="editorMenuToggle">Hide menu</button></body></html>';
  const patched=apply(raw);assert.ok(patched.includes('id="bl-flyer-device-layout"'));assert.equal(apply(patched),patched);assert.ok(patched.includes('<button id="editorMenuToggle">Hide menu</button>'));assert.equal(apply("<body>unrecognized</body>"),"<body>unrecognized</body>");
- const launch=read("site/studio/launch.js");assert.ok(launch.indexOf("crypto.subtle.digest")<launch.indexOf("BranchlineFlyerDeviceLayout?.apply(data.html)"));
+ const launch=read("site/studio/launch.js");
+ const integrityCheck=launch.indexOf("if(hash!==data.sha256)");
+ const installLayout=launch.indexOf("frame.srcdoc=deviceLayout.apply(data.html)");
+ assert.ok(integrityCheck>=0 && installLayout>integrityCheck,"Install the sidebar only after checking the editor digest");
  assert.ok(!launch.includes('allow-same-origin allow-scripts'));assert.ok(patched.includes("brand.prepend(toggle)"));
 });
