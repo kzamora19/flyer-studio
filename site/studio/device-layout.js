@@ -33,6 +33,11 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
   body.bl-flyer-mobile-menu main>aside.chatMobileClosed #sidebarFixed{padding:0!important;border:0}
   body.bl-flyer-mobile-menu .stage{height:auto!important;max-height:none!important;overflow:visible!important}
  }
+ @media(min-width:821px){
+  body:has(#sidebarFixed #studioNav) #editorMenuToggle{display:grid!important;place-items:center;width:100%;min-height:42px;padding:0!important;font-size:0!important;color:white!important;border:0!important;background:transparent!important}
+  body:has(#sidebarFixed #studioNav) #editorMenuToggle::before{content:"☰";font-size:22px;line-height:1}
+  body:has(#sidebarFixed #studioNav) #editorMenuToggle:focus-visible{outline:2px solid #12d3e4;outline-offset:-3px}
+ }
  @media(min-width:821px){body:has(#sidebarFixed #studioNav) #sidebarFixed.menuCollapsed #studioNav{display:none!important}}
  `;
  function wire(){
@@ -42,7 +47,14 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
   function find(){
    const t=document.getElementById("editorMenuToggle"),h=t?.closest(".editorMenuHeading"),brand=document.querySelector("header .brandIdentity");
    if(!t||!h||!brand||!document.getElementById("sidebarFixed")||!document.getElementById("sidebarContent"))return false;
-   toggle=t;heading=h;placeholder=document.createComment("original editor menu position");h.insertBefore(placeholder,t);
+   const syncToggleLabel=()=>{
+    const label=toggle.getAttribute("aria-expanded")==="true"?"Hide editing menu":"Show editing menu";
+    toggle.title=label;
+    toggle.setAttribute("aria-label",label);
+   };
+   toggle=t;heading=h;
+   syncToggleLabel();
+   new MutationObserver(syncToggleLabel).observe(toggle,{attributes:true,attributeFilter:["aria-expanded"]});placeholder=document.createComment("original editor menu position");h.insertBefore(placeholder,t);
    function sync(){
     if(query.matches){brand.prepend(toggle);document.body.classList.add("bl-flyer-mobile-menu");const header=brand.closest("header");if(header)document.body.style.setProperty("--bl-editor-header-height",header.getBoundingClientRect().height+"px");}
     else{heading.insertBefore(toggle,placeholder.nextSibling);document.body.classList.remove("bl-flyer-mobile-menu");}
@@ -73,7 +85,8 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
     if(title.textContent!==label)title.textContent=label;
    };
    for(const button of nav.querySelectorAll("[data-nav],#sidebarActions button")){
-    if(!button.hasAttribute("aria-label"))button.setAttribute("aria-label",button.textContent.trim());
+    const label=button.getAttribute("aria-label")||button.textContent.trim();
+    if(label){button.title=label;button.setAttribute("aria-label",label); }
    }
    query.addEventListener("change",sync);
    new MutationObserver(sync).observe(nav,{subtree:true,attributes:true,attributeFilter:["class","aria-current"]});
