@@ -2845,7 +2845,8 @@ const examples = [
   ['DEMO-FRIDGE','back','Two-door refrigerator','18999','21999'],
   ['DEMO-WASH','back','Twin-tub washer','7499','8999']
 ];
-const blank = () => ({version:1,campaign:{...defaultCampaign,footer:'',footerDesign:{front:defaultFooter(),back:defaultFooter()}},offers:[],reviewScope:'both',status:'Draft',history:[]});
+let branchFooterContact='';
+const blank = () => ({version:1,campaign:{...defaultCampaign,footer:'',footerDesign:{front:defaultFooter(branchFooterContact),back:defaultFooter(branchFooterContact)}},offers:[],reviewScope:'both',status:'Draft',history:[]});
 let state = blank();
 state.campaign.footer=defaultCampaign.footer;
 state.offers=examples.map(([sku,section,name,promo,regular,items=''])=>({sku,section,name,promo,regular,items,brand:'',model:'',badge:'',photo:'',demo:true}));
@@ -4123,7 +4124,7 @@ function validatedBackup(data) {
   });
   return {version:1,campaign,offers,reviewScope:reviewScope(data),status:'Draft',history:[]};
 }
-function defaultFooter(){return {mode:'standard',height:34,color:'#142c78',left:'Until supplies last. Terms and conditions apply.',right:'',leftSize:11,rightSize:12,leftFont:'current',rightFont:'current',leftWeight:500,rightWeight:700,leftColor:'#ffffff',rightColor:'#ffffff',leftAlign:'left',rightAlign:'right',leftPadding:16,rightPadding:16,padding:8,spacing:10,inset:0,borderColor:'#142c78',borderWidth:0,image:'',backgroundImage:'',imageFit:'fit',imageOpacity:100,imageScale:100,imageX:50,imageY:50,aspect:true,elements:[]};}
+function defaultFooter(contact=''){return {mode:'standard',height:34,color:'#142c78',left:'Until supplies last. Terms and conditions apply.',right:contact,leftSize:11,rightSize:12,leftFont:'current',rightFont:'current',leftWeight:500,rightWeight:700,leftColor:'#ffffff',rightColor:'#ffffff',leftAlign:'left',rightAlign:'right',leftPadding:16,rightPadding:16,padding:8,spacing:10,inset:0,borderColor:'#142c78',borderWidth:0,image:'',backgroundImage:'',imageFit:'fit',imageOpacity:100,imageScale:100,imageX:50,imageY:50,aspect:true,elements:[]};}
 function sanitizeFooter(raw){
   const d=defaultFooter(),v=raw&&typeof raw==='object'?raw:{},out={...d};
   const num=(k,min,max)=>v[k]==null||v[k]===''||!Number.isFinite(Number(v[k]))?d[k]:Math.max(min,Math.min(max,Number(v[k])));
@@ -5149,6 +5150,19 @@ async function protectedOperation(fields){
   if(typeof window.__MEGAFLYER_OPERATIONS_RPC__!=='function')throw Error('Protected operations require a verified Branchline PTG session.');
   return window.__MEGAFLYER_OPERATIONS_RPC__(fields);
 }
+async function applyNewProjectBranchFooter(project){
+  if(typeof window.__MEGAFLYER_OPERATIONS_RPC__!=='function')return;
+  const original=project.campaign.footerDesign;
+  const initial={front:original?.front,back:original?.back};
+  try{
+    const r=await protectedOperation({action:'permissions'});
+    branchFooterContact=typeof r?.footerContact==='string'?r.footerContact.slice(0,300):'';
+    if(!branchFooterContact||state!==project||state.status!=='Draft'||project.campaign.footerDesign!==original)return;
+    let changed=false;
+    for(const page of ['front','back'])if(original?.[page]===initial[page]&&original[page]?.mode==='standard'&&!original[page].right){original[page]={...original[page],right:branchFooterContact};changed=true;}
+    if(changed){edited('Branch footer contact defaults applied.');if(currentMenu==='campaign'&&currentSub==='footer')renderPageComponentEditor('footer');}
+  }catch{/* Remain editable; an unavailable verified session must not guess a branch. */}
+}
 async function verifyReviewPermissions(){
   reviewRights={canApprove:false,canOverride:false};renderReviewStatus();
   try{
@@ -5497,7 +5511,7 @@ function bind() {
   $('backup').onclick=()=>download(new Blob([JSON.stringify(state)],{type:'application/json'}),'flyer-project.json');
   $('new').onclick=()=>{
     if(!window.confirm('Replace this campaign with a blank one? Download a project backup first if you want to keep it.')) return;
-    state=blank();registerCustomSections(state.campaign);setup();edited('Blank campaign created.');if($('studioSubnav'))chooseAdvancedSub('campaign','text');
+    state=blank();registerCustomSections(state.campaign);setup();edited('Blank campaign created.');if($('studioSubnav'))chooseAdvancedSub('campaign','text');void applyNewProjectBranchFooter(state);
   };
   $('clearLogo').onclick=()=>{state.campaign.logo='';edited();};
   for(const [face,key] of Object.entries(artworkFields)) {
@@ -6207,7 +6221,7 @@ function renderPageComponentEditor(kind){
     f.elements.forEach((e,i)=>{const t=document.createElement('strong');t.textContent='Element '+(i+1);holder.append(t);if(e.kind==='text'){field('Text','elementText','text',e.text,v=>change(i,{text:v}));field('Text size','elementSize','number',e.size,v=>change(i,{size:v}));field('Text color','elementColor','color',e.color,v=>change(i,{color:v}));}else upload('Replace element image',image=>change(i,{image}));for(const [k,label] of [['x','X (%)'],['y','Y (%)'],['w','Width (%)'],['h','Height (%)'],['opacity','Opacity (%)']])field(label,'element'+k,'number',e[k],v=>change(i,{[k]:v}));button('Remove element '+(i+1),()=>update({elements:f.elements.filter((_,j)=>j!==i)}));});
   }
   button('Apply to both sides',()=>{state.campaign.footerDesign={front:structuredClone(f),back:structuredClone(f)};edited('Footer copied to both sides.');});
-  button('Reset footer',()=>update(defaultFooter()));
+  button('Reset footer',()=>update(defaultFooter(branchFooterContact)));
   button('Save Footer as Template',async()=>{const name=clean(prompt('Footer template name')||'').slice(0,80);if(!name)return;try{const stored=await powerFromDB('footer-templates')||[];const templates=[{name,design:f},...stored].slice(0,30);await powerToDB('footer-templates',templates);state.campaign.footerTemplates=templates;edited('Footer template saved.');}catch(e){feedback(e.message);}});
   button('Retrieve Footer Template',async()=>{const local=await powerFromDB('footer-templates')||[],templates=local.length?local:state.campaign.footerTemplates||[];if(!templates.length){feedback('No saved footer templates.');return;}const name=prompt('Enter a template number:\n'+templates.map((t,i)=>(i+1)+'. '+t.name).join('\n'));const t=templates[Number(name)-1];if(t)update(t.design);});
 }
@@ -6575,13 +6589,15 @@ function updateSectionHandles(){
 }
 
 async function boot() {
-  try {state=(await loadDatabase())||state;ptgReference=await readReference();}
+  let newProject=false;
+  try {const stored=await loadDatabase();newProject=!stored;state=stored||state;ptgReference=await readReference();}
   catch {feedback('Browser storage is unavailable. Download a project backup.');}
   state.campaign={...defaultCampaign,...state.campaign,brandHeader:brandHeaderChoice(state.campaign),
     headlineDesign:headlineDesignChoice(state.campaign)};
   registerCustomSections(state.campaign);
   if(state.campaign.sectionLayout)state.campaign.sectionLayout=sanitizeSectionLayout(state.campaign.sectionLayout);
   initStudioUI();setup();bind();initAdvancedStudio();bindCardArrange();initPowerTools();window.dispatchEvent(new Event('flyerstudio:ready'));
+  if(newProject)void applyNewProjectBranchFooter(state);
 }
 boot();
 // Flyer Studio Studio+ enhancements: local-safe improvements. No authentication secrets are persisted.
