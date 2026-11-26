@@ -373,6 +373,51 @@ try{
  assert.ok(left&&right&&left.x<right.x&&left.y===right.y,'Footer text stays on one shared baseline');
  assert.deepEqual(scoped.pixel,[18,52,86,255],'Transparent product card reveals actual section background');
  console.log('PASS: scoped 18-product validation, hidden section rendering, restoration, footer settings persistence, single-row layout and transparent card pixels');
+ // Verify actual left/right placement at every representative column count.
+ const universal=await page.evaluate(()=>{
+  const main=document.createElement('canvas');main.width=80;main.height=80;main.getContext('2d').fillStyle='#ff00ff';main.getContext('2d').fillRect(0,0,80,80);
+  const gift=document.createElement('canvas');gift.width=40;gift.height=20;
+  const a={image:main,frame:{x:0,y:0,width:80,height:80}},g={image:gift,frame:{x:0,y:0,width:40,height:20}};
+  return [380,250,185,145].flatMap(w=>['front','tech','bundles'].map(type=>{
+   const c=document.createElement('canvas');c.width=w;c.height=160;const ctx=c.getContext('2d'),images=[],words=[];
+   const draw=ctx.drawImage.bind(ctx),fill=ctx.fillText.bind(ctx);
+   ctx.drawImage=(img,...args)=>{images.push({main:img===main,args});draw(img,...args);};
+   ctx.fillText=(text,x,y,...args)=>{words.push({text,x,y});fill(text,x,y,...args);};
+   const area=card(ctx,{sku:'T',name:'PRODUCT DESCRIPTION',brand:'BRAND',model:'T1',promo:'1000',freebieText:'BONUS'},a,0,0,w,160,type,null,g);
+   const photo=images.find(v=>v.main),desc=words.filter(v=>/PRODUCT|DESCRIPTION|T1/.test(v.text));
+   return {w,type,photo:photo?.args,desc,area};
+  }));
+ });
+ for(const c of universal){
+  assert.ok(c.photo&&c.photo[4]+c.photo[6]<=c.w*.5+.5,'Main photo stays in left lane: '+JSON.stringify(c));
+  assert.ok(c.desc.length&&c.desc.every(t=>t.x>=c.w*.5),'Product copy stays in right lane');
+  assert.ok(c.area&&c.area.x>=c.w*.5&&c.area.y>=Math.max(...c.desc.map(t=>t.y)),'Freebie below description for every width');
+ }
+ assert.equal(await page.locator('#back').evaluate(el=>el.nextElementSibling.id),'arrangeCards');
+ const watermarks=await page.evaluate(async()=>{
+  const p=blank();p.campaign.title='WATERMARK TEST';p.campaign.dates='November 26, 2026';p.campaign.sectionLayout=defaultSectionLayout();p.campaign.sectionLayout.tech.enabled=false;
+  p.campaign.sectionLayout.front.cols=2;p.campaign.sectionLayout.front.rows=1;p.campaign.sectionLayout.front.height=300;p.campaign.sectionLayout.front.cardOpacity=100;
+  const img=document.createElement('canvas');img.width=80;img.height=113;const ic=img.getContext('2d');ic.fillStyle='#00ffff';ic.fillRect(0,0,80,113);
+  const png=img.toDataURL();const photo=document.createElement('canvas');photo.width=80;photo.height=80;photo.getContext('2d').fillStyle='#ff00ff';photo.getContext('2d').fillRect(0,0,80,80);
+  p.offers=[{sku:'WM-PRODUCT',name:'TEST PRODUCT',brand:'TEST',model:'T',promo:'1999',photo:photo.toDataURL(),section:'front',slot:0}];p.status='Approved';
+  const before=await render(p,'front',800,null,'authorized-final');
+  p.campaign.pageWatermarks={front:{type:'image',image:png,opacity:25,scale:100},back:{type:'none'}};
+  const restored=validatedBackup(JSON.parse(JSON.stringify(p)));
+  const after=await render(restored,'front',800,null,'authorized-final');
+  const box=before.layout.cards.find(v=>v.key==='front'),x=Math.ceil(box.x+6),y=Math.ceil(box.y+6),w=Math.floor(box.width-12),h=Math.floor(box.height-12);
+  const b=before.canvas.getContext('2d').getImageData(x,y,w,h).data,a=after.canvas.getContext('2d').getImageData(x,y,w,h).data;
+  let colored=0,protectedPhoto=0;
+  for(let i=0;i<a.length;i+=4){if(b[i]>245&&b[i+1]>245&&b[i+2]>245&&a[i]<225&&a[i+1]>245&&a[i+2]>245)colored++;if(b[i]>245&&b[i+1]<10&&b[i+2]>245&&a[i]===b[i]&&a[i+1]===b[i+1]&&a[i+2]===b[i+2])protectedPhoto++;}
+  delete p.campaign.pageWatermarks;Object.assign(p.campaign.sectionLayout.front,{backgroundMode:'watermark',backgroundImage:png,backgroundOpacity:25,backgroundScale:100});
+  const old=validatedBackup(JSON.parse(JSON.stringify(p)));const oldRendered=await render(old,'front',800,null,'authorized-final');
+  const pix=oldRendered.canvas.getContext('2d').getImageData(x,y,w,h).data;let sectionVisible=0;
+  for(let i=0;i<pix.length;i+=4)if(b[i]>245&&b[i+1]>245&&b[i+2]>245&&pix[i]<225&&pix[i+1]>245&&pix[i+2]>245)sectionVisible++;
+  return {colored,protectedPhoto,sectionVisible,persisted:restored.campaign.pageWatermarks.front.image===png,back:restored.campaign.pageWatermarks.back.type,legacy:old.campaign.sectionLayout.front.watermark.type};
+ });
+ assert.ok(watermarks.colored>50&&watermarks.protectedPhoto>50,'Watermark visible on opaque card fills but not over photo: '+JSON.stringify(watermarks));
+ assert.ok(watermarks.sectionVisible>50&&watermarks.legacy==='image','Legacy saved decorative section image becomes visible');
+ assert.ok(watermarks.persisted&&watermarks.back==='none','Whole-page image retained and sides independent');
+ console.log('PASS universal left/right card layout, Arrange cards order, page/legacy section watermark pixels and backup');
  assert.deepEqual(pageErrors,[],'Page must not throw runtime JS errors');
  console.log('PASS: Chromium toolbar, scrolling arrows, Front/Back, no duplicates, menu Show/Hide, floating Studio+/Assets, mobile layout');
 } finally {
