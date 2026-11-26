@@ -79,7 +79,7 @@ try{
  });
  await page.locator('#arrangeCards').click();
  assert.equal(await page.locator('#arrangeCards').getAttribute('aria-pressed'),'true');
- const frontButtons=page.locator('#slotFields .sectionPicker').filter({hasText:'Front grid'}).locator('.numberGrid button');
+ const frontButtons=page.locator('#slotFields .numberGrid button[title^="Front grid · Card "]');
  await frontButtons.nth(0).click();await frontButtons.nth(1).click();
  assert.equal(await page.evaluate(()=>placement(state.offers,'front').slots[1]?.sku),'CARD-A');
  assert.equal(await page.evaluate(()=>placement(state.offers,'front').slots[1]?.freebiePhoto),arrangementBaseline.freebie);
@@ -88,7 +88,7 @@ try{
  await page.locator('#redoCards').click();
  assert.equal(await page.evaluate(()=>placement(state.offers,'front').slots[1]?.sku),'CARD-A');
  await frontButtons.nth(1).click();await page.locator('#back').click();
- const backButtons=page.locator('#slotFields .sectionPicker').filter({hasText:'Back grid'}).locator('.numberGrid button');
+ const backButtons=page.locator('#slotFields .numberGrid button[title^="Back grid · Card "]');
  await backButtons.nth(0).click();
  assert.equal(await page.evaluate(()=>placement(state.offers,'back').slots[0]?.sku),'CARD-A');
  assert.equal(await page.evaluate(()=>placement(state.offers,'back').slots[0]?.freebiePhoto),arrangementBaseline.freebie);
