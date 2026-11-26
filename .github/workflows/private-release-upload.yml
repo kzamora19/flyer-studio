@@ -1,0 +1,40 @@
+name: Authorized MegaFlyer product-area watermark private release transfer
+on:
+  push:
+    branches: [release/watermark-product-area-20261126]
+    paths: ['.github/workflows/private-release-upload.yml']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  upload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 84cce230b1a2d866e8f72dfbdb7f4cf415d6f32a
+      - uses: actions/checkout@v4
+        with:
+          ref: 8906c710de8f72f0607109c142518588df87e207
+          path: historical-build
+      - uses: actions/checkout@v4
+        with:
+          ref: 039395a9f8299fc92d2bbb22ec4ae3a5a40ecc19
+          path: historical-transfer
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebuild and verify exact staged candidate
+        run: |
+          mkdir -p scripts staging
+          cp historical-build/scripts/build-private-flyer.mjs scripts/
+          cp historical-build/staging/editor-storage-bridge.js staging/
+          cp historical-transfer/staging/private-release-upload.mjs staging/
+          node scripts/build-private-flyer.mjs "$RUNNER_TEMP/branchline-private-bundle"
+          echo '8433aebc4dab0c8802353aa615057cef4a5d4b96d9fcd4eb9f2c26da757f673e  '"$RUNNER_TEMP/branchline-private-bundle/private/studio.html" | sha256sum -c
+      - name: Transfer only verified private editor using existing attested uploader
+        run: |
+          npm init -y >/dev/null
+          npm install --no-save --no-package-lock --ignore-scripts @supabase/supabase-js@2.49.8
+          node staging/private-release-upload.mjs
