@@ -30,6 +30,15 @@ assert.equal(back[0],255,'Back JPEG start');
  const xref=Number(text.match(/startxref\n(\d+)\n%%EOF/)[1]);
  assert.equal(text.slice(xref,xref+4),'xref','Valid xref address');
  assert.match(text,/\/MediaBox \[0 0 595\.2756 841\.8898\]/,'A4 size in PDF points');
- assert.ok(source.includes("await render(snapshot,face,width)"),'PDF source uses same flyer renderer as preview');
+ assert.ok(source.includes("await render(snapshot,face,width,undefined,renderMode)"),'PDF source uses same flyer renderer as preview with authorized render mode');
+ for(const image of [front,back]){
+  const single=Buffer.from(await pdfFile([{width:4,height:4,data:image}],d).arrayBuffer());
+  const singleText=single.toString('latin1');
+  assert.match(singleText,/\/Count 1\b/,'Single-face PDF has exactly one page');
+  assert.equal((singleText.match(/\/Type \/Page \/Parent /g)||[]).length,1);
+  assert.equal((singleText.match(/\/Subtype \/Image/g)||[]).length,1);
+  assert.ok(single.indexOf(Buffer.from(image))>=0,'Selected image remains unchanged');
+  assert.equal(single.indexOf(Buffer.from(image===front?back:front)),-1,'Unselected face is absent');
+ }
  console.log('PASS: A4 two-page PDF with correct image streams, trim/MediaBox and xref.');
 })().catch(err=>{console.error(err);process.exitCode=1;});
