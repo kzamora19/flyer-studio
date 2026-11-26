@@ -5,7 +5,7 @@ const status=document.getElementById('status'),mount=document.getElementById('mo
 const cloudPanel=document.getElementById('cloudPanel'),cloudNote=document.getElementById('cloudMessage');
 const portal='https://kzamora19.github.io/first-megasaver-ptg/studios/';
 let timer=null,expiryTimer=null,active=false,checking=false,expiresAt=0,absoluteCutoff=0,expiryWarned=false;
-let privateKey=null,sessionId='',challenge='',draftPort=null;
+let privateKey=null,sessionId='',challenge='',draftPort=null,catalogPort=null;
 let proofQueue=Promise.resolve();
 // Background revocation checks and protected photo operations consume the
 // SAME rotating one-use PTG challenge. Always serialize them in the parent.
@@ -35,6 +35,7 @@ function lock(message){
  active=false;checking=false;privateKey=null;sessionId='';challenge='';
  if(timer)clearInterval(timer);if(expiryTimer)clearTimeout(expiryTimer);
  if(draftPort){draftPort.close();draftPort=null;}
+ if(catalogPort){catalogPort.close();catalogPort=null;}
  timer=null;expiryTimer=null;
  // The editor is origin-isolated: never reach into its DOM or storage.
  // Local backup must be completed before expiry, or via a future scoped bridge.
@@ -184,6 +185,67 @@ function setupCloud(vault){
  cloudPanel.hidden=false;
  tell('Cloud backup is optional and encrypted. Save locally first. Large image projects may require local export.');
 }
+// The catalog is public, but the opaque private editor cannot call the
+// origin-restricted Edge Function directly. Relay only its two fixed operations.
+const catalogEndpoint='https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-catalog';
+async function relayStoreCatalog(message){
+ const p=new URLSearchParams();
+ if(message.mode==='photos'){
+  if(typeof message.sku!=='string'||!message.sku.trim()||message.sku.length>100||
+     typeof message.model!=='string'||message.model.length>100)throw Error('Invalid store product lookup.');
+  p.set('mode','photos');p.set('sku',message.sku.trim());p.set('model',message.model.trim());
+ }else if(message.mode==='image'){
+  const url=new URL(String(message.url||''));
+  if(url.origin!=='https://www.1stmegasaver.com.ph'||url.username||url.password||
+     !url.pathname.startsWith('/wp-content/uploads/')||url.href.length>2048)throw Error('Invalid store image URL.');
+  p.set('mode','image');p.set('url',url.href);
+ }else throw Error('Unsupported store photo action.');
+ const response=await fetch(catalogEndpoint+'?'+p,{method:'GET',credentials:'omit',
+   redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(20000)});
+ const type=response.headers.get('content-type')||'';
+ if(!response.ok){
+  const payload=await response.json().catch(()=>null);
+  throw Error(typeof payload?.error==='string'?payload.error:'Store catalog returned HTTP '+response.status+'.');
+ }
+ if(message.mode==='photos'&&!type.toLowerCase().startsWith('application/json'))throw Error('Unexpected catalog response.');
+ if(message.mode==='image'&&!/^image\/(png|jpeg|webp)(?:;|$)/i.test(type))throw Error('Unsupported catalog image.');
+ const bytes=await response.arrayBuffer();
+ if(bytes.byteLength>(message.mode==='photos'?1024*1024:20*1024*1024))throw Error('Catalog response exceeds size limit.');
+ return {type,bytes};
+}
+function installCatalogRelay(){
+ let port=null,sequence=0;
+ const pending=new Map();
+ let readyResolve;
+ const ready=new Promise(resolve=>{readyResolve=resolve;});
+ window.addEventListener('message',function receive(event){
+  if(event.source!==parent||event.data?.kind!=='megaflyer-public-catalog-port'||!event.ports?.[0])return;
+  window.removeEventListener('message',receive);
+  port=event.ports[0];
+  port.onmessage=({data})=>{
+   const request=pending.get(data?.id);if(!request)return;
+   pending.delete(data.id);clearTimeout(request.timer);
+   if(data.ok)request.resolve(new Response(data.value.bytes,{headers:{'Content-Type':data.value.type}}));
+   else request.reject(Error(data.error||'Store catalog unavailable.'));
+  };
+  port.start();readyResolve();
+ });
+ window.__MEGAFLYER_CATALOG_RPC__=async function(fields){
+  let readyTimer;try{await Promise.race([ready,new Promise((_,reject)=>{readyTimer=setTimeout(()=>reject(Error('Store catalog connection is unavailable. Reopen MegaFlyer.')),5000);})]);}
+  finally{clearTimeout(readyTimer);}
+  return new Promise((resolve,reject)=>{
+   const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('Store photo request timed out.'));},25000);
+   pending.set(id,{resolve,reject,timer});port.postMessage({...fields,id});
+  });
+ };
+}
+function withCatalogRelay(html){
+ // Installed locally after the signed editor package has passed verification.
+ // Never share credentials, allow arbitrary URLs, or change the sandbox flags.
+ const script='<script>('+installCatalogRelay.toString()+')();<\/script>';
+ const at=html.search(/<script(?:\s|>)/i);
+ return at<0?html+script:html.slice(0,at)+script+html.slice(at);
+}
 async function open(){
  try{
   // An in-memory non-extractable private key avoids a reusable browser bearer.
@@ -306,13 +368,32 @@ async function open(){
    }
   };
   channel.port1.start();
+  const catalogChannel=new MessageChannel();
+  catalogPort=catalogChannel.port1;
+  let catalogInFlight=0;
+  catalogPort.onmessage=async({data:message})=>{
+   if(!active||Date.now()>=expiresAt||mount.querySelector('iframe')!==frame||
+      !Number.isSafeInteger(message?.id))return;
+   const port=catalogChannel.port1;
+   if(catalogInFlight>=8){port.postMessage({id:message.id,ok:false,error:'Too many store photo requests. Retry shortly.'});return;}
+   catalogInFlight++;
+   try{
+    const value=await relayStoreCatalog(message);
+    if(active&&Date.now()<expiresAt)port.postMessage({id:message.id,ok:true,value},[value.bytes]);
+   }catch(error){
+    if(active&&Date.now()<expiresAt)port.postMessage({id:message.id,ok:false,error:error.message||'Store catalog unavailable.'});
+   }finally{catalogInFlight--;}
+  };
+  catalogPort.start();
   frame.addEventListener('load',()=>{
-   if(active&&Date.now()<expiresAt&&frame.contentWindow)
+   if(active&&Date.now()<expiresAt&&frame.contentWindow){
     frame.contentWindow.postMessage({kind:'megaflyer-private-storage-port'},'*',[channel.port2]);
+    frame.contentWindow.postMessage({kind:'megaflyer-public-catalog-port'},'*',[catalogChannel.port2]);
+   }
   },{once:true});
   // The original response has passed SHA-256 verification. Apply the local
   // presentation overlay without modifying authorization or sandbox flags.
-  frame.srcdoc=deviceLayout.apply(data.html);mount.replaceChildren(frame);active=true;status.hidden=true;
+  frame.srcdoc=withCatalogRelay(deviceLayout.apply(data.html));mount.replaceChildren(frame);active=true;status.hidden=true;
   setupCloud(vault);
   if(window.BRANCHLINE_CENTRAL_DRIVE){
     void window.BRANCHLINE_CENTRAL_DRIVE.setup({
