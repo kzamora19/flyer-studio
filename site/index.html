@@ -2559,6 +2559,24 @@ body.modalOpen{overflow:auto!important}
  .brandIdentity .brandAppIcon{width:32px;height:32px}
 }
 
+
+.bl-centered-menu-icon{display:none}
+@media(min-width:821px){
+ html:has(#bl-flyer-device-layout) #sidebarFixed#sidebarFixed #studioNav>[data-nav],
+ html:has(#bl-flyer-device-layout) #sidebarFixed#sidebarFixed #sidebarActions button,
+ html:has(#bl-flyer-device-layout) #sidebarFixed#sidebarFixed #editorMenuToggle,
+ #sidebarFixed#sidebarFixed.menuCollapsed #studioNav>[data-nav],
+ #sidebarFixed#sidebarFixed.menuCollapsed #sidebarActions button,
+ #sidebarFixed#sidebarFixed.menuCollapsed #editorMenuToggle{position:relative!important;padding:0!important;text-indent:0!important;font-size:0!important;display:grid!important;place-items:center!important}
+ html:has(#bl-flyer-device-layout) #sidebarFixed#sidebarFixed #studioNav>[data-nav]::before,
+ html:has(#bl-flyer-device-layout) #sidebarFixed#sidebarFixed #sidebarActions button::before,
+ html:has(#bl-flyer-device-layout) #sidebarFixed#sidebarFixed #editorMenuToggle::before,
+ #sidebarFixed#sidebarFixed.menuCollapsed #studioNav>[data-nav]::before,
+ #sidebarFixed#sidebarFixed.menuCollapsed #sidebarActions button::before,
+ #sidebarFixed#sidebarFixed.menuCollapsed #editorMenuToggle::before{content:none!important;display:none!important}
+ html:has(#bl-flyer-device-layout) #sidebarFixed#sidebarFixed .bl-centered-menu-icon,
+ #sidebarFixed#sidebarFixed.menuCollapsed .bl-centered-menu-icon{display:block!important;position:absolute!important;inset:0!important;margin:auto!important;width:22px!important;height:22px!important;min-width:22px!important;max-width:none!important;transform:none!important;pointer-events:none!important}
+}
 </style>
 <link rel="stylesheet" href="./toolbar-tabs.css">
 <header><div class="brandIdentity"><img src="./icons/flyer-studio.svg" class="brandAppIcon" alt="" width="40" height="40"><div><strong>MegaFlyer Studio</strong><small>First Megasaver</small></div></div><span class="status" id="status" role="status" aria-live="polite" aria-label="Flyer status: Draft" title="This flyer has not yet been approved. Unapproved exports contain a DRAFT watermark.">Flyer Status: Draft</span></header>
@@ -4440,10 +4458,10 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null,pass='al
   const title=bundle?bundleCaption(offer):offer.flyerDescription||offer.name;
   const showModel=!(bundle&&offer.bundleBarcode)&&!descriptionIncludesModel([title],offer.model);
   const variant=offer.items||(showModel?offer.model:'');
-  const gap=Math.max(2,Math.min(6,w*.025)),lane=inner*(asset?.image?.width? .48:.37);
+  const gap=Math.max(2,Math.min(6,w*.025)),lane=inner*.48;
   const photoScale=Math.max(.6,Math.min(1,(style?.photoScale??100)/100));
   const photoWidth=Math.max(.1,lane*photoScale),photoX=x+inset+(lane-photoWidth)/2;
-  const photoHeight=Math.max(.1,copyBottom-imageY-2),copyX=x+inset+lane+gap;
+  const photoHeight=Math.max(.1,copyBottom-imageY-2),copyX=Math.max(x+w/2,x+inset+lane+gap);
   const copyWidth=Math.max(.1,x+w-inset-copyX),copyTop=imageY,preferred=compact?12:bundle?9:11;
   let copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,copyBottom-copyTop),preferred);
   if(asset&&quantity)promoBundlePhoto(ctx,asset,{x:photoX,y:imageY,width:photoWidth,height:photoHeight},quantity);
@@ -4509,8 +4527,9 @@ function defaultSectionLayout(){const base={
   return base;
 }
 const sectionLayoutLimits={height:[85,1100],gap:[0,30],cols:[1,8],rows:[1,10],borderWidth:[0,6],cardRadius:[0,30],headingHeight:[18,95],padding:[0,30],spacing:[0,50],sectionBorderWidth:[0,8],photoScale:[60,100]};
-const sectionAppearanceFields=['backgroundMode','backgroundColor','backgroundColor2','backgroundImage','backgroundOpacity','backgroundScale','backgroundX','backgroundY','backgroundRotation','backgroundFit','cardOpacity','cardColor','borderColor','borderWidth','cardRadius'];
+const sectionAppearanceFields=['backgroundMode','backgroundColor','backgroundColor2','backgroundImage','backgroundOpacity','backgroundScale','backgroundX','backgroundY','backgroundRotation','backgroundFit','cardOpacity','cardColor','borderColor','borderWidth','cardRadius','watermark'];
 function sanitizePageWatermark(raw={}){
+  raw=raw&&typeof raw==='object'?raw:{};
   const n=(v,min,max,d)=>v==null||v===''||!Number.isFinite(Number(v))?d:Math.max(min,Math.min(max,Number(v)));
   return {type:['text','image'].includes(raw.type)?raw.type:'none',text:String(raw.text||'').slice(0,100),image:imageData(raw.image)?raw.image:'',opacity:n(raw.opacity,0,100,18),scale:n(raw.scale,10,300,100),x:n(raw.x,0,100,50),y:n(raw.y,0,100,50),rotation:n(raw.rotation,-180,180,0)};
 }
@@ -5561,6 +5580,28 @@ function initEditorMenuCollapse(){
     try{localStorage.setItem(key,collapsed?'1':'0');}catch{}
   };
 }
+function installCenteredIcons(){
+  const shapes={
+   menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+   campaign:'<path d="m5 19 4-1 10-10-4-4L5 14l-1 6zM13 6l4 4"/>',
+   cards:'<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16"/>',
+   bulk:'<path d="M12 20V4m-6 6 6-6 6 6"/>',
+   review:'<path d="m5 12 5 5 9-11"/>',
+   backup:'<rect x="5" y="5" width="14" height="14" rx="1"/><rect x="8" y="8" width="8" height="8" rx=".5"/>',
+   settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/><circle cx="12" cy="12" r="7"/>'
+  };
+
+   const fixed=document.getElementById("sidebarFixed");if(!fixed)return false;
+   for(const button of fixed.querySelectorAll("#studioNav>[data-nav],#sidebarActions button,#editorMenuToggle")){
+    if(button.querySelector(".bl-centered-menu-icon"))continue;
+    const name=button.id==="editorMenuToggle"?"menu":button.dataset.nav||"settings";
+    const span=document.createElement("span");span.className="bl-centered-menu-icon";span.setAttribute("aria-hidden","true");
+    span.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(shapes[name]||shapes.settings)+'</svg>';
+    button.append(span);
+   }
+   return true;
+  }
+
 function initStudioUI(){
   const aside=document.querySelector('main > aside'),stage=document.querySelector('main > .stage');
   const old=[...aside.children];
@@ -5607,6 +5648,7 @@ function initStudioUI(){
       nav.append(children);
     }
   }
+  installCenteredIcons();
   const canvas=$('preview');
   const wrap=document.createElement('div');wrap.id='previewWrap';
   canvas.before(wrap);wrap.append(canvas);
@@ -5781,11 +5823,12 @@ let selectedLayoutSection='tech',activeSettingsTab='colors',settingsSnapshot=nul
 let watermarkScope='page',watermarkPage='front';
 let sectionArrangeMode=false, sectionDrag=null;
 const layoutUndo=[],layoutRedo=[];
-function layoutSnapshot(){return {layout:structuredClone(state.campaign.sectionLayout||null),customSections:structuredClone(state.campaign.customSections||[])};}
+function layoutSnapshot(){return {layout:structuredClone(state.campaign.sectionLayout||null),customSections:structuredClone(state.campaign.customSections||[]),pageWatermarks:structuredClone(state.campaign.pageWatermarks||null)};}
 function restoreLayoutSnapshot(snapshot){
   state.campaign.customSections=snapshot.customSections;
   registerCustomSections(state.campaign);
   if(snapshot.layout)state.campaign.sectionLayout=snapshot.layout;else delete state.campaign.sectionLayout;
+  if(snapshot.pageWatermarks)state.campaign.pageWatermarks=snapshot.pageWatermarks;else delete state.campaign.pageWatermarks;
   if(!sections[selectedLayoutSection])selectedLayoutSection='tech';
 }
 function rememberLayout(){
@@ -5910,7 +5953,7 @@ function renderWatermarkEditor(area,conf){
   function update(patch){
     if(state!==project)return;
     const next=sanitizePageWatermark({...current(),...patch});
-    if(scope==='page'){project.campaign.pageWatermarks={...project.campaign.pageWatermarks,[page]:next};edited('Page watermark updated.');renderAppearanceEditor();}
+    if(scope==='page'){rememberLayout();project.campaign.pageWatermarks={...project.campaign.pageWatermarks,[page]:next};edited('Page watermark updated.');renderAppearanceEditor();}
     else modifyLayout(cfg=>{cfg[key].watermark=next;if(cfg[key].backgroundMode==='watermark')cfg[key].backgroundMode='default';},'Section watermark updated.');
   }
   const actions=document.createElement('div');actions.className='row';
@@ -5930,7 +5973,7 @@ function renderWatermarkEditor(area,conf){
       const l=field(label,k,'number',mark[k],v=>update({[k]:v}));const input=l.querySelector('input');input.min=min;input.max=max;area.append(l);
     }
     button('Remove watermark',()=>update({type:'none',image:'',text:''}));
-    if(scope==='page')button('Apply to both sides',()=>{if(state!==project)return;project.campaign.pageWatermarks={front:{...mark},back:{...mark}};edited('Watermark applied to both sides.');renderAppearanceEditor();});
+    if(scope==='page')button('Apply to both sides',()=>{if(state!==project)return;rememberLayout();project.campaign.pageWatermarks={front:{...mark},back:{...mark}};edited('Watermark applied to both sides.');renderAppearanceEditor();});
   }
   button('Advanced section background settings',()=>{activeSettingsTab='sectionBackground';renderAppearanceEditor();});
   area.append(actions);
@@ -6045,7 +6088,7 @@ function renderAppearanceEditor(){
     const back=document.createElement('button');back.type='button';back.textContent='Back to simple watermark';back.onclick=()=>setAppearanceTab('background');area.append(back);
     const a=sanitizeSectionAppearance(z),key=selectedLayoutSection;
     explain('Backgrounds are clipped to this section. Set product box opacity to zero to reveal artwork. Changes do not resize product photos.');
-    const update=(field,value)=>modifyLayout(cfg=>{const next={...cfg[key],[field]:value};if(field==='backgroundMode'&&value==='watermark')next.backgroundOpacity=20;Object.assign(cfg[key],sanitizeSectionAppearance(next));},'Section background updated.');
+    const update=(field,value)=>modifyLayout(cfg=>{const next={...cfg[key],[field]:value};if(field==='backgroundMode'&&value==='watermark')next.backgroundOpacity=20;if(next.backgroundMode==='watermark')delete next.watermark;Object.assign(cfg[key],sanitizeSectionAppearance(next));},'Section background updated.');
     const mode=[['default','Default / None'],['solid','Solid Color'],['gradient','Gradient Color'],['image','Background Image'],['watermark','Decorative Watermark'],['combined','Combined Color and Image']];
     area.append(appearanceField('Background mode','backgroundMode','select',a.backgroundMode,v=>update('backgroundMode',v),mode));
     for(const [field,title] of [['backgroundColor','Background color'],['backgroundColor2','Gradient end color']]){
@@ -6053,7 +6096,7 @@ function renderAppearanceEditor(){
       area.append(appearanceField(title+' HEX',field,'text',a[field],v=>update(field,v)));
     }
     const upload=document.createElement('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';
-    upload.onchange=async()=>{const file=upload.files?.[0],project=state;if(!file)return;try{const data=await readPhoto(file);if(state!==project||!sections[key])return;modifyLayout(cfg=>{cfg[key].backgroundImage=data;if(!['image','watermark','combined'].includes(cfg[key].backgroundMode))cfg[key].backgroundMode='image';},'Section background image attached.');}catch(e){feedback(e.message)}};
+    upload.onchange=async()=>{const file=upload.files?.[0],project=state;if(!file)return;try{const data=await readPhoto(file);if(state!==project||!sections[key])return;modifyLayout(cfg=>{cfg[key].backgroundImage=data;if(cfg[key].backgroundMode==='watermark')delete cfg[key].watermark;if(!['image','watermark','combined'].includes(cfg[key].backgroundMode))cfg[key].backgroundMode='image';},'Section background image attached.');}catch(e){feedback(e.message)}};
     const label=document.createElement('label');label.textContent='Upload or replace background artwork';label.append(upload);area.append(label);
     if(a.backgroundImage){const img=document.createElement('img');img.src=a.backgroundImage;img.alt='Section background';img.style.cssText='max-width:100%;max-height:100px;object-fit:contain';area.append(img);}
     for(const [field,title,min,max] of [['backgroundOpacity','Image opacity (%)',0,100],['backgroundScale','Image scale (%)',10,300],['backgroundX','Horizontal position (%)',0,100],['backgroundY','Vertical position (%)',0,100],['backgroundRotation','Rotation (degrees)',-180,180],['cardOpacity','Product box opacity (%)',0,100]]){
