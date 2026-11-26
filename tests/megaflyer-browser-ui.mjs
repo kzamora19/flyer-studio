@@ -418,6 +418,32 @@ try{
  assert.ok(watermarks.sectionVisible>50&&watermarks.legacy==='image','Legacy saved decorative section image becomes visible');
  assert.ok(watermarks.persisted&&watermarks.back==='none','Whole-page image retained and sides independent');
  console.log('PASS universal left/right card layout, Arrange cards order, page/legacy section watermark pixels and backup');
+ // Actual clip pixels: split-hero TechZone beside artwork, category header strips,
+ // body gutters and footer must stay untouched, even at extreme opacity/scale.
+ const clipping=await page.evaluate(async()=>{
+   const art=document.createElement('canvas');art.width=80;art.height=80;art.getContext('2d').fillStyle='#00ffff';art.getContext('2d').fillRect(0,0,80,80);
+   const mark={type:'image',image:art.toDataURL(),opacity:100,scale:300};
+   const layout={modern:true,headline:{x:16,y:85,width:480,height:330},sections:[
+     {key:'tech',x:504,y:85,width:280,height:330,headerHeight:30},
+     {key:'front',x:16,y:440,width:768,height:250,headerHeight:25},
+     {key:'back',x:16,y:710,width:768,height:430,headerHeight:25}
+   ]};
+   const canvas=document.createElement('canvas');canvas.width=800;canvas.height=1132;
+   const ctx=canvas.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,800,1132);
+   const areas=watermarkProductAreas(layout,1100);
+   drawProductAreaWatermark(ctx,mark,areas,art);
+   const sample=(x,y)=>Array.from(ctx.getImageData(x,y,1,1).data);
+   const checks={brand:sample(400,30),artwork:sample(150,150),techHeading:sample(600,100),techBody:sample(650,200),frontHeading:sample(400,450),frontBody:sample(400,550),secondHeading:sample(400,720),secondBody:sample(400,900),footer:sample(400,1110)};
+   const legacy=watermarkProductAreas({cards:[{key:'tech',x:510,y:120,width:120,height:100},{key:'tech',x:640,y:120,width:120,height:100},{key:'front',x:16,y:420,width:760,height:740}]},1100);
+   return {checks,areas,legacy};
+ });
+ for(const key of ['brand','artwork','techHeading','frontHeading','secondHeading','footer'])assert.deepEqual(clipping.checks[key],[255,255,255,255],key+' is excluded even at maximum watermark size');
+ for(const key of ['techBody','frontBody','secondBody'])assert.deepEqual(clipping.checks[key],[0,255,255,255],key+' retains decorative watermark');
+ assert.equal(clipping.areas[2].y+clipping.areas[2].height,1100,'Modern watermark clips at footer');
+ assert.equal(clipping.legacy[0].x,510,'Legacy split artwork remains outside TechZone product area');
+ assert.equal(clipping.legacy[1].y+clipping.legacy[1].height,1100,'Legacy watermark clips at footer');
+ console.log('PASS decorative watermark product-only clipping: brand, transparent artwork region, section headers and footer excluded in modern and legacy layouts');
+
  assert.deepEqual(pageErrors,[],'Page must not throw runtime JS errors');
  console.log('PASS: Chromium toolbar, scrolling arrows, Front/Back, no duplicates, menu Show/Hide, floating Studio+/Assets, mobile layout');
 } finally {
