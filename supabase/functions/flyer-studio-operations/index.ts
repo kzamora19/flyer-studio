@@ -10,7 +10,15 @@ function serviceKey(){
 const key=serviceKey();
 const secret=Deno.env.get("FLYER_PTG_STUDIO_GATEWAY_SECRET")||"";
 const gateway=Deno.env.get("PTG_STUDIO_GATEWAY_URL")||"";
-const origin=Deno.env.get("FLYER_STUDIO_ALLOWED_ORIGIN")||"https://kzamora19.github.io";
+function exactHttpsOrigin(value:string){
+ if(!value.trim())return "";
+ try{
+  const u=new URL(value);
+  if(u.protocol!=="https:"||u.username||u.password||u.search||u.hash||u.pathname!=="/"||!/^[a-z0-9.-]+$/i.test(u.hostname)||u.hostname.includes("..")||(value.trim()!==u.origin&&value.trim()!==u.origin+"/"))return "";
+  return u.origin;
+ }catch{return "";}
+}
+const origin=exactHttpsOrigin(Deno.env.get("FLYER_STUDIO_ALLOWED_ORIGIN")||"");
 const mode=Deno.env.get("PTG_STUDIO_DEPLOYMENT_MODE")||"";
 const prodRefs=new Set(["agknxlowackphvwyvxge","vmyoxoiygfcecgkbavgg","tzklsscoiwnmeantcefw","psoopubvdpwztzkdyifa"]);
 const types=new Set(["image/png","image/jpeg","image/webp"]);
@@ -28,7 +36,7 @@ function respond(status:number,value:unknown,allowed=false){
  return new Response(JSON.stringify(value),{status,headers:h});
 }
 Deno.serve(async(req)=>{
- if(req.headers.get("origin")!==origin)return respond(403,{error:"Forbidden origin"});
+ if(!origin||req.headers.get("origin")!==origin)return respond(403,{error:"Forbidden origin"});
  if(req.method==="OPTIONS")return respond(200,{ok:true},true);
  if(req.method!=="POST"||!configured()||!db)return respond(503,{error:"Review authorization unavailable."},true);
  let body:any;
