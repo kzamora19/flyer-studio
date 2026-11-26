@@ -2905,7 +2905,8 @@ function restoreCardMove(undo){
   const from=undo?cardMoveUndo:cardMoveRedo,to=undo?cardMoveRedo:cardMoveUndo;
   const entry=from.at(-1);if(!entry||entry.project!==state)return;
   const expected=undo?entry.after:entry.before;
-  if(expected.some(x=>!state.offers.includes(x.offer)||x.offer.section!==x.section||x.offer.slot!==x.slot)){
+  if(expected.some(x=>!state.offers.includes(x.offer)||x.offer.section!==x.section||x.offer.slot!==x.slot)||
+    (undo?entry.before:entry.after).some(x=>!Object.hasOwn(sections,x.section)||Number.isInteger(x.slot)&&x.slot>=slotCount(state.campaign,x.section))){
     cardMoveUndo.length=0;cardMoveRedo.length=0;updateCardMoveControls();feedback('Card layout changed; previous arrangement history cleared.');return;
   }
   applyCardMoveSnapshot(undo?entry.before:entry.after);
@@ -4930,7 +4931,6 @@ function transition(target) {
 }
 function bind() {
   showTarget();
-  bindCardArrange();
   if(ptgLocalOrigin()) {
     $('livePTG').hidden=false;
     $('ptgConnection').textContent='Sign in with your existing PTG username and password. No CSV is needed for live lookup.';
@@ -6160,7 +6160,7 @@ async function boot() {
     headlineDesign:headlineDesignChoice(state.campaign)};
   registerCustomSections(state.campaign);
   if(state.campaign.sectionLayout)state.campaign.sectionLayout=sanitizeSectionLayout(state.campaign.sectionLayout);
-  initStudioUI();setup();bind();initAdvancedStudio();initPowerTools();window.dispatchEvent(new Event('flyerstudio:ready'));
+  initStudioUI();setup();bind();initAdvancedStudio();bindCardArrange();initPowerTools();window.dispatchEvent(new Event('flyerstudio:ready'));
 }
 boot();
 // Flyer Studio Studio+ enhancements: local-safe improvements. No authentication secrets are persisted.
