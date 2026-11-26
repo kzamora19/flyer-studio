@@ -327,8 +327,11 @@ try{
   const cc=colors.getContext('2d');
   const zone={...c.sectionLayout.front,panelColor:'#ffffff'};
   paintSectionBackground(cc,zone,{x:0,y:0,width:200,height:150},null);
-  card(cc,{...base,sku:'TRANSPARENT'},null,20,20,160,100,'front',zone,null);
-  const pixel=Array.from(cc.getImageData(30,50,1,1).data);
+  const asset=await loadProductPhoto(data);
+  card(cc,{...base,sku:'TRANSPARENT'},asset,20,20,160,100,'front',zone,null);
+  // Sample inside the card but outside its photo, copy, price and border.
+  // A missing-photo placeholder intentionally has its own opaque fill.
+  const pixel=Array.from(cc.getImageData(23,65,1,1).data);
   return {blocking:valid.blocking,frontKeys:[...new Set(front.layout.cards.map(v=>v.key))],restored,both,unchanged:before===JSON.stringify(project.offers),footer:appearance.campaign.footerDesign,zone:appearance.campaign.sectionLayout.front,textDraws,pixel};
  });
  assert.deepEqual(scoped.blocking,[],'18 valid front products with hidden TechZone and unused back must validate');
