@@ -60,3 +60,18 @@ test('catalog relay targets only the approved edge endpoint and accepts only val
  await assert.rejects(relay({mode:'other'}),/Unsupported/);
  assert.equal(calls.length,1);
 });
+
+test('catalog relay retries a temporary gateway response once and still rejects a persistent outage',async()=>{
+ const statuses=[502,200];
+ let calls=0;
+ const fakeFetch=async()=>{
+  calls++;
+  const status=statuses.shift()||502;
+  return new Response(JSON.stringify(status===200?{photos:[]}:{error:'Catalog unavailable'}),{status,headers:{'content-type':'application/json'}});
+ };
+ const relay=new Function('fetch','setTimeout',slice(launcher,"const catalogEndpoint=","function installCatalogRelay")+"\nreturn relayStoreCatalog;")(fakeFetch,fn=>fn());
+ await relay({mode:'photos',sku:'00060593',model:'AH-X10BEF'});
+ assert.equal(calls,2);
+ await assert.rejects(relay({mode:'photos',sku:'00060593',model:'AH-X10BEF'}),/Catalog unavailable/);
+ assert.equal(calls,4);
+});
