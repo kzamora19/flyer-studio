@@ -2652,7 +2652,9 @@ body.modalOpen{overflow:auto!important}
 <label>Freebie photo (optional) <input id="freebiePhoto" type="file" accept="image/png,image/jpeg,image/webp"></label>
 <div class="row"><button id="freebieClearPhoto" type="button">Remove freebie photo</button><button id="freebieClear" type="button">Remove freebie</button></div>
 <details><summary>Freebie appearance</summary>
-<p class="muted">Freebies stay in the lower-right available area. Main product photos and prices retain their usual positions.</p>
+<p class="muted">Freebies adapt to the available lower-right space, especially on wider cards. Main product photos and prices retain their usual positions.</p>
+<label>Freebie area height (%) <input id="freebieAreaHeight" type="number" min="30" max="100" step="5"></label>
+<label>Image and description layout <select id="freebieLayout"><option value="auto">Auto (use available space)</option><option value="side">Side by side</option><option value="stack">Image above description</option></select></label>
 <label>Image size (%) <input id="freebieSize" type="number" min="20" max="100" step="5"></label>
 <label>Image scale (%) <input id="freebieScale" type="number" min="50" max="200" step="5"></label>
 <label>Horizontal position (%) <input id="freebieX" type="number" min="0" max="100" step="5"></label>
@@ -2660,6 +2662,8 @@ body.modalOpen{overflow:auto!important}
 <label>Image fitting <select id="freebieFit"><option value="fit">Fit</option><option value="fill">Fill</option></select></label>
 <label><input id="freebieAspect" type="checkbox"> Lock image aspect ratio</label>
 <label>Description font size <input id="freebieFont" type="number" min="4" max="18" step="1"></label>
+<label>Description horizontal alignment <select id="freebieTextAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+<label>Description vertical position (%) <input id="freebieTextY" type="number" min="0" max="100" step="5"></label>
 <button id="freebieResetAppearance" type="button">Reset freebie appearance</button>
 </details>
 <p id="freebieStatus" class="muted" role="status"></p>
@@ -3621,11 +3625,11 @@ function showCardPhotos() {
   $('cardPhotoSource').hidden=!source||Boolean(sources?.length);
   if(source) $('cardPhotoSource').href=source;
 }
-const freebieControlFields={freebieSize:'size',freebieScale:'scale',freebieX:'x',freebieY:'y',freebieFit:'fit',freebieAspect:'aspect',freebieFont:'font'};
+const freebieControlFields={freebieSize:'size',freebieScale:'scale',freebieX:'x',freebieY:'y',freebieFit:'fit',freebieAspect:'aspect',freebieFont:'font',freebieAreaHeight:'areaHeight',freebieLayout:'layout',freebieTextAlign:'textAlign',freebieTextY:'textY'};
 function sanitizeFreebieAppearance(raw){
   const v=raw&&typeof raw==='object'?raw:{};
   const bound=(key,min,max,fallback)=>v[key]==null||v[key]===''||!Number.isFinite(Number(v[key]))?fallback:Math.max(min,Math.min(max,Number(v[key])));
-  return {size:bound('size',20,100,100),scale:bound('scale',50,200,100),x:bound('x',0,100,50),y:bound('y',0,100,50),fit:v.fit==='fill'?'fill':'fit',aspect:v.aspect!==false,font:bound('font',4,18,10)};
+  return {size:bound('size',20,100,100),scale:bound('scale',50,200,100),x:bound('x',0,100,50),y:bound('y',0,100,50),fit:v.fit==='fill'?'fill':'fit',aspect:v.aspect!==false,font:bound('font',4,18,10),areaHeight:bound('areaHeight',30,100,100),layout:['side','stack'].includes(v.layout)?v.layout:'auto',textAlign:['center','right'].includes(v.textAlign)?v.textAlign:'left',textY:bound('textY',0,100,50)};
 }
 function showFreebieEditor() {
   const offer=sectionSide(slotTarget.section)===side?targetedOffer():null;
@@ -4355,22 +4359,38 @@ function freebieArea(ctx,offer,asset,box,photoBox,copyBox,price){
     else bottom=Math.min(bottom,price.y-price.size-gap);
   }
   const available=bottom-topLimit;
-  const panelHeight=Math.min(Math.max(6,box.h*.25),available*.68);
+  const a=sanitizeFreebieAppearance(offer.freebieAppearance);
+  // Two/three-column cards have a much wider detail lane. Use the genuinely
+  // unoccupied space below the fitted product description, not a fixed tiny strip.
+  const wide=box.w>=230||box.w>=195&&box.w/box.h>=2.1;
+  const copyEnd=copyBox.y+(copyBox.required||0)+gap;
+  const roomAfterCopy=Math.max(0,bottom-Math.max(topLimit,copyEnd));
+  const preferred=wide?Math.min(box.h*.58,Math.max(available*.52,roomAfterCopy)):Math.min(Math.max(6,box.h*.25),available*.68);
+  const reserved=wide?Math.min(preferred,Math.max(roomAfterCopy,available*.40)):preferred;
+  const panelHeight=Math.min(available,reserved)*a.areaHeight/100;
   if(right-left<4||panelHeight<3)return null;
-  return {x:left,y:bottom-panelHeight,w:right-left,h:panelHeight};
+  return {x:left,y:bottom-panelHeight,w:right-left,h:panelHeight,wide};
 }
 function drawFreebiePanel(ctx,offer,asset,area){
   if(!area)return;
   const a=sanitizeFreebieAppearance(offer.freebieAppearance);
   const {x,y,w,h}=area,pad=Math.min(2,h*.08,w*.04);
   ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
-  // No opaque fill or full-width band: reveal existing section artwork.
   const text=String(offer.freebieText||'');
-  const textH=text?Math.min(h*(asset? .36:.85),a.font*2.2):0;
-  const usableW=Math.max(.1,w-pad*2),usableH=Math.max(.1,h-pad*2-textH);
-  if(asset&&usableH>.1){
-    const vw=usableW*a.size/100,vh=usableH*a.size/100;
-    const px=x+pad+(usableW-vw)*a.x/100,py=y+pad+(usableH-vh)*a.y/100;
+  const usableW=Math.max(.1,w-pad*2),usableH=Math.max(.1,h-pad*2);
+  const side=Boolean(asset&&text&&(a.layout==='side'||a.layout==='auto'&&area.wide&&usableW>=90&&usableW/usableH>=1.65)&&usableW>=28);
+  const gap=side?Math.min(4,usableW*.04):0;
+  let imageW=usableW,imageH=usableH,textX=x+pad,textY=y+pad,textW=usableW,textH=usableH;
+  if(side){
+    imageW=(usableW-gap)*.46;textW=usableW-imageW-gap;textX=x+pad+imageW+gap;
+  }else if(asset&&text){
+    const ideal=fitCardCopy(ctx,text,'',usableW,usableH,a.font);
+    textH=Math.min(usableH*.48,Math.max(usableH*.25,ideal.required+pad));
+    imageH=Math.max(.1,usableH-textH-pad);textY=y+pad+imageH+pad;
+  }
+  if(asset&&imageH>.1){
+    const vw=imageW*a.size/100,vh=imageH*a.size/100;
+    const px=x+pad+(imageW-vw)*a.x/100,py=y+pad+(imageH-vh)*a.y/100;
     ctx.save();ctx.beginPath();ctx.rect(px,py,vw,vh);ctx.clip();
     const f=asset.frame,zoom=a.scale/100;
     let iw=vw*zoom,ih=vh*zoom;
@@ -4382,8 +4402,19 @@ function drawFreebiePanel(ctx,offer,asset,area){
     ctx.drawImage(asset.image,f.x,f.y,f.width,f.height,dx,dy,iw,ih);ctx.restore();
   }
   if(text&&textH>0){
-    const copy=fitCardCopy(ctx,text,'',usableW,Math.max(.1,textH-pad),a.font);
-    drawCardCopy(ctx,copy,x+pad,asset?y+h-textH:y+pad,usableW);
+    const copy=fitCardCopy(ctx,text,'',textW,textH,a.font);
+    let baseline=textY+Math.max(0,textH-copy.required)*a.textY/100;
+    // Align each fitted line independently without moving or scaling the image.
+    ctx.save();ctx.font='800 '+copy.size+'px Arial, sans-serif';
+    for(const row of copy.titles){
+      const measured=Math.min(textW,ctx.measureText(row).width);
+      const offset=a.textAlign==='right'?textW-measured:a.textAlign==='center'?(textW-measured)/2:0;
+      baseline+=copy.size;
+      line(ctx,row,textX+offset,baseline,Math.max(.1,textW-offset),copy.size,'#101f38',800);
+      baseline+=copy.titleStep-copy.size;
+      ctx.font='800 '+copy.size+'px Arial, sans-serif';
+    }
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -4436,7 +4467,7 @@ function techCard(ctx,offer,asset,x,y,w,h,style=null,freebieAsset=null) {
     fill(ctx,'#edf2fa',photoX,photoY,photoWidth,photoHeight);
     line(ctx,'NO PHOTO',photoX+2,photoY+photoHeight/2+2,Math.max(1,photoWidth-4),7,'#506584');
   }
-  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:photoY,w:photoWidth,h:photoHeight},{x:detailX,y:textTop},
+  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:photoY,w:photoWidth,h:photoHeight},{x:detailX,y:textTop,required:copy.required},
     {promo:prices.promo,secondary:prices.secondary,align:style?.priceAlign||'left',x:style?.priceAlign==='center'?x+w/2:style?.priceAlign==='right'?x+w-inset:x+inset,y:priceY,size:priceSize,width:inner,secondarySize:Math.min(9,Math.max(4,h*.085))});
   if(freebie)copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-textTop),12);
   drawCardCopy(ctx,copy,detailX,textTop,detailWidth);
@@ -4515,7 +4546,7 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
     line(ctx,'PHOTO NEEDED',photoX+3,imageY+photoHeight/2+3,Math.max(1,photoWidth-6),Math.min(9,h*.11),'#506584');
   }
   const align=style?.priceAlign||'left',priceX=align==='center'?x+w/2:align==='right'?x+w-inset:x+inset;
-  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:imageY,w:photoWidth,h:photoHeight},{x:copyX,y:copyTop},
+  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:imageY,w:photoWidth,h:photoHeight},{x:copyX,y:copyTop,required:copy.required},
     {promo:prices.promo,secondary:prices.secondary,align,x:priceX,y:priceY,size:promoSize,width:inner,secondarySize:Math.min(10,Math.max(3,h*.1))});
   if(freebie)copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-copyTop),bundle?9:11);
   drawCardCopy(ctx,copy,copyX,copyTop,copyWidth);
