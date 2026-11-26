@@ -75,3 +75,33 @@ test('catalog relay retries a temporary gateway response once and still rejects 
  await assert.rejects(relay({mode:'photos',sku:'00060593',model:'AH-X10BEF'}),/Catalog unavailable/);
  assert.equal(calls,4);
 });
+
+test('protected photo library uses proof-session markers, not legacy bearer tokens',async()=>{
+ const library=read('site/product-photo-library.js');
+ const sessionCode=slice(library,'function currentSession(){','function selection(){');
+ const requestCode=slice(library,'async function request(action','function toBase64(');
+ const calls=[];
+ const window={__MEGAFLYER_PRIVATE_DB__:{},__MEGAFLYER_PTG_RPC__:()=>{},__MEGAFLYER_PHOTO_RPC__:async(action,fields,account)=>{calls.push({action,fields,account});return {photos:[{id:'fixture'}]}}};
+ const make=new Function('window','ptgSession',sessionCode+requestCode+'return {currentSession,request};');
+ const api=make(window,null);
+ assert.deepEqual(api.currentSession(),{id:'ptg-proof-session',token:'signed-studio-proof'});
+ assert.deepEqual(await api.request('resolve',{product:{barcode:'00060593'}}),{photos:[{id:'fixture'}]});
+ assert.equal(calls[0].account.token,'signed-studio-proof');
+ assert.equal(make({},null).currentSession(),null);
+ assert.deepEqual(make({},{id:'legacy-id',token:'legacy-token'}).currentSession(),{id:'legacy-id',token:'legacy-token'});
+});
+test('upload success requires an acknowledged photo ID and confirmed recall',async()=>{
+ const library=read('site/product-photo-library.js');
+ const code=slice(library,'async function uploadFile(','function button(');
+ const fixture={offer:{},product:{productKey:'b:60593',barcode:'60593'}};
+ let replies=[],notices=[];
+ const upload=new Function('selection','TYPES','notice','optimized','toBase64','request','sameSelection','sync','$',code+'return uploadFile;')(
+  ()=>fixture,new Set(['image/png']),(m)=>notices.push(m),async()=>({size:10,type:'image/webp'}),async()=> 'AA==',async()=>replies.shift(),()=>true,async()=>{},()=>({checked:true}));
+ const file={type:'image/png',size:10};
+ replies=[{ok:true,photoId:'fixture'},{photos:[]}];
+ await assert.rejects(upload(file,null,true),/recall could not be confirmed/);
+ assert.equal(notices.some(n=>n.includes('saved and verified')),false);
+ replies=[{ok:true,photoId:'fixture'},{photos:[{id:'fixture'}]}];
+ assert.equal((await upload(file,null,true)).photoId,'fixture');
+ assert.ok(notices.some(n=>n.includes('saved and verified')));
+});
