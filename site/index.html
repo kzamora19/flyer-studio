@@ -2688,7 +2688,7 @@ body.modalOpen{overflow:auto!important}
 <label>Review note <textarea id="reviewNote" maxlength="400" rows="2"></textarea></label>
 <div class="row"><button id="submit" class="primary">Submit for review</button><button id="approve">Approve</button><button id="changes">Request changes</button></div>
 <ol id="activity"></ol>
-<div class="row" id="flyerExportActions"><button type="button" id="png">Download PNG · current side</button><button type="button" id="printPdf" class="primary">Download print PDF · both sides</button></div>
+<label>Export mode <select id="exportMode"><option value="draft">Export Draft (watermark)</option><option value="final">Approve &amp; Export Final</option><option id="adminOverrideOption" value="override" disabled hidden>Override &amp; Export Final</option></select></label><button type="button" id="verifyReviewRights">Verify review permissions</button><p class="muted" id="reviewPermissionStatus">Protected account verification is required for final approval.</p><div class="row" id="flyerExportActions"><button type="button" id="png">Download PNG · current side</button><button type="button" id="printPdf" class="primary">Download print PDF · both sides</button></div>
 <p class="muted" id="printInfo">Open the downloaded PDF to print both sides. Drafts include a watermark.</p>
 <p id="printStatus" class="muted" role="status" hidden></p>
 </details>
@@ -3055,7 +3055,7 @@ function history(action, person='', note='') {
 }
 function edited(message='Saved in this browser.') {
   if(state.status!=='Draft') history('Returned to draft after editing');
-  state.status='Draft';
+  state.status='Draft';delete state.approvalReceipt;
   save();
   refresh();
   feedback(message);
@@ -3229,7 +3229,7 @@ function collectReviewIssues(project=state){
   }
   return issues;
 }
-let renderedReviewIssues=[],reviewPending=true,reviewGeneration=0,reviewTimer=null;
+let renderedReviewIssues=[],reviewPending=true,reviewGeneration=0,reviewTimer=null,reviewRights={canApprove:false,canOverride:false},reviewActionBusy=false;
 function reviewIssues(){return [...collectReviewIssues(),...renderedReviewIssues];}
 function preflight(){return reviewIssues().filter(i=>i.severity==='error').map(i=>i.message);}
 function navigateReviewIssue(target){
@@ -3250,8 +3250,8 @@ function renderReviewStatus(){
   }
   if(!issues.length&&!reviewPending)$('issues').textContent='No applicable validation issues.';
   $('submit').disabled=reviewPending||blocked||!['Draft','Changes requested'].includes(state.status);
-  $('approve').disabled=reviewPending||blocked||state.status!=='In review';
-  $('changes').disabled=state.status!=='In review';
+  $('approve').disabled=reviewActionBusy||reviewPending||blocked||!reviewRights.canApprove||!(state.status==='In review'||state.status==='Approved'&&!state.approvalReceipt);
+  $('changes').disabled=reviewActionBusy||state.status!=='In review';
 }
 function actualLayoutIssues(layout,page){
   const out=[],add=(message,target,severity='error')=>out.push({message:page.toUpperCase()+': '+message,target:{...target,page},severity});
@@ -5012,7 +5012,7 @@ function banner(ctx,c,box,parts,artwork) {
   fit(ctx,c.subtitle.toUpperCase(),x+20,y+h*.71,w-40,w<500?24:34,'#ffffff',typefaces[c.taglineFont]);
   fit(ctx,c.dates,x+20,y+h*.85,w-40,18,'#ffffff');
 }
-async function render(project,page,pixelWidth,target) {
+async function render(project,page,pixelWidth,target,exportMode=null) {
   const c=pageCampaign(project.campaign,page), d=dimensions(c);
   const source=headlineArtworkSource(c,page);
   const parts=source?null:posterParts(c);
@@ -5060,7 +5060,7 @@ async function render(project,page,pixelWidth,target) {
   }
   layout.freebieWarnings=drawSlots(ctx,project,pictures,layout.cards,target,freebies);
   layout.footerWarnings=await drawFooter(ctx,footer,h,edge);
-  if(project.status!=='Approved'||!reviewPages(project).includes(page)) {
+  if(exportMode==='draft'||(exportMode!=='authorized-final'&&(project.status!=='Approved'||!reviewPages(project).includes(page)))) {
     ctx.save();ctx.translate(400,h*.59);ctx.rotate(-.44);
     ctx.globalAlpha=.16;ctx.textAlign='center';ctx.font='900 136px Arial';ctx.fillStyle='#19376e';
     ctx.fillText('DRAFT',0,0);ctx.restore();
@@ -5129,54 +5129,122 @@ async function png300(blob) {
   }
   return new Blob(parts,{type:'image/png'});
 }
-async function exportFile(format) {
-  const controls=['png','printPdf'].map($);
-  const printStatus=$('printStatus');
-  controls.forEach(button=>button.disabled=true);
-  if(format==='pdf') {
-    printStatus.hidden=false;
-    printStatus.textContent='Preparing selected sides…';
-  }
-  try {
-    const snapshot=structuredClone(state), faces=reviewPages(snapshot), page=faces.includes(side)?side:faces[0];
-    const d=dimensions(snapshot.campaign);
-    const width=Math.round(d.pageWidth/25.4*300);
-    const name='megasaver-flyer'+(snapshot.status==='Approved'?'':'-draft');
-    if(format==='png') {
-      const files=[];
-      for(const face of faces){
-        const {canvas,layout}=await render(snapshot,face,width);
-        if(layout.freebieWarnings?.length)throw Error('Freebie cannot fit: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Adjust card layout before exporting.');
-        files.push({face,blob:await png300(await canvasBlob(canvas,'image/png'))});
-      }
-      for(const file of files)download(file.blob,name+'-'+file.face+'.png');
-    } else {
-      const pages=[];
-      for(const face of faces) {
-        const {canvas,layout}=await render(snapshot,face,width);
-        if(layout.freebieWarnings?.length)throw Error('Freebie cannot fit: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Adjust card layout before exporting.');
-        const jpeg=await canvasBlob(canvas,'image/jpeg');
-        pages.push({width:canvas.width,height:canvas.height,data:new Uint8Array(await jpeg.arrayBuffer())});
-      }
-      download(pdfFile(pages,d),name+(faces.length===1?'-'+faces[0]:'')+'.pdf');
-    }
-    feedback('Export downloaded.');
-    if(format==='pdf') printStatus.textContent='PDF downloaded. Open it to print.';
-  } catch(error) {
-    feedback(error.message);
-    if(format==='pdf') printStatus.textContent=error.message;
-  } finally {controls.forEach(button=>button.disabled=false);}
+function canonicalReviewValue(value){
+  if(Array.isArray(value))return value.map(canonicalReviewValue);
+  if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonicalReviewValue(value[k])]));
+  return value;
 }
-function transition(target) {
+function reviewProjectId(project=state){
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(project.projectId||'')){
+    project.projectId=powerId();if(project===state)save();
+  }
+  return project.projectId;
+}
+async function reviewDigest(project){
+  const value=JSON.stringify(canonicalReviewValue({campaign:project.campaign,offers:project.offers,scope:reviewScope(project)}));
+  const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('');
+}
+async function protectedOperation(fields){
+  if(typeof window.__MEGAFLYER_OPERATIONS_RPC__!=='function')throw Error('Protected operations require a verified Branchline PTG session.');
+  return window.__MEGAFLYER_OPERATIONS_RPC__(fields);
+}
+async function verifyReviewPermissions(){
+  reviewRights={canApprove:false,canOverride:false};renderReviewStatus();
+  try{
+    const r=await protectedOperation({action:'permissions'});
+    reviewRights={canApprove:r?.canApprove===true,canOverride:r?.canOverride===true};
+    $('reviewPermissionStatus').textContent=reviewRights.canOverride?'Verified System Admin — override available.':reviewRights.canApprove?'Verified approval authority.':'Verified Studio user — approval by authorized administrator required.';
+  }catch(e){$('reviewPermissionStatus').textContent=e.message;}
+  $('adminOverrideOption').hidden=!reviewRights.canOverride;$('adminOverrideOption').disabled=!reviewRights.canOverride;
+  if(!reviewRights.canOverride&&$('exportMode').value==='override')$('exportMode').value='draft';
+  renderReviewStatus();
+}
+async function chooseProtectedArtwork(category,apply){
+  try{
+    const project=state,listed=await protectedOperation({action:'assets-list',category});
+    const assets=Array.isArray(listed?.assets)?listed.assets:[];
+    if(!assets.length){feedback('No matching shared artwork.');return;}
+    const value=prompt('Select artwork number:\n'+assets.map((asset,i)=>(i+1)+'. '+asset.name).join('\n'));
+    if(!value)return;const asset=assets[Number(value)-1];if(!asset)return;
+    const data=await protectedOperation({action:'asset-image',assetId:asset.id});
+    if(state!==project)return;
+    const image='data:'+data.mime+';base64,'+data.base64;
+    if(!imageData(image))throw Error('Shared artwork could not be decoded.');
+    await loadImage(image);if(state!==project)return;
+    apply(image);
+  }catch(e){feedback(e.message);}
+}
+async function fullReviewSnapshot(snapshot){
+  const issues=collectReviewIssues(snapshot),technical=[];
+  for(const face of reviewPages(snapshot)){
+    const {layout}=await render(snapshot,face,800);
+    const rows=actualLayoutIssues(layout,face);issues.push(...rows);technical.push(...rows.filter(i=>i.severity==='error'));
+  }
+  return {issues,technical,warnings:issues.filter(i=>i.severity==='warning').map(i=>i.message),blocking:issues.filter(i=>i.severity==='error').map(i=>i.message)};
+}
+async function authorizeReview(action,snapshot,diagnostics,format,extra={}){
+  const value=await protectedOperation({action,projectId:reviewProjectId(snapshot),scope:reviewScope(snapshot),digest:await reviewDigest(snapshot),warnings:diagnostics.warnings.slice(0,100).map(v=>v.slice(0,400)),blocking:diagnostics.blocking.slice(0,100).map(v=>v.slice(0,400)),format,...extra});
+  if(value?.authorized!==true||typeof value.receiptId!=='string')throw Error('Final artwork authorization was not confirmed.');
+  return value;
+}
+async function approveSnapshot(snapshot,diagnostics){
+  if(diagnostics.blocking.length)throw Error('Resolve applicable blocking validation errors before approval.');
+  if(!reviewRights.canApprove)throw Error('Verify authorized administrator approval first.');
+  if(state.status!=='In review'&&state.status!=='Approved')throw Error('Submit the selected flyer for review before approval.');
+  const generation=reviewGeneration,result=await authorizeReview('approve',snapshot,diagnostics,'approval');
+  if(generation!==reviewGeneration||await reviewDigest(state)!==await reviewDigest(snapshot))throw Error('Project changed during approval. Submit the current revision again.');
+  state.status='Approved';state.approvalReceipt=result.receiptId;snapshot.status='Approved';snapshot.approvalReceipt=result.receiptId;
+  history('Approved by verified PTG authority','',clean($('reviewNote').value));save();
+  return result;
+}
+async function exportFile(format) {
+  if(reviewActionBusy)return;reviewActionBusy=true;
+  const controls=['png','printPdf'].map($),printStatus=$('printStatus'),mode=$('exportMode').value;
+  controls.forEach(button=>button.disabled=true);
+  printStatus.hidden=false;printStatus.textContent='Checking selected sides…';
+  try{
+    reviewProjectId();const snapshot=structuredClone(state),faces=reviewPages(snapshot),diagnostics=await fullReviewSnapshot(snapshot);
+    if(diagnostics.technical.length)throw Error(diagnostics.technical.map(i=>i.message).join(' '));
+    let renderMode='draft';
+    if(mode==='final'){
+      if(diagnostics.blocking.length)throw Error('Resolve blocking validation errors before final export.');
+      if(!snapshot.approvalReceipt||snapshot.status!=='Approved')await approveSnapshot(snapshot,diagnostics);
+      await authorizeReview('final',snapshot,diagnostics,format,{approvalId:snapshot.approvalReceipt});renderMode='authorized-final';
+    }else if(mode==='override'){
+      if(!reviewRights.canOverride)throw Error('Verify System Admin authorization first.');
+      const reason=clean(prompt('Enter the administrative override reason (at least 10 characters).')||'');
+      if(reason.length<10||reason.length>1000)throw Error('Override requires a reason of 10–1000 characters.');
+      if(!confirm('Acknowledge all outstanding validation issues?\n'+[...diagnostics.blocking,...diagnostics.warnings].join('\n')))throw Error('Override cancelled.');
+      await authorizeReview('override',snapshot,diagnostics,format,{reason,acknowledged:true});renderMode='authorized-final';
+    }
+    const d=dimensions(snapshot.campaign),width=Math.round(d.pageWidth/25.4*300),name='megasaver-flyer'+(renderMode==='draft'?'-draft':'');
+    const files=[],pages=[];
+    for(const face of faces){
+      const {canvas,layout}=await render(snapshot,face,width,undefined,renderMode);
+      const technical=actualLayoutIssues(layout,face).filter(i=>i.severity==='error');
+      if(technical.length)throw Error(technical.map(i=>i.message).join(' '));
+      if(format==='png')files.push({face,blob:await png300(await canvasBlob(canvas,'image/png'))});
+      else {const jpeg=await canvasBlob(canvas,'image/jpeg');pages.push({width:canvas.width,height:canvas.height,data:new Uint8Array(await jpeg.arrayBuffer())});}
+    }
+    if(format==='png')for(const file of files)download(file.blob,name+'-'+file.face+'.png');
+    else download(pdfFile(pages,d),name+(faces.length===1?'-'+faces[0]:'')+'.pdf');
+    feedback('Export downloaded.');printStatus.textContent='Export downloaded.';
+  }catch(error){feedback(error.message);printStatus.textContent=error.message;}
+  finally{reviewActionBusy=false;controls.forEach(b=>b.disabled=false);refresh();}
+}
+async function transition(target) {
   const expected=target==='In review'?$('submit'):target==='Approved'?$('approve'):$('changes');
-  if(expected.disabled||(target!=='Changes requested'&&(reviewPending||preflight().length))) return;
+  if(reviewActionBusy||expected.disabled||(target!=='Changes requested'&&(reviewPending||preflight().length)))return;
   const person=clean($('reviewer').value),note=clean($('reviewNote').value);
-  if(!person) {feedback('Enter the reviewer’s name.');$('reviewer').focus();return;}
-  if(target==='Changes requested'&&!note) {feedback('Enter the changes needed.');$('reviewNote').focus();return;}
-  state.status=target;
-  history(target,person,note);
-  $('reviewNote').value='';
-  save();refresh();
+  if(target==='Changes requested'&&!note){feedback('Enter the changes needed.');return;}
+  reviewActionBusy=true;renderReviewStatus();
+  try{
+    if(target==='Approved'){reviewProjectId();const snapshot=structuredClone(state);await approveSnapshot(snapshot,await fullReviewSnapshot(snapshot));}
+    else {state.status=target;delete state.approvalReceipt;history(target,person,note);save();}
+    $('reviewNote').value='';feedback(target);
+  }catch(e){feedback(e.message);}
+  finally{reviewActionBusy=false;refresh();}
 }
 function bind() {
   showTarget();
@@ -5379,6 +5447,7 @@ function bind() {
   }
   $('clearReviewDemos').onclick=()=>clearDemos(false);
   $('clearAllDemos').onclick=()=>clearDemos(true);
+  $('verifyReviewRights').onclick=()=>verifyReviewPermissions();
   $('png').onclick=()=>exportFile('png');
   $('printPdf').onclick=()=>exportFile('pdf');
   $('submit').onclick=()=>transition('In review');
@@ -5974,6 +6043,7 @@ function renderAppearanceEditor(){
     for(const [field,title] of [['borderWidth','Border thickness'],['cardRadius','Corner radius']])area.append(appearanceField(title,field,'number',z[field],v=>setLayoutValue(key,field,v)));
     const actions=document.createElement('div');actions.className='row';
     const button=(title,handler)=>{const b=document.createElement('button');b.type='button';b.textContent=title;b.onclick=handler;actions.append(b);};
+    button('Choose shared artwork',()=>chooseProtectedArtwork('backgrounds',image=>modifyLayout(cfg=>{cfg[key].backgroundImage=image;cfg[key].backgroundMode='image';},'Shared section background applied.')));
     button('Transparent boxes',()=>update('cardOpacity',0));
     button('Remove image',()=>update('backgroundImage',''));
     button('Reset appearance',()=>modifyLayout(cfg=>{const d=defaultSectionLayout()[key];for(const field of sectionAppearanceFields)delete cfg[key][field];Object.assign(cfg[key],sanitizeSectionAppearance(d),Object.fromEntries(['cardColor','borderColor','borderWidth','cardRadius'].map(f=>[f,d[f]])));},'Section appearance reset.'));
@@ -6114,7 +6184,7 @@ function renderPageComponentEditor(kind){
   for(const [k,label] of [['height','Footer height'],['padding','Padding'],['spacing','Spacing'],['inset','Inset from sides'],['borderWidth','Border thickness']])field(label,k,'number',f[k],v=>update({[k]:v}));
   for(const [k,label] of [['color','Background color'],['borderColor','Border color']])field(label,k,'color',f[k],v=>update({[k]:v}));
   const upload=(label,apply)=>{const l=document.createElement('label');l.textContent=label;const input=document.createElement('input');input.type='file';input.accept='image/png,image/jpeg,image/webp';l.append(input);holder.append(l);input.onchange=async()=>{const file=input.files?.[0],project=state;if(!file)return;try{const data=await readPhoto(file);if(state!==project)return;apply(data);}catch(e){feedback(e.message);}};};
-  upload('Footer background artwork',data=>update({backgroundImage:data}));button('Remove footer background',()=>update({backgroundImage:''}));
+  upload('Footer background artwork',data=>update({backgroundImage:data}));button('Choose shared footer background',()=>chooseProtectedArtwork('backgrounds',image=>update({backgroundImage:image})));button('Remove footer background',()=>update({backgroundImage:''}));
   if(['standard','text','imageText'].includes(f.mode)){
     for(const [k,title] of [['left','Left disclaimer / text'],['right','Right contact / text']]){
       field(title,k,'text',f[k],v=>update({[k]:v}));
@@ -6126,14 +6196,14 @@ function renderPageComponentEditor(kind){
     button('Use Santiago Branch contact numbers',()=>update({right:'0919-081-7993 / 0919-079-5426'}));
   }
   if(['image','imageText'].includes(f.mode)){
-    upload('Footer image (upload or replace)',data=>update({image:data}));button('Remove image',()=>update({image:''}));
+    upload('Footer image (upload or replace)',data=>update({image:data}));button('Choose shared footer image',()=>chooseProtectedArtwork('',image=>update({image})));button('Remove image',()=>update({image:''}));
     for(const [k,label] of [['imageOpacity','Image opacity (%)'],['imageScale','Image scale (%)'],['imageX','Image horizontal position (%)'],['imageY','Image vertical position (%)']])field(label,k,'number',f[k],v=>update({[k]:v}));
     field('Image fit','imageFit','select',f.imageFit,v=>update({imageFit:v}),[['fit','Fit'],['fill','Fill'],['stretch','Stretch']]);button(f.aspect?'Unlock aspect ratio':'Lock aspect ratio',()=>update({aspect:!f.aspect}));
   }
   if(f.mode==='custom'){
     const change=(i,p)=>update({elements:f.elements.map((e,j)=>i===j?{...e,...p}:e)});
     button('Add text element',()=>update({elements:[...f.elements,{kind:'text',text:'Custom text',x:0,y:0,w:35,h:100,size:12,color:'#ffffff'}]}));
-    upload('Add image / logo / QR artwork',image=>update({elements:[...f.elements,{kind:'image',image,x:40,y:0,w:25,h:100}]}));
+    upload('Add image / logo / QR artwork',image=>update({elements:[...f.elements,{kind:'image',image,x:40,y:0,w:25,h:100}]}));button('Add shared logo / image',()=>chooseProtectedArtwork('',image=>update({elements:[...f.elements,{kind:'image',image,x:40,y:0,w:25,h:100}]})));
     f.elements.forEach((e,i)=>{const t=document.createElement('strong');t.textContent='Element '+(i+1);holder.append(t);if(e.kind==='text'){field('Text','elementText','text',e.text,v=>change(i,{text:v}));field('Text size','elementSize','number',e.size,v=>change(i,{size:v}));field('Text color','elementColor','color',e.color,v=>change(i,{color:v}));}else upload('Replace element image',image=>change(i,{image}));for(const [k,label] of [['x','X (%)'],['y','Y (%)'],['w','Width (%)'],['h','Height (%)'],['opacity','Opacity (%)']])field(label,'element'+k,'number',e[k],v=>change(i,{[k]:v}));button('Remove element '+(i+1),()=>update({elements:f.elements.filter((_,j)=>j!==i)}));});
   }
   button('Apply to both sides',()=>{state.campaign.footerDesign={front:structuredClone(f),back:structuredClone(f)};edited('Footer copied to both sides.');});
