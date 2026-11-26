@@ -70,8 +70,9 @@ try{
   const png=document.createElement('canvas');png.width=80;png.height=80;
   const ctx=png.getContext('2d');ctx.fillStyle='#f000ef';ctx.fillRect(0,0,80,80);
   const freebie=png.toDataURL('image/png');
-  const a={sku:'CARD-A',brand:'Test',name:'Test A',section:'front',slot:0,promo:'1000',photo:'',freebieText:'TEST FREEBIE',freebiePhoto:freebie};
-  const b={sku:'CARD-B',brand:'Test',name:'Test B',section:'front',slot:1,promo:'2000',photo:''};
+  const base={brand:'Test',model:'TEST-2026',regular:'',badge:'',items:'',freebieText:'',freebiePhoto:'',photo:''};
+  const a={...base,sku:'CARD-A',name:'Test A',section:'front',slot:0,promo:'1000',freebieText:'TEST FREEBIE',freebiePhoto:freebie};
+  const b={...base,sku:'CARD-B',name:'Test B',section:'front',slot:1,promo:'2000'};
   state.offers=[a,b];state.status='Draft';side='front';slotTarget.section='front';slotTarget.slot='1';
   setup();showTarget();
   return {snapshot,freebie};
