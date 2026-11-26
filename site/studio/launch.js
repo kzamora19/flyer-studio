@@ -424,7 +424,7 @@ async function open(){
     const result=await withProof(async()=>{
      if(!active||Date.now()>=expiresAt)throw Error('Session expired');
      const signed=await signedRequest();
-     const res=await fetch('https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-studio-operations',{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',headers:{'Content-Type':'application/json',apikey:cfg.publishableKey||''},body:JSON.stringify({...fields,studioProof:{sessionId:signed.sessionId,challenge:signed.challenge,signature:signed.signature}}),signal:AbortSignal.timeout(25000)});
+     const res=await fetch(cfg.endpoint.replace(/\/flyer-editor-delivery$/,'/flyer-studio-operations'),{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',headers:{'Content-Type':'application/json',apikey:cfg.publishableKey||''},body:JSON.stringify({...fields,studioProof:{sessionId:signed.sessionId,challenge:signed.challenge,signature:signed.signature}}),signal:AbortSignal.timeout(25000)});
      const data=await res.json().catch(()=>null);
      if(!data?.studioProof||!validSession({...data.studioProof,ok:true}))throw Error('Protected authorization not verified.');
      if(!active)throw Error('Studio closed');
