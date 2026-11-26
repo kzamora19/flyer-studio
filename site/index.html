@@ -2651,6 +2651,17 @@ body.modalOpen{overflow:auto!important}
 <label>Freebie wording <input id="freebieText" maxlength="80" placeholder="e.g. FREE INSTALLATION"></label>
 <label>Freebie photo (optional) <input id="freebiePhoto" type="file" accept="image/png,image/jpeg,image/webp"></label>
 <div class="row"><button id="freebieClearPhoto" type="button">Remove freebie photo</button><button id="freebieClear" type="button">Remove freebie</button></div>
+<details><summary>Freebie appearance</summary>
+<p class="muted">Freebies stay in the lower-right available area. Main product photos and prices retain their usual positions.</p>
+<label>Image size (%) <input id="freebieSize" type="number" min="20" max="100" step="5"></label>
+<label>Image scale (%) <input id="freebieScale" type="number" min="50" max="200" step="5"></label>
+<label>Horizontal position (%) <input id="freebieX" type="number" min="0" max="100" step="5"></label>
+<label>Vertical position (%) <input id="freebieY" type="number" min="0" max="100" step="5"></label>
+<label>Image fitting <select id="freebieFit"><option value="fit">Fit</option><option value="fill">Fill</option></select></label>
+<label><input id="freebieAspect" type="checkbox"> Lock image aspect ratio</label>
+<label>Description font size <input id="freebieFont" type="number" min="4" max="18" step="1"></label>
+<button id="freebieResetAppearance" type="button">Reset freebie appearance</button>
+</details>
 <p id="freebieStatus" class="muted" role="status"></p>
 </div>
 </details>
@@ -3561,11 +3572,21 @@ function showCardPhotos() {
   $('cardPhotoSource').hidden=!source||Boolean(sources?.length);
   if(source) $('cardPhotoSource').href=source;
 }
+const freebieControlFields={freebieSize:'size',freebieScale:'scale',freebieX:'x',freebieY:'y',freebieFit:'fit',freebieAspect:'aspect',freebieFont:'font'};
+function sanitizeFreebieAppearance(raw){
+  const v=raw&&typeof raw==='object'?raw:{};
+  const bound=(key,min,max,fallback)=>v[key]==null||v[key]===''||!Number.isFinite(Number(v[key]))?fallback:Math.max(min,Math.min(max,Number(v[key])));
+  return {size:bound('size',20,100,100),scale:bound('scale',50,200,100),x:bound('x',0,100,50),y:bound('y',0,100,50),fit:v.fit==='fill'?'fill':'fit',aspect:v.aspect!==false,font:bound('font',4,18,10)};
+}
 function showFreebieEditor() {
   const offer=sectionSide(slotTarget.section)===side?targetedOffer():null;
   $('freebieEditor').hidden=!offer;
   if(!offer) return;
   $('freebieText').value=offer.freebieText||'';
+  const appearance=sanitizeFreebieAppearance(offer.freebieAppearance);
+  for(const [id,key] of Object.entries(freebieControlFields)){
+    const el=$(id);if(el.type==='checkbox')el.checked=appearance[key];else el.value=appearance[key];
+  }
   $('freebieClearPhoto').disabled=!offer.freebiePhoto;
   $('freebieClear').disabled=!offer.freebieText&&!offer.freebiePhoto;
   $('freebieStatus').textContent=offer.freebiePhoto?
@@ -4030,6 +4051,7 @@ function validatedBackup(data) {
     seen.add(key);
     offer.photo=imageData(row.photo)?row.photo:'';
     offer.freebiePhoto=imageData(row.freebiePhoto)?row.freebiePhoto:'';
+    if(row.freebieAppearance&&typeof row.freebieAppearance==='object')offer.freebieAppearance=sanitizeFreebieAppearance(row.freebieAppearance);
     if(offer.photo&&typeof row.photoSource==='string'&&/^https:\/\/www\.1stmegasaver\.com\.ph\/product\//.test(row.photoSource)) {
       offer.photoSource=row.photoSource;
     }
@@ -4235,7 +4257,64 @@ function drawCardCopy(ctx,layout,x,y,width) {
   }
   return baseline;
 }
-function techCard(ctx,offer,asset,x,y,w,h,style=null) {
+// Compute a lower-right region only after the normal product-photo geometry is final.
+function freebieArea(ctx,offer,asset,box,photoBox,copyBox,price){
+  if(!offer||(!offer.freebieText&&!asset))return null;
+  const gap=Math.max(2,Math.min(4,box.w*.018)),right=box.x+box.w-box.inset;
+  let left=Math.max(box.x+box.w*.53,copyBox.x);
+  const stacked=photoBox.x+photoBox.w>left-gap&&photoBox.x<right;
+  const topLimit=Math.max(copyBox.y,stacked?photoBox.y+photoBox.h+gap:copyBox.y);
+  const bottomLimit=box.y+box.h-box.inset;
+  // Measure the real fitted price text, keeping its original alignment and baseline.
+  function rightEdge(text,size,weight,family,align,x){
+    fittedCanvasSize(ctx,text,price.width,size,weight,family);
+    const width=ctx.measureText(text).width;
+    return align==='right'?x:align==='center'?x+width/2:x+width;
+  }
+  const font=typefaces.current;
+  let priceRight=rightEdge(price.promo,price.size,font.weight,font.family,price.align,price.x);
+  for(const [text] of price.secondary)priceRight=Math.max(priceRight,rightEdge(text,price.secondarySize,600,'Arial, sans-serif','left',box.x+box.inset));
+  // Use the price-free right-hand area first. For centered/right-aligned
+  // prices, reserve the panel immediately above the existing price area.
+  let bottom=bottomLimit;
+  if(priceRight+gap>left){
+    if(right-priceRight-gap>=Math.max(10,box.w*.23))left=priceRight+gap;
+    else bottom=Math.min(bottom,price.y-price.size-gap);
+  }
+  const available=bottom-topLimit;
+  const panelHeight=Math.min(Math.max(6,box.h*.25),available*.68);
+  if(right-left<4||panelHeight<3)return null;
+  return {x:left,y:bottom-panelHeight,w:right-left,h:panelHeight};
+}
+function drawFreebiePanel(ctx,offer,asset,area){
+  if(!area)return;
+  const a=sanitizeFreebieAppearance(offer.freebieAppearance);
+  const {x,y,w,h}=area,pad=Math.min(2,h*.08,w*.04);
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  // No opaque fill or full-width band: reveal existing section artwork.
+  const text=String(offer.freebieText||'');
+  const textH=text?Math.min(h*(asset? .36:.85),a.font*2.2):0;
+  const usableW=Math.max(.1,w-pad*2),usableH=Math.max(.1,h-pad*2-textH);
+  if(asset&&usableH>.1){
+    const vw=usableW*a.size/100,vh=usableH*a.size/100;
+    const px=x+pad+(usableW-vw)*a.x/100,py=y+pad+(usableH-vh)*a.y/100;
+    ctx.save();ctx.beginPath();ctx.rect(px,py,vw,vh);ctx.clip();
+    const f=asset.frame,zoom=a.scale/100;
+    let iw=vw*zoom,ih=vh*zoom;
+    if(a.aspect){
+      const factor=(a.fit==='fill'?Math.max(vw/f.width,vh/f.height):Math.min(vw/f.width,vh/f.height))*zoom;
+      iw=f.width*factor;ih=f.height*factor;
+    }
+    const dx=px+(vw-iw)*a.x/100,dy=py+(vh-ih)*a.y/100;
+    ctx.drawImage(asset.image,f.x,f.y,f.width,f.height,dx,dy,iw,ih);ctx.restore();
+  }
+  if(text&&textH>0){
+    const copy=fitCardCopy(ctx,text,'',usableW,Math.max(.1,textH-pad),a.font);
+    drawCardCopy(ctx,copy,x+pad,asset?y+h-textH:y+pad,usableW);
+  }
+  ctx.restore();
+}
+function techCard(ctx,offer,asset,x,y,w,h,style=null,freebieAsset=null) {
   const inset=Math.max(4,Math.min(9,w*.03)),inner=Math.max(1,w-inset*2);
   const prices=cardPrices(offer),secondaryStep=h<110?Math.max(5,h*.07):11;
   const priceSize=Math.min(17,Math.max(5,h*.13));
@@ -4284,7 +4363,11 @@ function techCard(ctx,offer,asset,x,y,w,h,style=null) {
     fill(ctx,'#edf2fa',photoX,photoY,photoWidth,photoHeight);
     line(ctx,'NO PHOTO',photoX+2,photoY+photoHeight/2+2,Math.max(1,photoWidth-4),7,'#506584');
   }
+  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:photoY,w:photoWidth,h:photoHeight},{x:detailX,y:textTop},
+    {promo:prices.promo,secondary:prices.secondary,align:style?.priceAlign||'left',x:style?.priceAlign==='center'?x+w/2:style?.priceAlign==='right'?x+w-inset:x+inset,y:priceY,size:priceSize,width:inner,secondarySize:Math.min(9,Math.max(4,h*.085))});
+  if(freebie)copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-textTop),12);
   drawCardCopy(ctx,copy,detailX,textTop,detailWidth);
+  drawFreebiePanel(ctx,offer,freebieAsset,freebie);
   // Price occupies its own full-width footer, not the narrower description column.
   const align=style?.priceAlign||'left',priceX=align==='center'?x+inset+inner/2:align==='right'?x+inset+inner:x+inset;
   ctx.save();ctx.textAlign=align==='center'?'center':align==='right'?'right':'left';
@@ -4296,14 +4379,14 @@ function techCard(ctx,offer,asset,x,y,w,h,style=null) {
     line(ctx,offer.badge,badgeX+3,photoY+10,Math.max(1,badgeWidth-6),9,'#5e320a');
   }
 }
-function card(ctx,offer,asset,x,y,w,h,type,style=null) {
+function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
   const bundle=type==='bundles',compact=type==='tech';
   ctx.save();
   ctx.beginPath();ctx.roundRect(x,y,w,h,style?.cardRadius??9);
   ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.fill();
   ctx.strokeStyle=style?.borderColor||(bundle?'#f2bd45':'#c5d3e7');ctx.lineWidth=style?.borderWidth??1;ctx.stroke();
   if(!offer){ctx.restore();return;}
-  if(compact){techCard(ctx,offer,asset,x,y,w,h,style);ctx.restore();return;}
+  if(compact){techCard(ctx,offer,asset,x,y,w,h,style,freebieAsset);ctx.restore();return;}
   const inset=Math.max(3,Math.min(8,w*.07)),inner=Math.max(1,w-2*inset),photoInset=Math.max(2,Math.min(5,w*.05));
   const quantity=bundle?bundleQuantity(offer):null;
   const prices=cardPrices(offer,Boolean(quantity));
@@ -4357,8 +4440,12 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null) {
     fill(ctx,'#edf2fa',photoX,imageY,photoWidth,photoHeight);
     line(ctx,'PHOTO NEEDED',photoX+3,imageY+photoHeight/2+3,Math.max(1,photoWidth-6),Math.min(9,h*.11),'#506584');
   }
-  drawCardCopy(ctx,copy,copyX,copyTop,copyWidth);
   const align=style?.priceAlign||'left',priceX=align==='center'?x+w/2:align==='right'?x+w-inset:x+inset;
+  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:imageY,w:photoWidth,h:photoHeight},{x:copyX,y:copyTop},
+    {promo:prices.promo,secondary:prices.secondary,align,x:priceX,y:priceY,size:promoSize,width:inner,secondarySize:Math.min(10,Math.max(3,h*.1))});
+  if(freebie)copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-copyTop),bundle?9:11);
+  drawCardCopy(ctx,copy,copyX,copyTop,copyWidth);
+  drawFreebiePanel(ctx,offer,freebieAsset,freebie);
   ctx.textAlign=align==='center'?'center':align==='right'?'right':'left';
   fit(ctx,prices.promo,priceX,priceY,inner,promoSize,style?.priceColor||'#b51d22');
   ctx.textAlign='left';
@@ -4550,21 +4637,6 @@ function pageLayout(page,height,campaign,artwork) {
         slotCount(campaign,'front'),5,false,campaign.frontRowOrder)]
   };
 }
-function drawFreebieBand(ctx,offer,asset,x,y,w,h,style){
-  ctx.save();
-  ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
-  fill(ctx,style?.cardColor||'#ffffff',x,y,w,h);
-  ctx.strokeStyle=style?.borderColor||'#c5d3e7';ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,w-1,h-1);
-  const pad=Math.max(2,Math.min(5,h*.1));
-  const text=offer.freebieText||'';
-  const imageWidth=asset?(text?Math.min(w*.43,h*2):w-pad*2):0;
-  if(asset)photo(ctx,asset.image,x+pad,y+pad,imageWidth,h-pad*2,asset.frame);
-  if(text){
-    const tx=x+pad+(asset?imageWidth+pad:0);
-    line(ctx,text,tx,y+h*.62,Math.max(1,x+w-pad-tx),Math.min(13,h*.46),'#193568',800);
-  }
-  ctx.restore();
-}
 function drawSlots(ctx,project,pictures,positions,target,freebies=new Map()) {
   const bySection=Object.fromEntries([...new Set(positions.map(position=>position.key))]
     .map(key=>[key,placement(project.offers,key,project.campaign).slots]));
@@ -4572,10 +4644,7 @@ function drawSlots(ctx,project,pictures,positions,target,freebies=new Map()) {
     const offer=bySection[key][index];
     const active=key===target?.section&&index+1===Number(target.slot);
     const style=project.campaign.sectionLayout?.[key];
-    const hasFreebie=Boolean(offer&&(offer.freebieText||freebies.has(offer)));
-    const band=hasFreebie?Math.min(height*.3,Math.max(12,height*.24)):0;
-    if(offer||project.status!=='Approved'||active)card(ctx,offer,pictures.get(offer),x,y,width,height-band,key,style);
-    if(hasFreebie)drawFreebieBand(ctx,offer,freebies.get(offer),x,y+height-band,width,band,style);
+    if(offer||project.status!=='Approved'||active)card(ctx,offer,pictures.get(offer),x,y,width,height,key,style,freebies.get(offer));
     if(active) {
       ctx.strokeStyle='#086fd5';ctx.lineWidth=3;
       ctx.strokeRect(x+2,y+2,width-4,height-4);
@@ -5004,6 +5073,19 @@ function bind() {
     offer.freebiePhoto=image;
     edited('Freebie photo loaded for '+offer.sku+'.');
   });
+  for(const [id,key] of Object.entries(freebieControlFields)){
+    $(id).onchange=()=>{
+      const offer=targetedOffer();if(!offer)return;
+      const el=$(id),appearance=sanitizeFreebieAppearance(offer.freebieAppearance);
+      appearance[key]=el.type==='checkbox'?el.checked:el.value;
+      offer.freebieAppearance=sanitizeFreebieAppearance(appearance);
+      edited('Freebie appearance updated.');
+    };
+  }
+  $('freebieResetAppearance').onclick=()=>{
+    const offer=targetedOffer();if(!offer)return;
+    delete offer.freebieAppearance;edited('Freebie appearance reset.');
+  };
   $('freebieClearPhoto').onclick=()=>{
     const offer=targetedOffer();
     if(!offer?.freebiePhoto) return;
