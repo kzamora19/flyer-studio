@@ -59,5 +59,5 @@ reset();tools.card(ctx(),offer,asset,10,15,180,170,'bundles',{photoScale:100});
 assert.ok(calls.photos.length===1,'Bundle artwork still draws');
 assert.ok(calls.copies[0].y>calls.photos[0].y,'Tall bundle still stacks photo and description');
 
-assert.ok(html.includes('drawSlots(ctx,project,pictures,layout.cards,target)'), 'Preview and exports share card renderer');
+assert.ok(html.includes('drawSlots(ctx,project,pictures,layout.cards,target,freebies)'), 'Preview and exports share card renderer');
 console.log('PASS: larger TechZone and front product images; safe prices, descriptions, placeholders and bundle layout.');
