@@ -41,3 +41,31 @@ test('asset requests accept only known categories and UUID identifiers',async()=
  assert.equal(valid({action:'asset-image',assetId:'../secret.png'}),false);
  for(const bad of [null,[],{},'approve',{action:'unknown'}])assert.equal(valid(bad),false);
 });
+
+test('verified Santiago branch contact defaults are isolated to exact branch code',async()=>{
+ const {footerContactForBranch}=await policy;
+ assert.equal(footerContactForBranch('STG'),'0919-081-7993 / 0919-079-5426');
+ for(const code of ['STG001','SANTIAGO','stg','',null,undefined,{},'CAU'])assert.equal(footerContactForBranch(code),'');
+});
+test('fresh footer defaults never overwrite restored or concurrently edited projects',async()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+ const source=fs.readFileSync(path.join(__dirname,'../site/index.html'),'utf8');
+ const start=source.indexOf('async function applyNewProjectBranchFooter(project)');
+ const end=source.indexOf('async function verifyReviewPermissions()',start);
+ assert.ok(start>=0&&end>start);
+ const create=()=>({status:'Draft',campaign:{footerDesign:{front:{mode:'standard',right:''},back:{mode:'standard',right:''}}}});
+ let state=create(),finish,editedCount=0;
+ const context={state,branchFooterContact:'',window:{__MEGAFLYER_OPERATIONS_RPC__:()=>{}},protectedOperation:()=>new Promise(resolve=>{finish=resolve;}),edited:()=>editedCount++,currentMenu:'cards',currentSub:''};
+ vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+ const contact='0919-081-7993 / 0919-079-5426';
+ const p=context.applyNewProjectBranchFooter(state);
+ state.campaign.footerDesign.back={mode:'standard',right:'Custom number'};
+ finish({footerContact:contact});await p;
+ assert.equal(state.campaign.footerDesign.front.right,contact);
+ assert.equal(state.campaign.footerDesign.back.right,'Custom number');assert.equal(editedCount,1);
+ const old=state, pending=context.applyNewProjectBranchFooter(old);
+ context.state=create();finish({footerContact:contact});await pending;
+ assert.equal(context.state.campaign.footerDesign.front.right,'');
+ assert.equal(old.campaign.footerDesign.back.right,'Custom number');assert.equal(editedCount,1);
+ assert.ok(source.includes('if(newProject)void applyNewProjectBranchFooter(state)'),'Stored projects are excluded from startup defaults');
+});
