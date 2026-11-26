@@ -141,3 +141,25 @@ body.flyerChatLayout #sidebarContent .fields {grid-template-columns:minmax(0,1fr
  body.flyerChatLayout main>aside.chatMobileClosed #sidebarContent {display:none!important;}
  body.flyerChatLayout .stage {height:auto;overflow:visible;}
 }
+
+/* Center the glyph itself, not a flex group containing invisible label text. */
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav>[data-nav],
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav #sidebarActions button {
+  position:relative; justify-content:center!important; padding:0!important;
+}
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav>[data-nav]::before,
+body.flyerChatLayout #sidebarFixed.menuCollapsed #studioNav #sidebarActions button::before {
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:24px;min-width:24px;text-align:center;line-height:1;
+}
+@media(max-width:700px){
+ body.flyerChatLayout #studioNav>[data-nav],
+ body.flyerChatLayout #studioNav #sidebarActions button {
+  position:relative;justify-content:center!important;padding:0!important;
+ }
+ body.flyerChatLayout #studioNav>[data-nav]::before,
+ body.flyerChatLayout #studioNav #sidebarActions button::before {
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:24px;min-width:24px;text-align:center;line-height:1;
+ }
+}

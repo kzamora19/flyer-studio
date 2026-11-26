@@ -45,8 +45,9 @@ test('full card geometry is passed to renderer with freebie artwork',()=>{
 test('freebie settings are bounded and legacy projects receive safe defaults',()=>{
  const code=slice(html,'function sanitizeFreebieAppearance','function showFreebieEditor');
  const sanitize=new Function(code+'return sanitizeFreebieAppearance;')();
- assert.deepEqual(sanitize(),{size:100,scale:100,x:50,y:50,fit:'fit',aspect:true,font:10});
- assert.deepEqual(sanitize({size:250,scale:0,x:-5,y:300,fit:'fill',aspect:false,font:30}),{size:100,scale:50,x:0,y:100,fit:'fill',aspect:false,font:18});
+ assert.deepEqual(sanitize(),{size:100,scale:100,x:50,y:50,fit:'fit',aspect:true,font:10,areaHeight:100,layout:'auto',textAlign:'left',textY:50});
+ assert.deepEqual(sanitize({size:250,scale:0,x:-5,y:300,fit:'fill',aspect:false,font:30}),{size:100,scale:50,x:0,y:100,fit:'fill',aspect:false,font:18,areaHeight:100,layout:'auto',textAlign:'left',textY:50});
+ assert.deepEqual(sanitize({areaHeight:10,layout:'side',textAlign:'right',textY:200}),{size:100,scale:100,x:50,y:50,fit:'fit',aspect:true,font:10,areaHeight:30,layout:'side',textAlign:'right',textY:100});
  assert.match(html,/offer.freebieAppearance=sanitizeFreebieAppearance\(row.freebieAppearance\)/);
 });
 test('catalog relay targets only the approved edge endpoint and accepts only validated store URLs',async()=>{

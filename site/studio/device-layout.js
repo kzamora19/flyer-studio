@@ -45,6 +45,24 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
   body:has(#sidebarFixed #studioNav) #studioNav #sidebarActions button::before{position:absolute;inset:0;display:grid;place-items:center;margin:0!important;line-height:1}
  }
  @media(min-width:821px){body:has(#sidebarFixed #studioNav) #sidebarFixed.menuCollapsed #studioNav{display:none!important}}
+ @media(min-width:821px){
+  body:has(#sidebarFixed #studioNav) #studioNav>[data-nav],
+  body:has(#sidebarFixed #studioNav) #sidebarFixed.menuCollapsed #studioNav>[data-nav],
+  body:has(#sidebarFixed #studioNav) #studioNav #sidebarActions button{
+    position:relative!important;justify-content:center!important;align-items:center!important;padding:0!important;text-align:center!important;
+  }
+  body:has(#sidebarFixed #studioNav) #studioNav>[data-nav]::before,
+  body:has(#sidebarFixed #studioNav) #studioNav #sidebarActions button::before{
+    position:absolute!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;width:24px!important;min-width:24px!important;text-align:center!important;line-height:1!important;
+  }
+  body:has(#sidebarFixed #studioNav) #editorMenuToggle{position:relative!important;padding:0!important;justify-content:center!important;align-items:center!important;}
+  body:has(#sidebarFixed #studioNav) #editorMenuToggle::before{position:absolute!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;text-align:center!important;line-height:1!important;}
+ }
+ @media(max-width:820px){
+  body.bl-flyer-mobile-menu #studioNav>[data-nav]::before,
+  body.bl-flyer-mobile-menu #studioNav #sidebarActions button::before{position:static!important;transform:none!important;}
+ }
+
  `;
  function wire(){
   const query=matchMedia("(max-width:820px)");
