@@ -96,15 +96,46 @@ try{
   const snapshot=structuredClone(state);snapshot.status='Approved';
   const result=await render(snapshot,'back',1600);
   const {canvas,layout,dimensions:d}=result;
-  const card=layout.cards.find(c=>c.key==='back'&&c.index===0);
+  const cardBox=layout.cards.find(c=>c.key==='back'&&c.index===0);
   const unit=canvas.width/d.pageWidth,scale=unit*d.width/800;
-  const x=Math.floor(d.bleed*unit+card.x*scale),y=Math.floor(d.bleed*unit+(card.y+card.height*.7)*scale);
-  const w=Math.max(1,Math.floor(card.width*scale)),h=Math.max(1,Math.floor(card.height*.3*scale));
+  const x=Math.floor(d.bleed*unit+cardBox.x*scale),y=Math.floor(d.bleed*unit+cardBox.y*scale);
+  const w=Math.max(1,Math.floor(cardBox.width*scale)),h=Math.max(1,Math.floor(cardBox.height*scale));
   const bytes=canvas.getContext('2d').getImageData(x,y,w,h).data;
-  let matching=0;for(let i=0;i<bytes.length;i+=4)if(bytes[i]>210&&bytes[i+1]<50&&bytes[i+2]>210)matching++;
-  return matching;
+  let matching=0,left=0;
+  for(let i=0;i<bytes.length;i+=4)if(bytes[i]>210&&bytes[i+1]<50&&bytes[i+2]>210){matching++;if((i/4)%w<w*.5)left++;}
+  return {matching,left};
  });
- assert.ok(painted>20,'Actual export renderer must paint the uploaded freebie in the moved card');
+ assert.ok(painted.matching>20,'Actual export renderer must paint the uploaded freebie in the moved card');
+ assert.equal(painted.left,0,'Freebie pixels must remain on the right side');
+ const geometry=await page.evaluate(()=>{
+  const main=document.createElement('canvas');main.width=80;main.height=60;
+  main.getContext('2d').fillRect(0,0,80,60);
+  const free=document.createElement('canvas');free.width=60;free.height=30;
+  const fc=free.getContext('2d');fc.fillStyle='#f000ef';fc.fillRect(0,0,60,30);
+  const asset={image:main,frame:{x:0,y:0,width:80,height:60}},bonus={image:free,frame:{x:0,y:0,width:60,height:30}};
+  const offer={sku:'TEST-GEOMETRY',name:'SHARP AIRCON SPLIT TYPE',model:'AH-X10BEF',brand:'SHARP',promo:'39598',regular:'',items:'',badge:'',freebieText:''};
+  function capture(type,w,h,withFreebie,appearance){
+   const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+   const ctx=canvas.getContext('2d'),images=[],texts=[];
+   const draw=ctx.drawImage.bind(ctx),fill=ctx.fillText.bind(ctx);
+   ctx.drawImage=(image,...args)=>{images.push({kind:image===main?'main':'freebie',args});draw(image,...args);};
+   ctx.fillText=(value,...args)=>{texts.push({value,x:args[0],y:args[1],font:ctx.font});fill(value,...args);};
+   card(ctx,{...offer,freebieAppearance:appearance},asset,0,0,w,h,type,null,withFreebie?bonus:null);
+   const pixels=ctx.getImageData(0,0,w,h).data;let left=0,freeCount=0;
+   for(let i=0;i<pixels.length;i+=4)if(pixels[i]>210&&pixels[i+1]<50&&pixels[i+2]>210){freeCount++;if((i/4)%w<w*.5)left++;}
+   return {photo:images.find(i=>i.kind==='main'),price:texts.find(t=>t.value.includes('39,598')),freebie:images.find(i=>i.kind==='freebie'),left,freeCount};
+  }
+  return [['front',200,100],['back',170,145],['tech',220,175],['bundles',200,210]].map(([type,w,h])=>({type,before:capture(type,w,h,false),after:capture(type,w,h,true),adjusted:capture(type,w,h,true,{size:65,x:100,y:0,scale:120,fit:'fill',aspect:true,font:12})}));
+ });
+ for(const g of geometry){
+  assert.deepEqual(g.after.photo,g.before.photo,'Main photo geometry changed: '+g.type);
+  assert.deepEqual(g.after.price,g.before.price,'Price moved or resized: '+g.type);
+  assert.ok(g.after.freeCount>0&&g.after.left===0,'Freebie must render on right: '+g.type);
+  assert.notDeepEqual(g.adjusted.freebie,g.after.freebie,'Freebie appearance controls should change artwork: '+g.type);
+ }
+ await page.evaluate(()=>{const offer=placement(state.offers,'back').slots[0];offer.freebieAppearance={size:65,scale:120,x:80,y:20,fit:'fill',aspect:true,font:12};});
+ const restored=await page.evaluate(()=>{const saved=validatedBackup(JSON.parse(JSON.stringify(state)));return saved.offers.find(o=>o.sku==='CARD-A').freebieAppearance;});
+ assert.deepEqual(restored,{size:65,scale:120,x:80,y:20,fit:'fill',aspect:true,font:12});
  await page.locator('#arrangeCards').click();
  await page.evaluate(snapshot=>{state=snapshot;side='front';slotTarget.section='front';slotTarget.slot='1';setup();showTarget();},arrangementBaseline.snapshot);
  await page.locator('#front').click();
