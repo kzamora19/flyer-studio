@@ -3201,41 +3201,79 @@ function reviewScope(project=state){return ['front','back','both'].includes(proj
 function reviewPages(project=state){const scope=reviewScope(project);return scope==='both'?['front','back']:[scope];}
 function reviewSectionKeys(project=state){return [...new Set(reviewPages(project).flatMap(page=>pageSectionKeys(project.campaign,page)))].filter(key=>Object.hasOwn(sections,key));}
 function reviewOffers(project=state){const keys=new Set(reviewSectionKeys(project));return project.offers.filter(offer=>keys.has(offer.section));}
-function preflight() {
-  const issues=[];
-  const campaign=state.campaign, pages=reviewPages(), keys=reviewSectionKeys(), offers=reviewOffers();
-  if(campaign.brandHeader!=='classic'&&!campaign.brand) issues.push('Enter the brand.');
-  const usesEditableBanner=pages.some(page=>!headlineArtworkSource(campaign,page));
-  if(usesEditableBanner&&(!campaign.title||!campaign.dates)) {
-    issues.push('Enter the headline and sale dates for any side using editable text.');
-  }
-  if(pages.includes('back')&&backPresetActive(campaign)&&!campaign.dates) issues.push('Enter sale dates for the back artwork.');
-  if(!offers.length) issues.push('Add at least one offer to the selected visible sides.');
-  if(campaign.sectionLayout){
-    for(const page of pages){
-      const keys=pageSectionKeys(campaign,page);
-      if(!keys.length)continue;
-      const estimated=keys.reduce((total,key,index)=>total+campaign.sectionLayout[key].height+(index<keys.length-1?campaign.sectionLayout[key].spacing:0),0);
-      const max=page==='front'?790:780;
-      if(estimated>max)issues.push(page+' section heights exceed available space. Reduce section heights or move a section.');
+function collectReviewIssues(project=state){
+  const issues=[],c=project.campaign,pages=reviewPages(project),keys=reviewSectionKeys(project),offers=reviewOffers(project);
+  const add=(message,target,severity='error')=>issues.push({message,target,severity});
+  if(c.brandHeader!=='classic'&&!c.brand)add('Enter the brand.',{kind:'campaign',sub:'text'});
+  if(pages.some(page=>!headlineArtworkSource(c,page))&&(!c.title||!c.dates))add('Enter the headline and sale dates for selected sides.',{kind:'campaign',sub:'text'});
+  if(pages.includes('back')&&backPresetActive(c)&&!c.dates)add('Enter sale dates for the back artwork.',{kind:'campaign',sub:'artwork',page:'back'});
+  if(!offers.length)add('Add at least one offer to the selected visible sides.',{kind:'cards',page:pages[0]});
+  for(const key of keys){
+    const placed=placement(offers,key,c);
+    for(const o of placed.extra)add(sections[key]+' overflow: '+o.sku+'. Increase grid capacity or move the product.',{kind:'section',key});
+    for(const [index,o] of placed.slots.entries()){
+      if(!o)continue;
+      const target={kind:'card',key,index};
+      if(!o.photo)add('Missing product photo: '+o.sku+'. Upload or recall the exact product photo.',target);
+      if(!o.name||!validPrice(o.promo)||Number(o.promo)<=0||(o.regular&&(!validPrice(o.regular)||Number(o.regular)<Number(o.promo)))||(key==='bundles'&&!o.bundleBarcode&&!o.items))
+        add('Check product name, prices or bundle contents: '+o.sku+'.',target);
+      if(isDemoOffer(o))add('Replace or remove demo product '+o.sku+'.',target);
+      if(!o.brand&&!isDemoOffer(o))add('Check whether '+o.sku+' requires a brand label.',target,'warning');
     }
   }
-  for(const key of keys) {
-    const extra=overflow(offers,key);
-    if(extra.length) issues.push(sections[key]+' overflow: '+extra.map(offer=>offer.sku).join(', '));
+  const duplicates=new Map();
+  for(const o of offers){const key=skuKey(o.sku);if(key){if(!duplicates.has(key))duplicates.set(key,[]);duplicates.get(key).push(o);}}
+  for(const [barcode,rows] of duplicates)if(rows.length>1){
+    const first=rows[0],index=placement(offers,first.section,c).slots.indexOf(first);
+    add('Duplicate barcode '+barcode+' occurs '+rows.length+' times. Review the selected cards.',index>=0?{kind:'card',key:first.section,index}:{kind:'section',key:first.section});
   }
-  const missing=offers.filter(offer=>!offer.photo);
-  if(missing.length) issues.push('Exact photos missing: '+missing.map(offer=>offer.sku).join(', '));
-  const invalid=offers.filter(offer=>!offer.name||!validPrice(offer.promo)||Number(offer.promo)<=0||
-    (offer.regular&&(!validPrice(offer.regular)||Number(offer.regular)<Number(offer.promo)))||
-    (offer.section==='bundles'&&!offer.bundleBarcode&&!offer.items));
-  if(invalid.length) issues.push('Check names, prices or bundle contents: '+invalid.map(offer=>offer.sku).join(', '));
-  const duplicateBarcodes=new Map();
-  for(const offer of offers){const key=skuKey(offer.sku);duplicateBarcodes.set(key,(duplicateBarcodes.get(key)||0)+1);}
-  for(const [barcode,count] of duplicateBarcodes)if(count>1)
-    issues.push('Duplicate barcode '+barcode+' is used on '+count+' flyer cards. Confirm duplicates before approval.');
-  if(offers.some(offer=>offer.demo||String(offer.sku).startsWith('DEMO-'))) issues.push('Remove or replace DEMO offers on selected visible sides before approval.');
   return issues;
+}
+let renderedReviewIssues=[],reviewPending=true,reviewGeneration=0,reviewTimer=null;
+function reviewIssues(){return [...collectReviewIssues(),...renderedReviewIssues];}
+function preflight(){return reviewIssues().filter(i=>i.severity==='error').map(i=>i.message);}
+function navigateReviewIssue(target){
+  if(!target)return;
+  if(target.page)side=target.page;
+  if(target.kind==='card')openCard(target.key,target.index+1);
+  else if(target.kind==='section'){side=sectionSide(target.key);selectedLayoutSection=target.key;showTarget();refresh();$('layoutSettings').click();setAppearanceTab('cards');}
+  else if(target.kind==='campaign')chooseAdvancedSub('campaign',target.sub||'text');
+  else chooseAdvancedSub('cards',side);
+}
+function renderReviewStatus(){
+  const issues=reviewIssues(),blocked=issues.some(i=>i.severity==='error');
+  $('issues').replaceChildren();
+  if(reviewPending){const p=document.createElement('p');p.textContent='Checking selected flyer layout and artwork…';$('issues').append(p);}
+  for(const issue of issues){
+    const b=document.createElement('button');b.type='button';b.textContent=(issue.severity==='error'?'Error: ':'Warning: ')+issue.message;
+    b.style.cssText='display:block;text-align:left;width:100%;white-space:normal;margin:3px 0';b.onclick=()=>navigateReviewIssue(issue.target);$('issues').append(b);
+  }
+  if(!issues.length&&!reviewPending)$('issues').textContent='No applicable validation issues.';
+  $('submit').disabled=reviewPending||blocked||!['Draft','Changes requested'].includes(state.status);
+  $('approve').disabled=reviewPending||blocked||state.status!=='In review';
+  $('changes').disabled=state.status!=='In review';
+}
+function actualLayoutIssues(layout,page){
+  const out=[],add=(message,target,severity='error')=>out.push({message:page.toUpperCase()+': '+message,target:{...target,page},severity});
+  for(const message of layout.pageWarnings||[])add(message,{kind:'campaign',sub:'footer'});
+  for(const message of layout.footerWarnings||[])add(message,{kind:'campaign',sub:'footer'},message.includes('readable size')?'warning':'error');
+  for(const item of layout.freebieWarnings||[])add('Freebie does not fit for '+item.sku+'. Increase card space.',{kind:'card',key:item.key,index:item.index});
+  return out;
+}
+function scheduleReviewDiagnostics(){
+  const generation=++reviewGeneration;reviewPending=true;renderedReviewIssues=[];clearTimeout(reviewTimer);renderReviewStatus();
+  reviewTimer=setTimeout(async()=>{
+    const snapshot=structuredClone(state),results=[];
+    try{
+      for(const page of reviewPages(snapshot)){
+        if(generation!==reviewGeneration)return;
+        const {layout}=await render(snapshot,page,800);
+        results.push(...actualLayoutIssues(layout,page));
+      }
+    }catch(e){results.push({message:'Selected flyer rendering failed: '+e.message,severity:'error',target:{kind:'campaign',sub:'artwork'}});}
+    if(generation!==reviewGeneration)return;
+    renderedReviewIssues=results;reviewPending=false;renderReviewStatus();
+  },180);
 }
 function refresh() {
   clearFillDecision();
@@ -3270,11 +3308,7 @@ function refresh() {
   $('printInfo').textContent=printSize+' · PDF: '+scopeLabel+'. '+(state.status==='Approved'?'Approved export.':'Drafts include a watermark.');
   $('exportInfo').textContent=printSize+' · 300 ppi exports · Unapproved exports are marked DRAFT.';
   $('counts').textContent=reviewSectionKeys().map(key=>sections[key]+' '+group(state.offers,key).length+'/'+slotCount(state.campaign,key)).join(' · ');
-  const issues=preflight();
-  $('issues').replaceChildren(...issues.map(issue=>Object.assign(document.createElement('div'),{textContent:issue})));
-  $('submit').disabled=issues.length>0||!['Draft','Changes requested'].includes(state.status);
-  $('approve').disabled=state.status!=='In review'||issues.length>0;
-  $('changes').disabled=state.status!=='In review';
+  scheduleReviewDiagnostics();
   $('activity').replaceChildren(...state.history.slice(0,8).map(entry=>Object.assign(document.createElement('li'),{
     textContent:[entry.action,entry.person,entry.note,new Date(entry.time).toLocaleString()].filter(Boolean).join(' · ')
   })));
@@ -3299,6 +3333,7 @@ function refresh() {
     const warning=layout.freebieWarnings?.find(item=>item.key===slotTarget.section&&item.index+1===Number(slotTarget.slot));
     if(warning)$('freebieStatus').textContent='Not enough right-side space for this freebie. Increase card height or adjust the layout.';
     if(layout.freebieWarnings?.length)feedback('Freebie needs more right-side space: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Increase card height or adjust layout.');
+    else if(layout.footerWarnings?.length||layout.pageWarnings?.length)feedback([...(layout.pageWarnings||[]),...(layout.footerWarnings||[])].join(' '));
     updatePreviewHighlight();
     updateSectionHandles();
     if(arrangeMode) drawRowGuides(target,layout,dimensions);
@@ -5134,7 +5169,7 @@ async function exportFile(format) {
 }
 function transition(target) {
   const expected=target==='In review'?$('submit'):target==='Approved'?$('approve'):$('changes');
-  if(expected.disabled||(target!=='Changes requested'&&preflight().length)) return;
+  if(expected.disabled||(target!=='Changes requested'&&(reviewPending||preflight().length))) return;
   const person=clean($('reviewer').value),note=clean($('reviewNote').value);
   if(!person) {feedback('Enter the reviewer’s name.');$('reviewer').focus();return;}
   if(target==='Changes requested'&&!note) {feedback('Enter the changes needed.');$('reviewNote').focus();return;}
@@ -5749,7 +5784,7 @@ function addFlyerSection(name,page='back'){
 }
 function setSectionVisibility(key,enabled){
   if(!sections[key])return;
-  modifyLayout(config=>{config[key].enabled=enabled;if(key==='tech'&&!enabled)config[key].besideBanner=false;},
+  modifyLayout(config=>{config[key].enabled=enabled;},
     (enabled?'Restored ':'Removed ')+sections[key]+(enabled?' to':' from')+' the flyer; products preserved.');
 }
 function deleteEmptyCustomSection(key){
@@ -5839,7 +5874,7 @@ function renderAppearanceEditor(){
   const z=conf[selectedLayoutSection],sectionName=sections[selectedLayoutSection];
   if(previewLayout?.page===z.page){highlightSelection={kind:'field',key:selectedLayoutSection};updatePreviewHighlight();}
   if($('sectionOverflow')){
-    const issues=Object.keys(sections).filter(key=>state.offers.filter(o=>o.section===key).length>conf[key].cols*conf[key].rows)
+    const issues=reviewSectionKeys().filter(key=>state.offers.filter(o=>o.section===key).length>conf[key].cols*conf[key].rows)
       .map(key=>sections[key]+': '+(state.offers.filter(o=>o.section===key).length-conf[key].cols*conf[key].rows)+' unplaced item(s)');
     $('sectionOverflow').hidden=!issues.length;
     $('sectionOverflow').textContent=issues.length?'Grid overflow (products preserved): '+issues.join(' · '):'';
@@ -5905,7 +5940,7 @@ function renderAppearanceEditor(){
         row.append(name,restore);
         if(key.startsWith(customSectionPrefix)){
           const drop=document.createElement('button');drop.textContent='Delete empty section';drop.className='danger';
-          drop.disabled=state.offers.some(offer=>offer.section===key);drop.onclick=()=>deleteEmptyCustomSection(key);row.append(drop);
+          drop.disabled=state.offers.some(offer=>offer.section===key);drop.onclick=()=>askDeleteSection(key);row.append(drop);
         }
         area.append(row);
       }
