@@ -254,15 +254,26 @@ function installCatalogRelay(){
  };
 }
 function installOperationsRelay(){
- let port=null,seq=0,readyResolve;const pending=new Map(),ready=new Promise(resolve=>{readyResolve=resolve});
+ let port=null,seq=0,readyResolve,editorReady=false,autoChecked=false,reviewerName='';const pending=new Map(),ready=new Promise(resolve=>{readyResolve=resolve});
+ function autoVerify(){
+  if(!port||!editorReady||autoChecked)return;
+  autoChecked=true;
+  const reviewer=document.getElementById('reviewer'),status=document.getElementById('reviewPermissionStatus');
+  if(reviewer&&!reviewer.value&&reviewerName)reviewer.value=reviewerName;
+  if(status)status.textContent='Verifying protected approval permissions…';
+  if(typeof verifyReviewPermissions==='function')void verifyReviewPermissions();
+  else if(status)status.textContent='Automatic verification unavailable; use Verify review permissions.';
+ }
+ window.addEventListener('flyerstudio:ready',()=>{editorReady=true;autoVerify();},{once:true});
  window.addEventListener('message',function receive(event){
   if(event.source!==parent||event.data?.kind!=='megaflyer-protected-operations-port'||!event.ports?.[0])return;
   window.removeEventListener('message',receive);port=event.ports[0];
   port.onmessage=({data})=>{const entry=pending.get(data?.id);if(!entry)return;pending.delete(data.id);clearTimeout(entry.timer);if(data.ok)entry.resolve(data.value);else entry.reject(Error(data.error||'Protected operation unavailable.'));};
-  port.start();readyResolve();
+  reviewerName=typeof event.data.reviewerName==='string'?event.data.reviewerName.trim().slice(0,80):'';
+  port.start();readyResolve();autoVerify();
  });
  window.__MEGAFLYER_OPERATIONS_RPC__=async function(fields){
-  let wait;try{await Promise.race([ready,new Promise((_,reject)=>{wait=setTimeout(()=>reject(Error('Protected operations are unavailable.')),5000);})]);}finally{clearTimeout(wait);}
+  let wait;try{await Promise.race([ready,new Promise((_,reject)=>{wait=setTimeout(()=>reject(Error('Protected operations are unavailable.')),20000);})]);}finally{clearTimeout(wait);}
   return new Promise((resolve,reject)=>{
    const id=++seq,timer=setTimeout(()=>{pending.delete(id);reject(Error('Protected operation timed out.'));},60000);
    pending.set(id,{resolve,reject,timer});port.postMessage({id,fields});
@@ -437,7 +448,7 @@ async function open(){
    if(active&&Date.now()<expiresAt&&frame.contentWindow){
     frame.contentWindow.postMessage({kind:'megaflyer-private-storage-port'},'*',[channel.port2]);
     frame.contentWindow.postMessage({kind:'megaflyer-public-catalog-port'},'*',[catalogChannel.port2]);
-    frame.contentWindow.postMessage({kind:'megaflyer-protected-operations-port'},'*',[operationsChannel.port2]);
+    frame.contentWindow.postMessage({kind:'megaflyer-protected-operations-port',reviewerName:typeof data.workspaceIdentity?.name==='string'?data.workspaceIdentity.name:''},'*',[operationsChannel.port2]);
    }
   },{once:true});
   // The original response has passed SHA-256 verification. Apply the local
