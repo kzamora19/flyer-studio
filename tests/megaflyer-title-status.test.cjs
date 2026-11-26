@@ -17,8 +17,9 @@ assert.match(html,/statusBadge\.setAttribute\('aria-label','Flyer status: '\+sta
 for(const status of ['Draft','In review','Changes requested','Approved']){
  assert.ok(html.includes("'"+status+"':"),'Help text for '+status+' review state retained');
 }
-assert.ok(html.includes("$('approve').disabled=state.status!=='In review'"),
- 'Approval workflow is still restricted to in-review flyers');
-assert.ok(html.includes("if(project.status!=='Approved')"),
- 'Unapproved flyer DRAFT watermark logic remains intact');
+assert.match(html,/\$\('approve'\)\.disabled=reviewActionBusy\|\|reviewPending\|\|blocked\|\|!reviewRights\.canApprove\|\|!\(state\.status==='In review'\|\|state\.status==='Approved'&&!state\.approvalReceipt\)/,
+ 'Approval requires verified authority, no blocking issues, and a submitted or legacy approved project');
+assert.match(html,/exportMode==='authorized-final'/,'Watermark-free export requires the authorized final rendering mode');
+assert.match(html,/await authorizeReview\('final'/,'Final export verifies an approval receipt');
+assert.match(html,/await authorizeReview\('override'/,'Override export requests trusted authorization');
 console.log('PASS: MegaFlyer sidebar title and informative, accessible review status badge preserve approvals and watermarking.');
