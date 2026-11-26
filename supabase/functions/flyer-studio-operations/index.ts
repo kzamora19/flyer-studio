@@ -2,7 +2,12 @@
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
 import {validRole,permissions,validReviewPayload,uuid} from "./policy.mjs";
 const url=Deno.env.get("SUPABASE_URL")||"";
-const key=Deno.env.get("SUPABASE_SECRET_KEY")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
+function serviceKey(){
+ const direct=Deno.env.get("SUPABASE_SECRET_KEY");if(direct)return direct;
+ try{const keys=JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}");if(typeof keys?.default==="string"&&keys.default)return keys.default;}catch{/* legacy compatibility */}
+ return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
+}
+const key=serviceKey();
 const secret=Deno.env.get("FLYER_PTG_STUDIO_GATEWAY_SECRET")||"";
 const gateway=Deno.env.get("PTG_STUDIO_GATEWAY_URL")||"";
 const origin=Deno.env.get("FLYER_STUDIO_ALLOWED_ORIGIN")||"https://kzamora19.github.io";
