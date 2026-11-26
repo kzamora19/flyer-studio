@@ -17,8 +17,25 @@ assert.match(html,/statusBadge\.setAttribute\('aria-label','Flyer status: '\+sta
 for(const status of ['Draft','In review','Changes requested','Approved']){
  assert.ok(html.includes("'"+status+"':"),'Help text for '+status+' review state retained');
 }
-assert.ok(html.includes("$('approve').disabled=state.status!=='In review'"),
- 'Approval workflow is still restricted to in-review flyers');
-assert.ok(html.includes("if(project.status!=='Approved')"),
- 'Unapproved flyer DRAFT watermark logic remains intact');
+assert.match(html,/\$\('approve'\)\.disabled=reviewActionBusy\|\|reviewPending\|\|blocked\|\|!reviewRights\.canApprove\|\|!\(state\.status==='In review'\|\|state\.status==='Approved'&&!state\.approvalReceipt\)/,
+ 'Approval requires verified authority, no blocking issues, and a submitted or legacy approved project');
+// Exercise the renderer's actual predicate rather than assuming a positive equality spelling.
+const watermarkCondition=html.match(/if\((exportMode==='draft'[^\n]+)\) \{\s*ctx\.save\(\);ctx\.translate/);
+assert.ok(watermarkCondition,'Renderer must have an explicit draft watermark predicate');
+const vm=require('node:vm');
+for(const status of ['Draft','In review','Changes requested','Approved']){
+ for(const inScope of [false,true]){
+  for(const exportMode of ['draft','authorized-final',null]){
+   const expected=exportMode==='draft'||(exportMode!=='authorized-final'&&(status!=='Approved'||!inScope));
+   assert.equal(vm.runInNewContext(watermarkCondition[1],{exportMode,project:{status},page:'front',reviewPages:()=>inScope?['front']:['back']}),expected,
+    'Watermark policy: '+JSON.stringify({status,inScope,exportMode}));
+  }
+ }
+}
+assert.match(html,/let renderMode='draft';/,'Every export begins in draft mode');
+assert.match(html,/await authorizeReview\('final',snapshot,diagnostics,format,\{approvalId:snapshot\.approvalReceipt\}\);renderMode='authorized-final';/,'Final mode follows trusted receipt verification');
+assert.match(html,/await authorizeReview\('override',snapshot,diagnostics,format,\{reason,acknowledged:true\}\);renderMode='authorized-final';/,'Override mode follows trusted authorization and acknowledgment');
+assert.match(html,/await render\(snapshot,face,width,undefined,renderMode\)/,'Export passes the verified mode into the renderer');
+assert.match(html,/await authorizeReview\('final'/,'Final export verifies an approval receipt');
+assert.match(html,/await authorizeReview\('override'/,'Override export requests trusted authorization');
 console.log('PASS: MegaFlyer sidebar title and informative, accessible review status badge preserve approvals and watermarking.');

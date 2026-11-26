@@ -2574,7 +2574,7 @@ body.modalOpen{overflow:auto!important}
 <label>Back headline image <input id="backArtworkUpload" type="file" accept="image/png,image/jpeg,image/webp"></label>
 <div class="row"><button type="button" id="backArtworkClear">Remove back image</button><span id="backArtworkStatus" class="muted"></span></div>
 </details>
-<div id="campaignFields"></div>
+<div id="campaignFields"></div><div id="pageComponentEditor" hidden></div>
 <div id="customLogoFields" hidden>
 <label>Logo image <input type="file" id="logo" accept="image/png,image/jpeg,image/webp"></label>
 <button id="clearLogo">Remove logo</button>
@@ -2651,6 +2651,17 @@ body.modalOpen{overflow:auto!important}
 <label>Freebie wording <input id="freebieText" maxlength="80" placeholder="e.g. FREE INSTALLATION"></label>
 <label>Freebie photo (optional) <input id="freebiePhoto" type="file" accept="image/png,image/jpeg,image/webp"></label>
 <div class="row"><button id="freebieClearPhoto" type="button">Remove freebie photo</button><button id="freebieClear" type="button">Remove freebie</button></div>
+<details><summary>Freebie appearance</summary>
+<p class="muted">Freebies stay in the lower-right available area. Main product photos and prices retain their usual positions.</p>
+<label>Image size (%) <input id="freebieSize" type="number" min="20" max="100" step="5"></label>
+<label>Image scale (%) <input id="freebieScale" type="number" min="50" max="200" step="5"></label>
+<label>Horizontal position (%) <input id="freebieX" type="number" min="0" max="100" step="5"></label>
+<label>Vertical position (%) <input id="freebieY" type="number" min="0" max="100" step="5"></label>
+<label>Image fitting <select id="freebieFit"><option value="fit">Fit</option><option value="fill">Fill</option></select></label>
+<label><input id="freebieAspect" type="checkbox"> Lock image aspect ratio</label>
+<label>Description font size <input id="freebieFont" type="number" min="4" max="18" step="1"></label>
+<button id="freebieResetAppearance" type="button">Reset freebie appearance</button>
+</details>
 <p id="freebieStatus" class="muted" role="status"></p>
 </div>
 </details>
@@ -2668,13 +2679,16 @@ body.modalOpen{overflow:auto!important}
 </div>
 </details>
 <details open><summary>Review &amp; approval</summary>
+<label>Flyer scope <select id="reviewScope"><option value="both">Both sides</option><option value="front">Front only</option><option value="back">Back only</option></select></label>
+<p class="muted">Only visible sections on selected sides are reviewed and exported. Hidden products are retained.</p>
 <div class="muted" id="counts"></div>
 <div class="issue" id="issues"></div>
+<button type="button" id="clearReviewDemos">Clear demo products on selected visible sides</button><button type="button" id="clearAllDemos">Clear demo products in entire project</button>
 <label>Reviewed by <input id="reviewer" maxlength="80" autocomplete="name"></label>
 <label>Review note <textarea id="reviewNote" maxlength="400" rows="2"></textarea></label>
 <div class="row"><button id="submit" class="primary">Submit for review</button><button id="approve">Approve</button><button id="changes">Request changes</button></div>
 <ol id="activity"></ol>
-<div class="row" id="flyerExportActions"><button type="button" id="png">Download PNG · current side</button><button type="button" id="printPdf" class="primary">Download print PDF · both sides</button></div>
+<label>Export mode <select id="exportMode"><option value="draft">Export Draft (watermark)</option><option value="final">Approve &amp; Export Final</option><option id="adminOverrideOption" value="override" disabled hidden>Override &amp; Export Final</option></select></label><button type="button" id="verifyReviewRights">Verify review permissions</button><p class="muted" id="reviewPermissionStatus">Protected account verification is required for final approval.</p><div class="row" id="flyerExportActions"><button type="button" id="png">Download PNG · current side</button><button type="button" id="printPdf" class="primary">Download print PDF · both sides</button></div>
 <p class="muted" id="printInfo">Open the downloaded PDF to print both sides. Drafts include a watermark.</p>
 <p id="printStatus" class="muted" role="status" hidden></p>
 </details>
@@ -2810,7 +2824,7 @@ function brandHeaderChoice(campaign) {
   if(Object.hasOwn(brandHeaders,campaign.brandHeader)) return campaign.brandHeader;
   return campaign.logo||!/^(?:FIRST|1ST) MEGASAVER$/i.test(clean(campaign.brand))?'custom':'classic';
 }
-function brandHeaderOffset(campaign) {return campaign.brandHeader==='classic'?19:0;}
+function brandHeaderOffset(campaign) {return (campaign.brandHeader==='classic'?19:0)+(campaign._headerExtra||0);}
 function headlineDesignChoice(campaign) {
   if(Object.hasOwn(headlineDesigns,campaign.headlineDesign)) return campaign.headlineDesign;
   return sevenDaySale(campaign.title)?'poster':'plain';
@@ -2831,7 +2845,8 @@ const examples = [
   ['DEMO-FRIDGE','back','Two-door refrigerator','18999','21999'],
   ['DEMO-WASH','back','Twin-tub washer','7499','8999']
 ];
-const blank = () => ({version:1,campaign:{...defaultCampaign,footer:''},offers:[],status:'Draft',history:[]});
+let branchFooterContact='';
+const blank = () => ({version:1,campaign:{...defaultCampaign,footer:'',footerDesign:{front:defaultFooter(branchFooterContact),back:defaultFooter(branchFooterContact)}},offers:[],reviewScope:'both',status:'Draft',history:[]});
 let state = blank();
 state.campaign.footer=defaultCampaign.footer;
 state.offers=examples.map(([sku,section,name,promo,regular,items=''])=>({sku,section,name,promo,regular,items,brand:'',model:'',badge:'',photo:'',demo:true}));
@@ -3041,7 +3056,7 @@ function history(action, person='', note='') {
 }
 function edited(message='Saved in this browser.') {
   if(state.status!=='Draft') history('Returned to draft after editing');
-  state.status='Draft';
+  state.status='Draft';delete state.approvalReceipt;
   save();
   refresh();
   feedback(message);
@@ -3182,45 +3197,84 @@ function placement(offers,key,campaign=state.campaign) {
   return {slots,extra};
 }
 function overflow(offers,key) { return placement(offers,key).extra; }
-function preflight() {
-  const issues=[];
-  const campaign=state.campaign;
-  if(campaign.brandHeader!=='classic'&&!campaign.brand) issues.push('Enter the brand.');
-  const usesEditableBanner=Object.keys(artworkFields).some(page=>!headlineArtworkSource(campaign,page));
-  if(usesEditableBanner&&(!campaign.title||!campaign.dates)) {
-    issues.push('Enter the headline and sale dates for any side using editable text.');
-  }
-  if(backPresetActive(campaign)&&!campaign.dates) issues.push('Enter sale dates for the back artwork.');
-  if(!state.offers.length) issues.push('Add at least one offer.');
-  if(campaign.sectionLayout){
-    for(const key of Object.keys(sections)){
-      if(campaign.sectionLayout[key]?.enabled===false&&group(state.offers,key).length)
-        issues.push('Hidden section contains products: '+sections[key]+'. Restore it before approval.');
+function isDemoOffer(o){return Boolean(o.demo||String(o.sku).startsWith('DEMO-'));}
+function reviewScope(project=state){return ['front','back','both'].includes(project.reviewScope)?project.reviewScope:'both';}
+function reviewPages(project=state){const scope=reviewScope(project);return scope==='both'?['front','back']:[scope];}
+function reviewSectionKeys(project=state){return [...new Set(reviewPages(project).flatMap(page=>pageSectionKeys(project.campaign,page)))].filter(key=>Object.hasOwn(sections,key));}
+function reviewOffers(project=state){const keys=new Set(reviewSectionKeys(project));return project.offers.filter(offer=>keys.has(offer.section));}
+function collectReviewIssues(project=state){
+  const issues=[],c=project.campaign,pages=reviewPages(project),keys=reviewSectionKeys(project),offers=reviewOffers(project);
+  const add=(message,target,severity='error')=>issues.push({message,target,severity});
+  if(c.brandHeader!=='classic'&&!c.brand)add('Enter the brand.',{kind:'campaign',sub:'text'});
+  if(pages.some(page=>!headlineArtworkSource(c,page))&&(!c.title||!c.dates))add('Enter the headline and sale dates for selected sides.',{kind:'campaign',sub:'text'});
+  if(pages.includes('back')&&backPresetActive(c)&&!c.dates)add('Enter sale dates for the back artwork.',{kind:'campaign',sub:'artwork',page:'back'});
+  if(!offers.length)add('Add at least one offer to the selected visible sides.',{kind:'cards',page:pages[0]});
+  for(const key of keys){
+    const placed=placement(offers,key,c);
+    for(const o of placed.extra)add(sections[key]+' overflow: '+o.sku+'. Increase grid capacity or move the product.',{kind:'section',key});
+    for(const [index,o] of placed.slots.entries()){
+      if(!o)continue;
+      const target={kind:'card',key,index};
+      if(!o.photo)add('Missing product photo: '+o.sku+'. Upload or recall the exact product photo.',target);
+      if(!o.name||!validPrice(o.promo)||Number(o.promo)<=0||(o.regular&&(!validPrice(o.regular)||Number(o.regular)<Number(o.promo)))||(key==='bundles'&&!o.bundleBarcode&&!o.items))
+        add('Check product name, prices or bundle contents: '+o.sku+'.',target);
+      if(isDemoOffer(o))add('Replace or remove demo product '+o.sku+'.',target);
+      if(!o.brand&&!isDemoOffer(o))add('Check whether '+o.sku+' requires a brand label.',target,'warning');
     }
-    for(const page of ['front','back']){
-      const keys=pageSectionKeys(campaign,page);
-      if(!keys.length)continue;
-      const estimated=keys.reduce((total,key,index)=>total+campaign.sectionLayout[key].height+(index<keys.length-1?campaign.sectionLayout[key].spacing:0),0);
-      const max=page==='front'?790:780;
-      if(estimated>max)issues.push(page+' section heights exceed available space. Reduce section heights or move a section.');
-    }
   }
-  for(const key of Object.keys(sections)) {
-    const extra=overflow(state.offers,key);
-    if(extra.length) issues.push(sections[key]+' overflow: '+extra.map(offer=>offer.sku).join(', '));
+  const duplicates=new Map();
+  for(const o of offers){const key=skuKey(o.sku);if(key){if(!duplicates.has(key))duplicates.set(key,[]);duplicates.get(key).push(o);}}
+  for(const [barcode,rows] of duplicates)if(rows.length>1){
+    const first=rows[0],index=placement(offers,first.section,c).slots.indexOf(first);
+    add('Duplicate barcode '+barcode+' occurs '+rows.length+' times. Review the selected cards.',index>=0?{kind:'card',key:first.section,index}:{kind:'section',key:first.section});
   }
-  const missing=state.offers.filter(offer=>!offer.photo);
-  if(missing.length) issues.push('Exact photos missing: '+missing.map(offer=>offer.sku).join(', '));
-  const invalid=state.offers.filter(offer=>!offer.name||!validPrice(offer.promo)||Number(offer.promo)<=0||
-    (offer.regular&&(!validPrice(offer.regular)||Number(offer.regular)<Number(offer.promo)))||
-    (offer.section==='bundles'&&!offer.bundleBarcode&&!offer.items));
-  if(invalid.length) issues.push('Check names, prices or bundle contents: '+invalid.map(offer=>offer.sku).join(', '));
-  const duplicateBarcodes=new Map();
-  for(const offer of state.offers){const key=skuKey(offer.sku);duplicateBarcodes.set(key,(duplicateBarcodes.get(key)||0)+1);}
-  for(const [barcode,count] of duplicateBarcodes)if(count>1)
-    issues.push('Duplicate barcode '+barcode+' is used on '+count+' flyer cards. Confirm duplicates before approval.');
-  if(state.offers.some(offer=>offer.demo)) issues.push('Remove or replace all DEMO offers before approval.');
   return issues;
+}
+let renderedReviewIssues=[],reviewPending=true,reviewGeneration=0,reviewTimer=null,reviewRights={canApprove:false,canOverride:false},reviewActionBusy=false;
+function reviewIssues(){return [...collectReviewIssues(),...renderedReviewIssues];}
+function preflight(){return reviewIssues().filter(i=>i.severity==='error').map(i=>i.message);}
+function navigateReviewIssue(target){
+  if(!target)return;
+  if(target.page)side=target.page;
+  if(target.kind==='card')openCard(target.key,target.index+1);
+  else if(target.kind==='section'){side=sectionSide(target.key);selectedLayoutSection=target.key;showTarget();refresh();$('layoutSettings').click();setAppearanceTab('cards');}
+  else if(target.kind==='campaign')chooseAdvancedSub('campaign',target.sub||'text');
+  else chooseAdvancedSub('cards',side);
+}
+function renderReviewStatus(){
+  const issues=reviewIssues(),blocked=issues.some(i=>i.severity==='error');
+  $('issues').replaceChildren();
+  if(reviewPending){const p=document.createElement('p');p.textContent='Checking selected flyer layout and artwork…';$('issues').append(p);}
+  for(const issue of issues){
+    const b=document.createElement('button');b.type='button';b.textContent=(issue.severity==='error'?'Error: ':'Warning: ')+issue.message;
+    b.style.cssText='display:block;text-align:left;width:100%;white-space:normal;margin:3px 0';b.onclick=()=>navigateReviewIssue(issue.target);$('issues').append(b);
+  }
+  if(!issues.length&&!reviewPending)$('issues').textContent='No applicable validation issues.';
+  $('submit').disabled=reviewPending||blocked||!['Draft','Changes requested'].includes(state.status);
+  $('approve').disabled=reviewActionBusy||reviewPending||blocked||!reviewRights.canApprove||!(state.status==='In review'||state.status==='Approved'&&!state.approvalReceipt);
+  $('changes').disabled=reviewActionBusy||state.status!=='In review';
+}
+function actualLayoutIssues(layout,page){
+  const out=[],add=(message,target,severity='error')=>out.push({message:page.toUpperCase()+': '+message,target:{...target,page},severity});
+  for(const message of layout.pageWarnings||[])add(message,{kind:'campaign',sub:'footer'});
+  for(const message of layout.footerWarnings||[])add(message,{kind:'campaign',sub:'footer'},message.includes('readable size')?'warning':'error');
+  for(const item of layout.freebieWarnings||[])add('Freebie does not fit for '+item.sku+'. Increase card space.',{kind:'card',key:item.key,index:item.index});
+  return out;
+}
+function scheduleReviewDiagnostics(){
+  const generation=++reviewGeneration;reviewPending=true;renderedReviewIssues=[];clearTimeout(reviewTimer);renderReviewStatus();
+  reviewTimer=setTimeout(async()=>{
+    const snapshot=structuredClone(state),results=[];
+    try{
+      for(const page of reviewPages(snapshot)){
+        if(generation!==reviewGeneration)return;
+        const {layout}=await render(snapshot,page,800);
+        results.push(...actualLayoutIssues(layout,page));
+      }
+    }catch(e){results.push({message:'Selected flyer rendering failed: '+e.message,severity:'error',target:{kind:'campaign',sub:'artwork'}});}
+    if(generation!==reviewGeneration)return;
+    renderedReviewIssues=results;reviewPending=false;renderReviewStatus();
+  },180);
 }
 function refresh() {
   clearFillDecision();
@@ -3246,14 +3300,16 @@ function refresh() {
   statusBadge.title=statusHelp[state.status]||'Current flyer review status.';
   const paper=state.campaign.paper==='letter'?'US Letter':'A4';
   const printSize=Number(state.campaign.bleed)>0?paper+' with 3 mm bleed':paper;
-  $('printInfo').textContent=printSize+' · Open the PDF to print. '+(state.status==='Approved'?'The PDF includes front and back.':'Drafts include a watermark.');
+  const scope=reviewScope(), scopeLabel=scope==='both'?'both sides':scope+' only';
+  $('reviewScope').value=scope;
+  $('clearReviewDemos').disabled=!reviewOffers().some(isDemoOffer);
+  $('clearAllDemos').disabled=!state.offers.some(isDemoOffer);
+  $('png').textContent='Download PNG · '+(scope==='both'?'both sides':scope+' only');
+  $('printPdf').textContent='Download print PDF · '+scopeLabel;
+  $('printInfo').textContent=printSize+' · PDF: '+scopeLabel+'. '+(state.status==='Approved'?'Approved export.':'Drafts include a watermark.');
   $('exportInfo').textContent=printSize+' · 300 ppi exports · Unapproved exports are marked DRAFT.';
-  $('counts').textContent=Object.keys(sections).map(key=>sections[key]+' '+group(state.offers,key).length+'/'+slotCount(state.campaign,key)).join(' · ');
-  const issues=preflight();
-  $('issues').replaceChildren(...issues.map(issue=>Object.assign(document.createElement('div'),{textContent:issue})));
-  $('submit').disabled=issues.length>0||!['Draft','Changes requested'].includes(state.status);
-  $('approve').disabled=state.status!=='In review'||issues.length>0;
-  $('changes').disabled=state.status!=='In review';
+  $('counts').textContent=reviewSectionKeys().map(key=>sections[key]+' '+group(state.offers,key).length+'/'+slotCount(state.campaign,key)).join(' · ');
+  scheduleReviewDiagnostics();
   $('activity').replaceChildren(...state.history.slice(0,8).map(entry=>Object.assign(document.createElement('li'),{
     textContent:[entry.action,entry.person,entry.note,new Date(entry.time).toLocaleString()].filter(Boolean).join(' · ')
   })));
@@ -3275,6 +3331,10 @@ function refresh() {
     target.height=canvas.height;
     target.getContext('2d').drawImage(canvas,0,0);
     previewLayout={page,layout,dimensions};
+    const warning=layout.freebieWarnings?.find(item=>item.key===slotTarget.section&&item.index+1===Number(slotTarget.slot));
+    if(warning)$('freebieStatus').textContent='Not enough right-side space for this freebie. Increase card height or adjust the layout.';
+    if(layout.freebieWarnings?.length)feedback('Freebie needs more right-side space: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Increase card height or adjust layout.');
+    else if(layout.footerWarnings?.length||layout.pageWarnings?.length)feedback([...(layout.pageWarnings||[]),...(layout.footerWarnings||[])].join(' '));
     updatePreviewHighlight();
     updateSectionHandles();
     if(arrangeMode) drawRowGuides(target,layout,dimensions);
@@ -3561,11 +3621,21 @@ function showCardPhotos() {
   $('cardPhotoSource').hidden=!source||Boolean(sources?.length);
   if(source) $('cardPhotoSource').href=source;
 }
+const freebieControlFields={freebieSize:'size',freebieScale:'scale',freebieX:'x',freebieY:'y',freebieFit:'fit',freebieAspect:'aspect',freebieFont:'font'};
+function sanitizeFreebieAppearance(raw){
+  const v=raw&&typeof raw==='object'?raw:{};
+  const bound=(key,min,max,fallback)=>v[key]==null||v[key]===''||!Number.isFinite(Number(v[key]))?fallback:Math.max(min,Math.min(max,Number(v[key])));
+  return {size:bound('size',20,100,100),scale:bound('scale',50,200,100),x:bound('x',0,100,50),y:bound('y',0,100,50),fit:v.fit==='fill'?'fill':'fit',aspect:v.aspect!==false,font:bound('font',4,18,10)};
+}
 function showFreebieEditor() {
   const offer=sectionSide(slotTarget.section)===side?targetedOffer():null;
   $('freebieEditor').hidden=!offer;
   if(!offer) return;
   $('freebieText').value=offer.freebieText||'';
+  const appearance=sanitizeFreebieAppearance(offer.freebieAppearance);
+  for(const [id,key] of Object.entries(freebieControlFields)){
+    const el=$(id);if(el.type==='checkbox')el.checked=appearance[key];else el.value=appearance[key];
+  }
   $('freebieClearPhoto').disabled=!offer.freebiePhoto;
   $('freebieClear').disabled=!offer.freebieText&&!offer.freebiePhoto;
   $('freebieStatus').textContent=offer.freebiePhoto?
@@ -4009,6 +4079,9 @@ function validatedBackup(data) {
     if(type==='color'&&!/^#[0-9a-f]{6}$/i.test(value)) throw Error('Invalid brand color in backup.');
     campaign[key]=value;
   }
+  if(data.campaign.footerDesign&&typeof data.campaign.footerDesign==='object')campaign.footerDesign=Object.fromEntries(['front','back'].filter(p=>data.campaign.footerDesign[p]).map(p=>[p,sanitizeFooter(data.campaign.footerDesign[p])]));
+  if(data.campaign.headerDesign&&typeof data.campaign.headerDesign==='object')campaign.headerDesign=Object.fromEntries(['front','back'].map(p=>[p,{extraHeight:pageCampaign(data.campaign,p)._headerExtra}]));
+  if(Array.isArray(data.campaign.footerTemplates))campaign.footerTemplates=data.campaign.footerTemplates.slice(0,30).map(t=>({name:String(t.name||'Footer').slice(0,80),design:sanitizeFooter(t.design)}));
   campaign.logo=imageData(data.campaign.logo)?data.campaign.logo:'';
   for(const key of Object.values(artworkFields)) campaign[key]=imageData(data.campaign[key])?data.campaign[key]:'';
   for(const key of Object.values(rowOrderFields)) {
@@ -4030,6 +4103,7 @@ function validatedBackup(data) {
     seen.add(key);
     offer.photo=imageData(row.photo)?row.photo:'';
     offer.freebiePhoto=imageData(row.freebiePhoto)?row.freebiePhoto:'';
+    if(row.freebieAppearance&&typeof row.freebieAppearance==='object')offer.freebieAppearance=sanitizeFreebieAppearance(row.freebieAppearance);
     if(offer.photo&&typeof row.photoSource==='string'&&/^https:\/\/www\.1stmegasaver\.com\.ph\/product\//.test(row.photoSource)) {
       offer.photoSource=row.photoSource;
     }
@@ -4048,8 +4122,29 @@ function validatedBackup(data) {
     offer.demo=Boolean(row.demo)||offer.sku.startsWith('DEMO-');
     return offer;
   });
-  return {version:1,campaign,offers,status:'Draft',history:[]};
+  return {version:1,campaign,offers,reviewScope:reviewScope(data),status:'Draft',history:[]};
 }
+function defaultFooter(contact=''){return {mode:'standard',height:34,color:'#142c78',left:'Until supplies last. Terms and conditions apply.',right:contact,leftSize:11,rightSize:12,leftFont:'current',rightFont:'current',leftWeight:500,rightWeight:700,leftColor:'#ffffff',rightColor:'#ffffff',leftAlign:'left',rightAlign:'right',leftPadding:16,rightPadding:16,padding:8,spacing:10,inset:0,borderColor:'#142c78',borderWidth:0,image:'',backgroundImage:'',imageFit:'fit',imageOpacity:100,imageScale:100,imageX:50,imageY:50,aspect:true,elements:[]};}
+function sanitizeFooter(raw){
+  const d=defaultFooter(),v=raw&&typeof raw==='object'?raw:{},out={...d};
+  const num=(k,min,max)=>v[k]==null||v[k]===''||!Number.isFinite(Number(v[k]))?d[k]:Math.max(min,Math.min(max,Number(v[k])));
+  if(['none','standard','text','image','imageText','custom','legacy'].includes(v.mode))out.mode=v.mode;
+  for(const k of ['color','leftColor','rightColor','borderColor'])if(/^#[0-9a-f]{6}$/i.test(v[k]||''))out[k]=v[k];
+  for(const k of ['left','right'])if(typeof v[k]==='string')out[k]=v[k].slice(0,300);
+  for(const k of ['leftFont','rightFont'])if(Object.hasOwn(typefaces,v[k]))out[k]=v[k];
+  for(const k of ['leftAlign','rightAlign'])if(['left','center','right'].includes(v[k]))out[k]=v[k];
+  for(const [k,min,max] of [['height',18,180],['leftSize',8,24],['rightSize',8,24],['leftWeight',400,900],['rightWeight',400,900],['padding',0,40],['spacing',0,40],['leftPadding',0,40],['rightPadding',0,40],['inset',0,40],['borderWidth',0,6],['imageOpacity',0,100],['imageScale',10,300],['imageX',0,100],['imageY',0,100]])out[k]=num(k,min,max);
+  for(const k of ['image','backgroundImage'])out[k]=imageData(v[k])?v[k]:'';
+  out.aspect=v.aspect!==false;out.imageFit=['fit','fill','stretch'].includes(v.imageFit)?v.imageFit:'fit';
+  out.elements=(Array.isArray(v.elements)?v.elements:[]).slice(0,24).map(e=>{
+    const n=(k,min,max,f)=>Number.isFinite(Number(e?.[k]))?Math.max(min,Math.min(max,Number(e[k]))):f;
+    return {kind:e?.kind==='image'?'image':'text',text:String(e?.text||'').slice(0,300),image:imageData(e?.image)?e.image:'',x:n('x',0,100,0),y:n('y',0,100,0),w:n('w',1,100,25),h:n('h',1,100,100),size:n('size',4,30,12),color:/^#[0-9a-f]{6}$/i.test(e?.color||'')?e.color:'#ffffff',opacity:n('opacity',0,100,100)};
+  });
+  return out;
+}
+function footerFor(c,page){return c.footerDesign?.[page]?sanitizeFooter(c.footerDesign[page]):{...defaultFooter(),mode:'legacy',height:29,left:c.footer||'',color:c.blue||'#142c78'};}
+function footerHeight(c,page){const f=footerFor(c,page);return f.mode==='none'?0:f.height;}
+function pageCampaign(c,page){return {...c,_headerExtra:Math.max(0,Math.min(100,Number(c.headerDesign?.[page]?.extraHeight)||0))};}
 function dimensions(campaign) {
   const [width,height]=campaign.paper==='letter'?[215.9,279.4]:[210,297];
   const bleed=Number(campaign.bleed);
@@ -4235,7 +4330,64 @@ function drawCardCopy(ctx,layout,x,y,width) {
   }
   return baseline;
 }
-function techCard(ctx,offer,asset,x,y,w,h,style=null) {
+// Compute a lower-right region only after the normal product-photo geometry is final.
+function freebieArea(ctx,offer,asset,box,photoBox,copyBox,price){
+  if(!offer||(!offer.freebieText&&!asset))return null;
+  const gap=Math.max(2,Math.min(4,box.w*.018)),right=box.x+box.w-box.inset;
+  let left=Math.max(box.x+box.w*.53,copyBox.x);
+  const stacked=photoBox.x+photoBox.w>left-gap&&photoBox.x<right;
+  const topLimit=Math.max(copyBox.y,stacked?photoBox.y+photoBox.h+gap:copyBox.y);
+  const bottomLimit=box.y+box.h-box.inset;
+  // Measure the real fitted price text, keeping its original alignment and baseline.
+  function rightEdge(text,size,weight,family,align,x){
+    fittedCanvasSize(ctx,text,price.width,size,weight,family);
+    const width=ctx.measureText(text).width;
+    return align==='right'?x:align==='center'?x+width/2:x+width;
+  }
+  const font=typefaces.current;
+  let priceRight=rightEdge(price.promo,price.size,font.weight,font.family,price.align,price.x);
+  for(const [text] of price.secondary)priceRight=Math.max(priceRight,rightEdge(text,price.secondarySize,600,'Arial, sans-serif','left',box.x+box.inset));
+  // Use the price-free right-hand area first. For centered/right-aligned
+  // prices, reserve the panel immediately above the existing price area.
+  let bottom=bottomLimit;
+  if(priceRight+gap>left){
+    if(right-priceRight-gap>=Math.max(10,box.w*.23))left=priceRight+gap;
+    else bottom=Math.min(bottom,price.y-price.size-gap);
+  }
+  const available=bottom-topLimit;
+  const panelHeight=Math.min(Math.max(6,box.h*.25),available*.68);
+  if(right-left<4||panelHeight<3)return null;
+  return {x:left,y:bottom-panelHeight,w:right-left,h:panelHeight};
+}
+function drawFreebiePanel(ctx,offer,asset,area){
+  if(!area)return;
+  const a=sanitizeFreebieAppearance(offer.freebieAppearance);
+  const {x,y,w,h}=area,pad=Math.min(2,h*.08,w*.04);
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  // No opaque fill or full-width band: reveal existing section artwork.
+  const text=String(offer.freebieText||'');
+  const textH=text?Math.min(h*(asset? .36:.85),a.font*2.2):0;
+  const usableW=Math.max(.1,w-pad*2),usableH=Math.max(.1,h-pad*2-textH);
+  if(asset&&usableH>.1){
+    const vw=usableW*a.size/100,vh=usableH*a.size/100;
+    const px=x+pad+(usableW-vw)*a.x/100,py=y+pad+(usableH-vh)*a.y/100;
+    ctx.save();ctx.beginPath();ctx.rect(px,py,vw,vh);ctx.clip();
+    const f=asset.frame,zoom=a.scale/100;
+    let iw=vw*zoom,ih=vh*zoom;
+    if(a.aspect){
+      const factor=(a.fit==='fill'?Math.max(vw/f.width,vh/f.height):Math.min(vw/f.width,vh/f.height))*zoom;
+      iw=f.width*factor;ih=f.height*factor;
+    }
+    const dx=px+(vw-iw)*a.x/100,dy=py+(vh-ih)*a.y/100;
+    ctx.drawImage(asset.image,f.x,f.y,f.width,f.height,dx,dy,iw,ih);ctx.restore();
+  }
+  if(text&&textH>0){
+    const copy=fitCardCopy(ctx,text,'',usableW,Math.max(.1,textH-pad),a.font);
+    drawCardCopy(ctx,copy,x+pad,asset?y+h-textH:y+pad,usableW);
+  }
+  ctx.restore();
+}
+function techCard(ctx,offer,asset,x,y,w,h,style=null,freebieAsset=null) {
   const inset=Math.max(4,Math.min(9,w*.03)),inner=Math.max(1,w-inset*2);
   const prices=cardPrices(offer),secondaryStep=h<110?Math.max(5,h*.07):11;
   const priceSize=Math.min(17,Math.max(5,h*.13));
@@ -4284,7 +4436,11 @@ function techCard(ctx,offer,asset,x,y,w,h,style=null) {
     fill(ctx,'#edf2fa',photoX,photoY,photoWidth,photoHeight);
     line(ctx,'NO PHOTO',photoX+2,photoY+photoHeight/2+2,Math.max(1,photoWidth-4),7,'#506584');
   }
+  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:photoY,w:photoWidth,h:photoHeight},{x:detailX,y:textTop},
+    {promo:prices.promo,secondary:prices.secondary,align:style?.priceAlign||'left',x:style?.priceAlign==='center'?x+w/2:style?.priceAlign==='right'?x+w-inset:x+inset,y:priceY,size:priceSize,width:inner,secondarySize:Math.min(9,Math.max(4,h*.085))});
+  if(freebie)copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-textTop),12);
   drawCardCopy(ctx,copy,detailX,textTop,detailWidth);
+  drawFreebiePanel(ctx,offer,freebieAsset,freebie);
   // Price occupies its own full-width footer, not the narrower description column.
   const align=style?.priceAlign||'left',priceX=align==='center'?x+inset+inner/2:align==='right'?x+inset+inner:x+inset;
   ctx.save();ctx.textAlign=align==='center'?'center':align==='right'?'right':'left';
@@ -4295,15 +4451,16 @@ function techCard(ctx,offer,asset,x,y,w,h,style=null) {
     fill(ctx,'#ffe07c',badgeX,photoY,badgeWidth,13);
     line(ctx,offer.badge,badgeX+3,photoY+10,Math.max(1,badgeWidth-6),9,'#5e320a');
   }
+  return freebie;
 }
-function card(ctx,offer,asset,x,y,w,h,type,style=null) {
+function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
   const bundle=type==='bundles',compact=type==='tech';
   ctx.save();
   ctx.beginPath();ctx.roundRect(x,y,w,h,style?.cardRadius??9);
-  ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.fill();
+  ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.save();if(offer&&Number.isFinite(style?.cardOpacity))ctx.globalAlpha*=style.cardOpacity/100;ctx.fill();ctx.restore();
   ctx.strokeStyle=style?.borderColor||(bundle?'#f2bd45':'#c5d3e7');ctx.lineWidth=style?.borderWidth??1;ctx.stroke();
   if(!offer){ctx.restore();return;}
-  if(compact){techCard(ctx,offer,asset,x,y,w,h,style);ctx.restore();return;}
+  if(compact){const area=techCard(ctx,offer,asset,x,y,w,h,style,freebieAsset);ctx.restore();return area;}
   const inset=Math.max(3,Math.min(8,w*.07)),inner=Math.max(1,w-2*inset),photoInset=Math.max(2,Math.min(5,w*.05));
   const quantity=bundle?bundleQuantity(offer):null;
   const prices=cardPrices(offer,Boolean(quantity));
@@ -4357,8 +4514,12 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null) {
     fill(ctx,'#edf2fa',photoX,imageY,photoWidth,photoHeight);
     line(ctx,'PHOTO NEEDED',photoX+3,imageY+photoHeight/2+3,Math.max(1,photoWidth-6),Math.min(9,h*.11),'#506584');
   }
-  drawCardCopy(ctx,copy,copyX,copyTop,copyWidth);
   const align=style?.priceAlign||'left',priceX=align==='center'?x+w/2:align==='right'?x+w-inset:x+inset;
+  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:imageY,w:photoWidth,h:photoHeight},{x:copyX,y:copyTop},
+    {promo:prices.promo,secondary:prices.secondary,align,x:priceX,y:priceY,size:promoSize,width:inner,secondarySize:Math.min(10,Math.max(3,h*.1))});
+  if(freebie)copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-copyTop),bundle?9:11);
+  drawCardCopy(ctx,copy,copyX,copyTop,copyWidth);
+  drawFreebiePanel(ctx,offer,freebieAsset,freebie);
   ctx.textAlign=align==='center'?'center':align==='right'?'right':'left';
   fit(ctx,prices.promo,priceX,priceY,inner,promoSize,style?.priceColor||'#b51d22');
   ctx.textAlign='left';
@@ -4369,6 +4530,7 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null) {
     line(ctx,offer.badge,badgeX+3,imageY+10,Math.max(1,badgeWidth-6),9,'#5e320a');
   }
   ctx.restore();
+  return freebie;
 }
 function gridPositions(key,x,y,w,h,columns,rows) {
   const gap=6, width=(w-gap*(columns-1))/columns,height=(h-gap*(rows-1))/rows;
@@ -4417,6 +4579,20 @@ function defaultSectionLayout(){const base={
   return base;
 }
 const sectionLayoutLimits={height:[85,1100],gap:[0,30],cols:[1,8],rows:[1,10],borderWidth:[0,6],cardRadius:[0,30],headingHeight:[18,95],padding:[0,30],spacing:[0,50],sectionBorderWidth:[0,8],photoScale:[60,100]};
+const sectionAppearanceFields=['backgroundMode','backgroundColor','backgroundColor2','backgroundImage','backgroundOpacity','backgroundScale','backgroundX','backgroundY','backgroundRotation','backgroundFit','cardOpacity','cardColor','borderColor','borderWidth','cardRadius'];
+function sanitizeSectionAppearance(src={}){
+  const color=(v,f)=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v)?v:f;
+  const number=(key,min,max,f)=>src[key]==null||src[key]===''||!Number.isFinite(Number(src[key]))?f:Math.max(min,Math.min(max,Number(src[key])));
+  const modes=['default','solid','gradient','image','watermark','combined'];
+  const fits=['fit','fill','stretch','center','tile'];
+  return {backgroundMode:modes.includes(src.backgroundMode)?src.backgroundMode:src.backgroundImage?'image':'default',
+    backgroundColor:color(src.backgroundColor,src.panelColor||'#ffffff'),backgroundColor2:color(src.backgroundColor2,'#ffffff'),
+    backgroundImage:imageData(src.backgroundImage)?src.backgroundImage:'',
+    backgroundOpacity:number('backgroundOpacity',0,100,src.backgroundMode==='watermark'?20:100),
+    backgroundScale:number('backgroundScale',10,300,100),backgroundX:number('backgroundX',0,100,50),backgroundY:number('backgroundY',0,100,50),
+    backgroundRotation:number('backgroundRotation',-180,180,0),backgroundFit:fits.includes(src.backgroundFit)?src.backgroundFit:'fill',
+    cardOpacity:number('cardOpacity',0,100,100)};
+}
 function sanitizeSectionLayout(raw){
   const base=defaultSectionLayout(),out={};
   const safeColor=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
@@ -4433,7 +4609,7 @@ function sanitizeSectionLayout(raw){
     if(typeof src.headerText==='string')z.headerText=src.headerText.trim().slice(0,85);
     if(['left','center','right'].includes(src.headingAlign))z.headingAlign=src.headingAlign;
     if(['left','center','right'].includes(src.priceAlign))z.priceAlign=src.priceAlign;
-    if(imageData(src.backgroundImage))z.backgroundImage=src.backgroundImage;
+    Object.assign(z,sanitizeSectionAppearance({...z,...src}));
     for(const color of ['headerColor','panelColor','cardColor','emptyColor','borderColor','sectionBorder','priceColor'])if(safeColor(src[color]))z[color]=src[color];
     // 80 boxes per section at most; avoid generating an unbounded UI.
     if(z.cols*z.rows>80)z.rows=Math.max(1,Math.floor(80/z.cols));
@@ -4490,15 +4666,38 @@ function modernPageLayout(page,height,c,artwork){
   }
   return {modern:true,headline,sections:rectangles,cards,overflow:requested>available,bannerShift:0,splitHero:split};
 }
+function paintSectionBackground(ctx,z,area,bgAsset){
+  const a=sanitizeSectionAppearance(z),{x,y,width:w,height:h}=area;
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  let color=z.panelColor;
+  if(['solid','combined'].includes(a.backgroundMode))color=a.backgroundColor;
+  if(a.backgroundMode==='gradient'){
+    color=ctx.createLinearGradient(x,y,x+w,y+h);color.addColorStop(0,a.backgroundColor);color.addColorStop(1,a.backgroundColor2);
+  }
+  if(a.backgroundMode!=='default'||z.panelColor)fill(ctx,color||'#ffffff',x,y,w,h);
+  if(bgAsset&&['image','watermark','combined'].includes(a.backgroundMode)){
+    ctx.globalAlpha*=a.backgroundOpacity/100;
+    const f=a.backgroundFit,zoom=a.backgroundScale/100;
+    let iw=w,ih=h;
+    if(f!=='stretch'){
+      const factor=f==='fill'?Math.max(w/bgAsset.width,h/bgAsset.height):f==='center'||f==='tile'?1:Math.min(w/bgAsset.width,h/bgAsset.height);
+      iw=bgAsset.width*factor;ih=bgAsset.height*factor;
+    }
+    iw*=zoom;ih*=zoom;
+    const px=x+(w-iw)*a.backgroundX/100,py=y+(h-ih)*a.backgroundY/100;
+    ctx.translate(px+iw/2,py+ih/2);ctx.rotate(a.backgroundRotation*Math.PI/180);
+    if(f==='tile'){
+      // Bound tile work even for unusually tiny assets.
+      const tw=Math.max(12,iw),th=Math.max(12,ih),r=Math.hypot(w,h)*1.5;
+      for(let yy=-r;yy<r;yy+=th)for(let xx=-r;xx<r;xx+=tw)ctx.drawImage(bgAsset,xx,yy,tw,th);
+    }else ctx.drawImage(bgAsset,-iw/2,-ih/2,iw,ih);
+  }
+  ctx.restore();
+}
 function paintSection(ctx,campaign,area,bgAsset=null){
   const key=area.key,z=campaign.sectionLayout[key],h=area.headerHeight;
   const title=z.headerText||(key==='tech'?campaign.tech:key==='bundles'?campaign.bundles:key==='back'?campaign.back:sections[key]||'Front Products');
-  fill(ctx,z.panelColor,area.x,area.y,area.width,area.height);
-  if(bgAsset){
-    const scale=Math.max(area.width/bgAsset.width,area.height/bgAsset.height);
-    const w=bgAsset.width*scale,ht=bgAsset.height*scale;ctx.save();ctx.beginPath();ctx.rect(area.x,area.y,area.width,area.height);ctx.clip();
-    ctx.drawImage(bgAsset,area.x+(area.width-w)/2,area.y+(area.height-ht)/2,w,ht);ctx.restore();
-  }
+  paintSectionBackground(ctx,z,area,bgAsset);
   if(z.sectionBorderWidth){ctx.strokeStyle=z.sectionBorder;ctx.lineWidth=z.sectionBorderWidth;ctx.strokeRect(area.x,area.y,area.width,area.height);}
   if(!h||z.headerShape==='none')return;
   const x=area.x,y=area.y,w=area.width;
@@ -4519,6 +4718,64 @@ function paintSection(ctx,campaign,area,bgAsset=null){
   line(ctx,draw,textX,y+h-7,w-48,textSize,'#ffffff',font.weight,font.family);
 }
 
+function pageGeometryWarnings(layout,height,footerHeight){
+  const warnings=[];
+  if(layout.overflow)warnings.push('Requested section heights exceed the available page space.');
+  const bottom=height-footerHeight;
+  if(layout.headline.y+layout.headline.height>bottom)warnings.push('Header or banner overlaps the footer.');
+  for(const area of layout.sections||[])if(area.y+area.height>bottom+.01)warnings.push('Section overlaps the footer: '+area.key);
+  for(const box of layout.cards)if(box.width<12||box.height<12||box.y+box.height>bottom+.01||box.x<0||box.x+box.width>800.01)warnings.push('Product box needs more space: '+box.key+' '+(box.index+1));
+  return [...new Set(warnings)];
+}
+function footerImage(ctx,image,x,y,w,h,f){
+  if(!image||w<=0||h<=0)return;
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.globalAlpha*=f.imageOpacity/100;
+  const factor=f.imageFit==='fill'?Math.max(w/image.width,h/image.height):Math.min(w/image.width,h/image.height);
+  let iw=f.aspect&&f.imageFit!=='stretch'?image.width*factor:w,ih=f.aspect&&f.imageFit!=='stretch'?image.height*factor:h;
+  iw*=f.imageScale/100;ih*=f.imageScale/100;
+  ctx.drawImage(image,x+(w-iw)*f.imageX/100,y+(h-ih)*f.imageY/100,iw,ih);ctx.restore();
+}
+function footerText(ctx,text,x,y,w,h,f,side,warnings){
+  if(!text)return;
+  const face=typefaces[f[side+'Font']]||typefaces.current,weight=f[side+'Weight'],size=f[side+'Size'];
+  const actual=fittedCanvasSize(ctx,text,w,Math.min(size,h*.7),weight,face.family);
+  if(actual<8)warnings.push(side+' footer text does not fit at a readable size.');
+  ctx.save();ctx.textAlign=f[side+'Align'];ctx.textBaseline='middle';
+  const align=ctx.textAlign,tx=align==='center'?x+w/2:align==='right'?x+w:x;
+  line(ctx,text,tx,y+h/2,w,actual,f[side+'Color'],weight,face.family);ctx.restore();
+}
+async function drawFooter(ctx,f,pageHeight,edge){
+  const warnings=[];if(f.mode==='none')return warnings;
+  const y=pageHeight-f.height,x=f.inset,w=800-2*x;
+  if(f.mode==='legacy'){fill(ctx,f.color,-edge,y,800+2*edge,f.height+edge);line(ctx,f.left,17,pageHeight-11,765,10,'#ffffff',500);return warnings;}
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,f.height);ctx.clip();
+  fill(ctx,f.color,x,y,w,f.height);
+  if(f.backgroundImage)footerImage(ctx,await loadImage(f.backgroundImage),x,y,w,f.height,{...f,imageFit:'fill'});
+  const pad=f.padding,inner=Math.max(1,w-pad*2);
+  if(['standard','text','imageText'].includes(f.mode)){
+    let start=x+pad,available=inner;
+    if(f.mode==='imageText'&&f.image){const iw=inner*.3;footerImage(ctx,await loadImage(f.image),start,y+2,iw,f.height-4,f);start+=iw+f.spacing;available-=iw+f.spacing;}
+    const gap=f.spacing,lp=f.leftPadding,rp=f.rightPadding,split=f.left&&f.right?(available-gap)*.58:available;
+    footerText(ctx,f.left,start+lp,y,Math.max(1,split-lp),f.height,f,'left',warnings);
+    if(f.right){const rightStart=f.left?start+split+gap:start;footerText(ctx,f.right,rightStart,y,Math.max(1,start+available-rightStart-rp),f.height,f,'right',warnings);}
+  }else if(f.mode==='image'){
+    if(!f.image)warnings.push('Footer image is missing.');
+    else footerImage(ctx,await loadImage(f.image),x+pad,y+2,inner,f.height-4,f);
+  }else if(f.mode==='custom'){
+    for(const e of f.elements){
+      const ex=x+w*e.x/100,ey=y+f.height*e.y/100,ew=w*e.w/100,eh=f.height*e.h/100;
+      if(ex+ew>x+w+.01||ey+eh>pageHeight+.01){warnings.push('A custom footer element extends outside the footer.');continue;}
+      ctx.save();ctx.globalAlpha*=e.opacity/100;
+      if(e.kind==='image'&&e.image)footerImage(ctx,await loadImage(e.image),ex,ey,ew,eh,{...f,imageOpacity:100,imageScale:100,imageX:50,imageY:50,imageFit:'fit',aspect:true});
+      else if(e.kind==='text')footerText(ctx,e.text,ex,ey,ew,eh,{...f,leftSize:e.size,leftColor:e.color},'left',warnings);
+      ctx.restore();
+    }
+  }
+  if(f.borderWidth){ctx.strokeStyle=f.borderColor;ctx.lineWidth=f.borderWidth;ctx.strokeRect(x,y,w,f.height);}
+  ctx.restore();
+  if(!f.inset){fill(ctx,f.color,-edge,y,edge,f.height+edge);fill(ctx,f.color,800,y,edge,f.height+edge);fill(ctx,f.color,0,pageHeight,800,edge);}
+  return warnings;
+}
 function pageLayout(page,height,campaign,artwork) {
   if(campaign.sectionLayout)return modernPageLayout(page,height,campaign,artwork);
   const offset=brandHeaderOffset(campaign);
@@ -4550,37 +4807,24 @@ function pageLayout(page,height,campaign,artwork) {
         slotCount(campaign,'front'),5,false,campaign.frontRowOrder)]
   };
 }
-function drawFreebieBand(ctx,offer,asset,x,y,w,h,style){
-  ctx.save();
-  ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
-  fill(ctx,style?.cardColor||'#ffffff',x,y,w,h);
-  ctx.strokeStyle=style?.borderColor||'#c5d3e7';ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,w-1,h-1);
-  const pad=Math.max(2,Math.min(5,h*.1));
-  const text=offer.freebieText||'';
-  const imageWidth=asset?(text?Math.min(w*.43,h*2):w-pad*2):0;
-  if(asset)photo(ctx,asset.image,x+pad,y+pad,imageWidth,h-pad*2,asset.frame);
-  if(text){
-    const tx=x+pad+(asset?imageWidth+pad:0);
-    line(ctx,text,tx,y+h*.62,Math.max(1,x+w-pad-tx),Math.min(13,h*.46),'#193568',800);
-  }
-  ctx.restore();
-}
 function drawSlots(ctx,project,pictures,positions,target,freebies=new Map()) {
+  const warnings=[];
   const bySection=Object.fromEntries([...new Set(positions.map(position=>position.key))]
     .map(key=>[key,placement(project.offers,key,project.campaign).slots]));
   for(const {key,index,x,y,width,height} of positions) {
     const offer=bySection[key][index];
     const active=key===target?.section&&index+1===Number(target.slot);
     const style=project.campaign.sectionLayout?.[key];
-    const hasFreebie=Boolean(offer&&(offer.freebieText||freebies.has(offer)));
-    const band=hasFreebie?Math.min(height*.3,Math.max(12,height*.24)):0;
-    if(offer||project.status!=='Approved'||active)card(ctx,offer,pictures.get(offer),x,y,width,height-band,key,style);
-    if(hasFreebie)drawFreebieBand(ctx,offer,freebies.get(offer),x,y+height-band,width,band,style);
+    if(offer||project.status!=='Approved'||active){
+      const area=card(ctx,offer,pictures.get(offer),x,y,width,height,key,style,freebies.get(offer));
+      if(offer&&(offer.freebieText||offer.freebiePhoto)&&!area)warnings.push({key,index,sku:offer.sku});
+    }
     if(active) {
       ctx.strokeStyle='#086fd5';ctx.lineWidth=3;
       ctx.strokeRect(x+2,y+2,width-4,height-4);
     }
   }
+  return warnings;
 }
 function drawBrandHeader(ctx,c,logo,edge) {
   fill(ctx,c.brandHeader==='classic'?officialBrandBlue:c.blue,-edge,-edge,800+2*edge,75+brandHeaderOffset(c)+edge);
@@ -4769,8 +5013,8 @@ function banner(ctx,c,box,parts,artwork) {
   fit(ctx,c.subtitle.toUpperCase(),x+20,y+h*.71,w-40,w<500?24:34,'#ffffff',typefaces[c.taglineFont]);
   fit(ctx,c.dates,x+20,y+h*.85,w-40,18,'#ffffff');
 }
-async function render(project,page,pixelWidth,target) {
-  const c=project.campaign, d=dimensions(c);
+async function render(project,page,pixelWidth,target,exportMode=null) {
+  const c=pageCampaign(project.campaign,page), d=dimensions(c);
   const source=headlineArtworkSource(c,page);
   const parts=source?null:posterParts(c);
   if(document.fonts) {
@@ -4793,7 +5037,9 @@ async function render(project,page,pixelWidth,target) {
   const logoSource=c.brandHeader==='classic'?officialWordmark:c.logo;
   const [logo,artwork]=await Promise.all([logoSource,source].map(value=>value?loadImage(value):null));
   const sectionImages=new Map(await Promise.all(keys.filter(key=>c.sectionLayout?.[key]?.backgroundImage).map(async key=>[key,await loadImage(c.sectionLayout[key].backgroundImage)])));
-  const layout=pageLayout(page,h,c,artwork);
+  const footer=footerFor(c,page);
+  const layout=pageLayout(page,h-(footerHeight(c,page)-29),c,artwork);
+  layout.pageWarnings=pageGeometryWarnings(layout,h,footerHeight(c,page));
   ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.setTransform(scale,0,0,scale,extrusion,extrusion);
   const edge=extrusion/scale;
@@ -4813,10 +5059,9 @@ async function render(project,page,pixelWidth,target) {
     fill(ctx,c.red,16,461+offset+shift,768,27);
     fit(ctx,c.back.toUpperCase(),27,481+offset+shift,740,17,'#ffffff',typefaces[c.sectionFont]);
   }
-  drawSlots(ctx,project,pictures,layout.cards,target,freebies);
-  fill(ctx,c.blue,-edge,h-29,800+edge*2,29+edge);
-  line(ctx,c.footer,17,h-11,765,10,'#ffffff',500);
-  if(project.status!=='Approved') {
+  layout.freebieWarnings=drawSlots(ctx,project,pictures,layout.cards,target,freebies);
+  layout.footerWarnings=await drawFooter(ctx,footer,h,edge);
+  if(exportMode==='draft'||(exportMode!=='authorized-final'&&(project.status!=='Approved'||!reviewPages(project).includes(page)))) {
     ctx.save();ctx.translate(400,h*.59);ctx.rotate(-.44);
     ctx.globalAlpha=.16;ctx.textAlign='center';ctx.font='900 136px Arial';ctx.fillStyle='#19376e';
     ctx.fillText('DRAFT',0,0);ctx.restore();
@@ -4885,49 +5130,135 @@ async function png300(blob) {
   }
   return new Blob(parts,{type:'image/png'});
 }
-async function exportFile(format) {
-  const controls=['png','printPdf'].map($);
-  const printStatus=$('printStatus');
-  controls.forEach(button=>button.disabled=true);
-  if(format==='pdf') {
-    printStatus.hidden=false;
-    printStatus.textContent='Preparing both sides…';
-  }
-  try {
-    const snapshot=structuredClone(state), page=side;
-    const d=dimensions(snapshot.campaign);
-    const width=Math.round(d.pageWidth/25.4*300);
-    const name='megasaver-flyer'+(snapshot.status==='Approved'?'':'-draft');
-    if(format==='png') {
-      const {canvas}=await render(snapshot,page,width);
-      const blob=await canvasBlob(canvas,'image/png');
-      download(await png300(blob),name+'-'+page+'.png');
-    } else {
-      const pages=[];
-      for(const face of ['front','back']) {
-        const {canvas}=await render(snapshot,face,width);
-        const jpeg=await canvasBlob(canvas,'image/jpeg');
-        pages.push({width:canvas.width,height:canvas.height,data:new Uint8Array(await jpeg.arrayBuffer())});
-      }
-      download(pdfFile(pages,d),name+'.pdf');
-    }
-    feedback('Export downloaded.');
-    if(format==='pdf') printStatus.textContent='PDF downloaded. Open it to print.';
-  } catch(error) {
-    feedback(error.message);
-    if(format==='pdf') printStatus.textContent=error.message;
-  } finally {controls.forEach(button=>button.disabled=false);}
+function canonicalReviewValue(value){
+  if(Array.isArray(value))return value.map(canonicalReviewValue);
+  if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonicalReviewValue(value[k])]));
+  return value;
 }
-function transition(target) {
+function reviewProjectId(project=state){
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(project.projectId||'')){
+    project.projectId=powerId();if(project===state)save();
+  }
+  return project.projectId;
+}
+async function reviewDigest(project){
+  const value=JSON.stringify(canonicalReviewValue({campaign:project.campaign,offers:project.offers,scope:reviewScope(project)}));
+  const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('');
+}
+async function protectedOperation(fields){
+  if(typeof window.__MEGAFLYER_OPERATIONS_RPC__!=='function')throw Error('Protected operations require a verified Branchline PTG session.');
+  return window.__MEGAFLYER_OPERATIONS_RPC__(fields);
+}
+async function applyNewProjectBranchFooter(project){
+  if(typeof window.__MEGAFLYER_OPERATIONS_RPC__!=='function')return;
+  const original=project.campaign.footerDesign;
+  const initial={front:original?.front,back:original?.back};
+  try{
+    const r=await protectedOperation({action:'permissions'});
+    branchFooterContact=typeof r?.footerContact==='string'?r.footerContact.slice(0,300):'';
+    if(!branchFooterContact||state!==project||state.status!=='Draft'||project.campaign.footerDesign!==original)return;
+    let changed=false;
+    for(const page of ['front','back'])if(original?.[page]===initial[page]&&original[page]?.mode==='standard'&&!original[page].right){original[page]={...original[page],right:branchFooterContact};changed=true;}
+    if(changed){edited('Branch footer contact defaults applied.');if(currentMenu==='campaign'&&currentSub==='footer')renderPageComponentEditor('footer');}
+  }catch{/* Remain editable; an unavailable verified session must not guess a branch. */}
+}
+async function verifyReviewPermissions(){
+  reviewRights={canApprove:false,canOverride:false};renderReviewStatus();
+  try{
+    const r=await protectedOperation({action:'permissions'});
+    reviewRights={canApprove:r?.canApprove===true,canOverride:r?.canOverride===true};
+    $('reviewPermissionStatus').textContent=reviewRights.canOverride?'Verified System Admin — override available.':reviewRights.canApprove?'Verified approval authority.':'Verified Studio user — approval by authorized administrator required.';
+  }catch(e){$('reviewPermissionStatus').textContent=e.message;}
+  $('adminOverrideOption').hidden=!reviewRights.canOverride;$('adminOverrideOption').disabled=!reviewRights.canOverride;
+  if(!reviewRights.canOverride&&$('exportMode').value==='override')$('exportMode').value='draft';
+  renderReviewStatus();
+}
+async function chooseProtectedArtwork(category,apply){
+  try{
+    const project=state,listed=await protectedOperation({action:'assets-list',category});
+    const assets=Array.isArray(listed?.assets)?listed.assets:[];
+    if(!assets.length){feedback('No matching shared artwork.');return;}
+    const value=prompt('Select artwork number:\n'+assets.map((asset,i)=>(i+1)+'. '+asset.name).join('\n'));
+    if(!value)return;const asset=assets[Number(value)-1];if(!asset)return;
+    const data=await protectedOperation({action:'asset-image',assetId:asset.id});
+    if(state!==project)return;
+    const image='data:'+data.mime+';base64,'+data.base64;
+    if(!imageData(image))throw Error('Shared artwork could not be decoded.');
+    await loadImage(image);if(state!==project)return;
+    apply(image);
+  }catch(e){feedback(e.message);}
+}
+async function fullReviewSnapshot(snapshot){
+  const issues=collectReviewIssues(snapshot),technical=[];
+  for(const face of reviewPages(snapshot)){
+    const {layout}=await render(snapshot,face,800);
+    const rows=actualLayoutIssues(layout,face);issues.push(...rows);technical.push(...rows.filter(i=>i.severity==='error'));
+  }
+  return {issues,technical,warnings:issues.filter(i=>i.severity==='warning').map(i=>i.message),blocking:issues.filter(i=>i.severity==='error').map(i=>i.message)};
+}
+async function authorizeReview(action,snapshot,diagnostics,format,extra={}){
+  const value=await protectedOperation({action,projectId:reviewProjectId(snapshot),scope:reviewScope(snapshot),digest:await reviewDigest(snapshot),warnings:diagnostics.warnings.slice(0,100).map(v=>v.slice(0,400)),blocking:diagnostics.blocking.slice(0,100).map(v=>v.slice(0,400)),format,...extra});
+  if(value?.authorized!==true||typeof value.receiptId!=='string')throw Error('Final artwork authorization was not confirmed.');
+  return value;
+}
+async function approveSnapshot(snapshot,diagnostics){
+  if(diagnostics.blocking.length)throw Error('Resolve applicable blocking validation errors before approval.');
+  if(!reviewRights.canApprove)throw Error('Verify authorized administrator approval first.');
+  if(state.status!=='In review'&&state.status!=='Approved')throw Error('Submit the selected flyer for review before approval.');
+  const generation=reviewGeneration,result=await authorizeReview('approve',snapshot,diagnostics,'approval');
+  if(generation!==reviewGeneration||await reviewDigest(state)!==await reviewDigest(snapshot))throw Error('Project changed during approval. Submit the current revision again.');
+  state.status='Approved';state.approvalReceipt=result.receiptId;snapshot.status='Approved';snapshot.approvalReceipt=result.receiptId;
+  history('Approved by verified PTG authority','',clean($('reviewNote').value));save();
+  return result;
+}
+async function exportFile(format) {
+  if(reviewActionBusy)return;reviewActionBusy=true;
+  const controls=['png','printPdf'].map($),printStatus=$('printStatus'),mode=$('exportMode').value;
+  controls.forEach(button=>button.disabled=true);
+  printStatus.hidden=false;printStatus.textContent='Checking selected sides…';
+  try{
+    reviewProjectId();const snapshot=structuredClone(state),faces=reviewPages(snapshot),diagnostics=await fullReviewSnapshot(snapshot);
+    if(diagnostics.technical.length)throw Error(diagnostics.technical.map(i=>i.message).join(' '));
+    let renderMode='draft';
+    if(mode==='final'){
+      if(diagnostics.blocking.length)throw Error('Resolve blocking validation errors before final export.');
+      if(!snapshot.approvalReceipt||snapshot.status!=='Approved')await approveSnapshot(snapshot,diagnostics);
+      await authorizeReview('final',snapshot,diagnostics,format,{approvalId:snapshot.approvalReceipt});renderMode='authorized-final';
+    }else if(mode==='override'){
+      if(!reviewRights.canOverride)throw Error('Verify System Admin authorization first.');
+      const reason=clean(prompt('Enter the administrative override reason (at least 10 characters).')||'');
+      if(reason.length<10||reason.length>1000)throw Error('Override requires a reason of 10–1000 characters.');
+      if(!confirm('Acknowledge all outstanding validation issues?\n'+[...diagnostics.blocking,...diagnostics.warnings].join('\n')))throw Error('Override cancelled.');
+      await authorizeReview('override',snapshot,diagnostics,format,{reason,acknowledged:true});renderMode='authorized-final';
+    }
+    const d=dimensions(snapshot.campaign),width=Math.round(d.pageWidth/25.4*300),name='megasaver-flyer'+(renderMode==='draft'?'-draft':'');
+    const files=[],pages=[];
+    for(const face of faces){
+      const {canvas,layout}=await render(snapshot,face,width,undefined,renderMode);
+      const technical=actualLayoutIssues(layout,face).filter(i=>i.severity==='error');
+      if(technical.length)throw Error(technical.map(i=>i.message).join(' '));
+      if(format==='png')files.push({face,blob:await png300(await canvasBlob(canvas,'image/png'))});
+      else {const jpeg=await canvasBlob(canvas,'image/jpeg');pages.push({width:canvas.width,height:canvas.height,data:new Uint8Array(await jpeg.arrayBuffer())});}
+    }
+    if(format==='png')for(const file of files)download(file.blob,name+'-'+file.face+'.png');
+    else download(pdfFile(pages,d),name+(faces.length===1?'-'+faces[0]:'')+'.pdf');
+    feedback('Export downloaded.');printStatus.textContent='Export downloaded.';
+  }catch(error){feedback(error.message);printStatus.textContent=error.message;}
+  finally{reviewActionBusy=false;controls.forEach(b=>b.disabled=false);refresh();}
+}
+async function transition(target) {
   const expected=target==='In review'?$('submit'):target==='Approved'?$('approve'):$('changes');
-  if(expected.disabled) return;
+  if(reviewActionBusy||expected.disabled||(target!=='Changes requested'&&(reviewPending||preflight().length)))return;
   const person=clean($('reviewer').value),note=clean($('reviewNote').value);
-  if(!person) {feedback('Enter the reviewer’s name.');$('reviewer').focus();return;}
-  if(target==='Changes requested'&&!note) {feedback('Enter the changes needed.');$('reviewNote').focus();return;}
-  state.status=target;
-  history(target,person,note);
-  $('reviewNote').value='';
-  save();refresh();
+  if(target==='Changes requested'&&!note){feedback('Enter the changes needed.');return;}
+  reviewActionBusy=true;renderReviewStatus();
+  try{
+    if(target==='Approved'){reviewProjectId();const snapshot=structuredClone(state);await approveSnapshot(snapshot,await fullReviewSnapshot(snapshot));}
+    else {state.status=target;delete state.approvalReceipt;history(target,person,note);save();}
+    $('reviewNote').value='';feedback(target);
+  }catch(e){feedback(e.message);}
+  finally{reviewActionBusy=false;refresh();}
 }
 function bind() {
   showTarget();
@@ -5004,6 +5335,19 @@ function bind() {
     offer.freebiePhoto=image;
     edited('Freebie photo loaded for '+offer.sku+'.');
   });
+  for(const [id,key] of Object.entries(freebieControlFields)){
+    $(id).onchange=()=>{
+      const offer=targetedOffer();if(!offer)return;
+      const el=$(id),appearance=sanitizeFreebieAppearance(offer.freebieAppearance);
+      appearance[key]=el.type==='checkbox'?el.checked:el.value;
+      offer.freebieAppearance=sanitizeFreebieAppearance(appearance);
+      edited('Freebie appearance updated.');
+    };
+  }
+  $('freebieResetAppearance').onclick=()=>{
+    const offer=targetedOffer();if(!offer)return;
+    delete offer.freebieAppearance;edited('Freebie appearance reset.');
+  };
   $('freebieClearPhoto').onclick=()=>{
     const offer=targetedOffer();
     if(!offer?.freebiePhoto) return;
@@ -5109,6 +5453,15 @@ function bind() {
     if(currentMenu==='cards')selectNav('cards',face);
     showTarget();refresh();
   };
+  $('reviewScope').onchange=()=>{const next=$('reviewScope').value;if(next===reviewScope()||!['front','back','both'].includes(next))return;state.reviewScope=next;edited('Review and export scope updated.');};
+  function clearDemos(all){
+    const demos=new Set((all?state.offers:reviewOffers()).filter(isDemoOffer));
+    if(!demos.size||!window.confirm('Remove '+demos.size+' demo product(s) '+(all?'from the entire project, including hidden and unselected sections?':'from selected visible sides? Hidden and unselected products will be retained.')))return;
+    state.offers=state.offers.filter(o=>!demos.has(o));selected=offerKey(state.offers[0]);offerEditor();showTarget();edited('Removed '+demos.size+' demo product(s).');
+  }
+  $('clearReviewDemos').onclick=()=>clearDemos(false);
+  $('clearAllDemos').onclick=()=>clearDemos(true);
+  $('verifyReviewRights').onclick=()=>verifyReviewPermissions();
   $('png').onclick=()=>exportFile('png');
   $('printPdf').onclick=()=>exportFile('pdf');
   $('submit').onclick=()=>transition('In review');
@@ -5158,7 +5511,7 @@ function bind() {
   $('backup').onclick=()=>download(new Blob([JSON.stringify(state)],{type:'application/json'}),'flyer-project.json');
   $('new').onclick=()=>{
     if(!window.confirm('Replace this campaign with a blank one? Download a project backup first if you want to keep it.')) return;
-    state=blank();registerCustomSections(state.campaign);setup();edited('Blank campaign created.');if($('studioSubnav'))chooseAdvancedSub('campaign','text');
+    state=blank();registerCustomSections(state.campaign);setup();edited('Blank campaign created.');if($('studioSubnav'))chooseAdvancedSub('campaign','text');void applyNewProjectBranchFooter(state);
   };
   $('clearLogo').onclick=()=>{state.campaign.logo='';edited();};
   for(const [face,key] of Object.entries(artworkFields)) {
@@ -5215,7 +5568,7 @@ let currentMenu='cards', currentSub='';
 let highlightSelection=null;
 let modalCardTab='lookup';
 const NAV_ITEMS=[
-  ['campaign','Campaign & Branding',[['text','Headlines & Text'],['artwork','Sale Artwork'],['labels','Section Labels']]],
+  ['campaign','Campaign & Branding',[['text','Headlines & Text'],['artwork','Sale Artwork'],['labels','Section Labels'],['header','Header'],['footer','Footer']]],
   ['cards','Edit Flyer Cards',[]],
   ['bulk','Bulk Import',[]],
   ['review','Review & Approval',[]],
@@ -5514,7 +5867,7 @@ function addFlyerSection(name,page='back'){
 }
 function setSectionVisibility(key,enabled){
   if(!sections[key])return;
-  modifyLayout(config=>{config[key].enabled=enabled;if(key==='tech'&&!enabled)config[key].besideBanner=false;},
+  modifyLayout(config=>{config[key].enabled=enabled;},
     (enabled?'Restored ':'Removed ')+sections[key]+(enabled?' to':' from')+' the flyer; products preserved.');
 }
 function deleteEmptyCustomSection(key){
@@ -5600,10 +5953,11 @@ function renderAppearanceEditor(){
   }
   const original=appearanceOriginalFields;original.hidden=true;
   const conf=state.campaign.sectionLayout||defaultSectionLayout();
+  if(!conf[selectedLayoutSection])selectedLayoutSection=Object.keys(conf)[0];
   const z=conf[selectedLayoutSection],sectionName=sections[selectedLayoutSection];
   if(previewLayout?.page===z.page){highlightSelection={kind:'field',key:selectedLayoutSection};updatePreviewHighlight();}
   if($('sectionOverflow')){
-    const issues=Object.keys(sections).filter(key=>state.offers.filter(o=>o.section===key).length>conf[key].cols*conf[key].rows)
+    const issues=reviewSectionKeys().filter(key=>state.offers.filter(o=>o.section===key).length>conf[key].cols*conf[key].rows)
       .map(key=>sections[key]+': '+(state.offers.filter(o=>o.section===key).length-conf[key].cols*conf[key].rows)+' unplaced item(s)');
     $('sectionOverflow').hidden=!issues.length;
     $('sectionOverflow').textContent=issues.length?'Grid overflow (products preserved): '+issues.join(' · '):'';
@@ -5669,7 +6023,7 @@ function renderAppearanceEditor(){
         row.append(name,restore);
         if(key.startsWith(customSectionPrefix)){
           const drop=document.createElement('button');drop.textContent='Delete empty section';drop.className='danger';
-          drop.disabled=state.offers.some(offer=>offer.section===key);drop.onclick=()=>deleteEmptyCustomSection(key);row.append(drop);
+          drop.disabled=state.offers.some(offer=>offer.section===key);drop.onclick=()=>askDeleteSection(key);row.append(drop);
         }
         area.append(row);
       }
@@ -5681,6 +6035,38 @@ function renderAppearanceEditor(){
   head.append(appearanceField('Choose section','_section','select',selectedLayoutSection,v=>{selectedLayoutSection=v;renderAppearanceEditor()},Object.keys(sections).map(k=>[k,sections[k]])));
   head.append(appearanceField('Page','page','select',z.page,v=>moveSectionToPage(selectedLayoutSection,v),[['front','Front'],['back','Back']]));
   area.append(head);
+  if(activeSettingsTab==='background'){
+    const a=sanitizeSectionAppearance(z),key=selectedLayoutSection;
+    explain('Backgrounds are clipped to this section. Set product box opacity to zero to reveal artwork. Changes do not resize product photos.');
+    const update=(field,value)=>modifyLayout(cfg=>{const next={...cfg[key],[field]:value};if(field==='backgroundMode'&&value==='watermark')next.backgroundOpacity=20;Object.assign(cfg[key],sanitizeSectionAppearance(next));},'Section background updated.');
+    const mode=[['default','Default / None'],['solid','Solid Color'],['gradient','Gradient Color'],['image','Background Image'],['watermark','Decorative Watermark'],['combined','Combined Color and Image']];
+    area.append(appearanceField('Background mode','backgroundMode','select',a.backgroundMode,v=>update('backgroundMode',v),mode));
+    for(const [field,title] of [['backgroundColor','Background color'],['backgroundColor2','Gradient end color']]){
+      area.append(appearanceField(title,field,'color',a[field],v=>update(field,v)));
+      area.append(appearanceField(title+' HEX',field,'text',a[field],v=>update(field,v)));
+    }
+    const upload=document.createElement('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';
+    upload.onchange=async()=>{const file=upload.files?.[0],project=state;if(!file)return;try{const data=await readPhoto(file);if(state!==project||!sections[key])return;modifyLayout(cfg=>{cfg[key].backgroundImage=data;if(!['image','watermark','combined'].includes(cfg[key].backgroundMode))cfg[key].backgroundMode='image';},'Section background image attached.');}catch(e){feedback(e.message)}};
+    const label=document.createElement('label');label.textContent='Upload or replace background artwork';label.append(upload);area.append(label);
+    if(a.backgroundImage){const img=document.createElement('img');img.src=a.backgroundImage;img.alt='Section background';img.style.cssText='max-width:100%;max-height:100px;object-fit:contain';area.append(img);}
+    for(const [field,title,min,max] of [['backgroundOpacity','Image opacity (%)',0,100],['backgroundScale','Image scale (%)',10,300],['backgroundX','Horizontal position (%)',0,100],['backgroundY','Vertical position (%)',0,100],['backgroundRotation','Rotation (degrees)',-180,180],['cardOpacity','Product box opacity (%)',0,100]]){
+      const l=appearanceField(title,field,'number',a[field],v=>update(field,v));const input=l.querySelector('input');input.min=String(min);input.max=String(max);area.append(l);
+    }
+    area.append(appearanceField('Image fit','backgroundFit','select',a.backgroundFit,v=>update('backgroundFit',v),[['fit','Fit'],['fill','Fill'],['stretch','Stretch'],['center','Center'],['tile','Repeat / Tile']]));
+    for(const [field,title] of [['cardColor','Product box color'],['borderColor','Product box border']])area.append(appearanceField(title,field,'color',z[field],v=>setLayoutValue(key,field,v)));
+    for(const [field,title] of [['borderWidth','Border thickness'],['cardRadius','Corner radius']])area.append(appearanceField(title,field,'number',z[field],v=>setLayoutValue(key,field,v)));
+    const actions=document.createElement('div');actions.className='row';
+    const button=(title,handler)=>{const b=document.createElement('button');b.type='button';b.textContent=title;b.onclick=handler;actions.append(b);};
+    button('Choose shared artwork',()=>chooseProtectedArtwork('backgrounds',image=>modifyLayout(cfg=>{cfg[key].backgroundImage=image;cfg[key].backgroundMode='image';},'Shared section background applied.')));
+    button('Transparent boxes',()=>update('cardOpacity',0));
+    button('Remove image',()=>update('backgroundImage',''));
+    button('Reset appearance',()=>modifyLayout(cfg=>{const d=defaultSectionLayout()[key];for(const field of sectionAppearanceFields)delete cfg[key][field];Object.assign(cfg[key],sanitizeSectionAppearance(d),Object.fromEntries(['cardColor','borderColor','borderWidth','cardRadius'].map(f=>[f,d[f]])));},'Section appearance reset.'));
+    function copyTo(keys,from){modifyLayout(cfg=>{const source={...cfg[from],...sanitizeSectionAppearance(cfg[from])};for(const target of keys)for(const field of sectionAppearanceFields)cfg[target][field]=source[field];},'Section appearance copied.');}
+    button('Apply to current page',()=>copyTo(Object.keys(conf).filter(k=>conf[k].page===z.page),key));
+    button('Apply to both pages',()=>copyTo(Object.keys(conf),key));
+    area.append(actions,appearanceField('Copy appearance from another section','copyBackground','select','',v=>{if(conf[v])copyTo([key],v)},[['','Choose section'],...Object.keys(conf).filter(k=>k!==key).map(k=>[k,sections[k]])]));
+    return;
+  }
   if(activeSettingsTab==='sections'){
     explain('Style each section independently. The orange raised heading for Perfect Bundles and the slim red strip for Holiday Best Buys are available as presets.');
     const group=document.createElement('div');group.className='settingsGroup';
@@ -5740,7 +6126,7 @@ function initAdvancedStudio(){
   const settings=$('settingsDialog');
   const intro=settings.querySelector('.modalInner');
   const tabs=document.createElement('div');tabs.id='appearanceTabs';tabs.className='modalTabs';
-  for(const [id,label] of [['colors','Colors'],['fonts','Fonts'],['sections','Sections'],['cards','Cards'],['boxes','Boxes'],['layout','Arrange'],['print','Print']]){
+  for(const [id,label] of [['colors','Colors'],['fonts','Fonts'],['sections','Sections'],['background','Background & Watermark'],['cards','Cards'],['boxes','Boxes'],['layout','Arrange'],['print','Print']]){
     const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.appearance=id;b.onclick=()=>setAppearanceTab(id);tabs.append(b);
   }
   intro.prepend(tabs);
@@ -5791,6 +6177,54 @@ function cancelAppearance(){
   if(settingsSnapshot){state.campaign=settingsSnapshot;registerCustomSections(state.campaign);settingsSnapshot=null;layoutUndo.length=0;layoutRedo.length=0;setup();edited('Layout settings canceled; previous campaign restored.');}
   hideDialog('settingsDialog');
 }
+function renderPageComponentEditor(kind){
+  const holder=$('pageComponentEditor');holder.replaceChildren();
+  const page=side,other=page==='front'?'back':'front';
+  const heading=document.createElement('h2');heading.textContent=(page==='front'?'Front':'Back')+' '+kind;holder.append(heading);
+  const button=(label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;holder.append(b);return b;};
+  const field=(label,k,type,value,fn,options)=>holder.append(appearanceField(label,k,type,value,fn,options));
+  button('Edit '+other+' '+kind,()=>{side=other;showTarget();refresh();renderPageComponentEditor(kind);});
+  if(kind==='header'){
+    field('Extra brand-header height','extraHeight','number',pageCampaign(state.campaign,page)._headerExtra,v=>{state.campaign.headerDesign??={};state.campaign.headerDesign[page]={extraHeight:Math.max(0,Math.min(100,Number(v)||0))};edited('Header height changed.');});
+    button('Edit existing header artwork',()=>chooseAdvancedSub('campaign','artwork'));
+    button('Copy header height to other side',()=>{state.campaign.headerDesign??={};state.campaign.headerDesign[other]={extraHeight:pageCampaign(state.campaign,page)._headerExtra};edited('Header settings copied.');});
+    return;
+  }
+  const f=footerFor(state.campaign,page);
+  const update=(patch)=>{state.campaign.footerDesign??={};state.campaign.footerDesign[page]=sanitizeFooter({...footerFor(state.campaign,page),...patch});edited('Footer updated.');renderPageComponentEditor('footer');};
+  field('Footer mode','footerMode','select',f.mode,v=>update(v==='standard'&&f.mode==='legacy'?{...defaultFooter(),left:f.left||defaultFooter().left,mode:v}:{mode:v}),[['legacy','Original project footer'],['none','No Footer'],['standard','Standard Single-Row Footer'],['text','Custom Text Footer'],['image','Image Only'],['imageText','Image + Text'],['custom','Custom Footer Layout']]);
+  if(f.mode==='legacy'){button('Adopt standard single-row footer',()=>update({...defaultFooter(),left:f.left||defaultFooter().left}));return;}
+  if(f.mode==='none')return;
+  for(const [k,label] of [['height','Footer height'],['padding','Padding'],['spacing','Spacing'],['inset','Inset from sides'],['borderWidth','Border thickness']])field(label,k,'number',f[k],v=>update({[k]:v}));
+  for(const [k,label] of [['color','Background color'],['borderColor','Border color']])field(label,k,'color',f[k],v=>update({[k]:v}));
+  const upload=(label,apply)=>{const l=document.createElement('label');l.textContent=label;const input=document.createElement('input');input.type='file';input.accept='image/png,image/jpeg,image/webp';l.append(input);holder.append(l);input.onchange=async()=>{const file=input.files?.[0],project=state;if(!file)return;try{const data=await readPhoto(file);if(state!==project)return;apply(data);}catch(e){feedback(e.message);}};};
+  upload('Footer background artwork',data=>update({backgroundImage:data}));button('Choose shared footer background',()=>chooseProtectedArtwork('backgrounds',image=>update({backgroundImage:image})));button('Remove footer background',()=>update({backgroundImage:''}));
+  if(['standard','text','imageText'].includes(f.mode)){
+    for(const [k,title] of [['left','Left disclaimer / text'],['right','Right contact / text']]){
+      field(title,k,'text',f[k],v=>update({[k]:v}));
+      field(title+' font',k+'Font','select',f[k+'Font'],v=>update({[k+'Font']:v}),Object.entries(typefaces).map(([id,font])=>[id,font.label]));
+      for(const attr of ['Size','Weight','Padding'])field(title+' '+attr,k+attr,'number',f[k+attr],v=>update({[k+attr]:v}));
+      field(title+' color',k+'Color','color',f[k+'Color'],v=>update({[k+'Color']:v}));
+      field(title+' alignment',k+'Align','select',f[k+'Align'],v=>update({[k+'Align']:v}),[['left','Left'],['center','Center'],['right','Right']]);
+    }
+    button('Use Santiago Branch contact numbers',()=>update({right:'0919-081-7993 / 0919-079-5426'}));
+  }
+  if(['image','imageText'].includes(f.mode)){
+    upload('Footer image (upload or replace)',data=>update({image:data}));button('Choose shared footer image',()=>chooseProtectedArtwork('',image=>update({image})));button('Remove image',()=>update({image:''}));
+    for(const [k,label] of [['imageOpacity','Image opacity (%)'],['imageScale','Image scale (%)'],['imageX','Image horizontal position (%)'],['imageY','Image vertical position (%)']])field(label,k,'number',f[k],v=>update({[k]:v}));
+    field('Image fit','imageFit','select',f.imageFit,v=>update({imageFit:v}),[['fit','Fit'],['fill','Fill'],['stretch','Stretch']]);button(f.aspect?'Unlock aspect ratio':'Lock aspect ratio',()=>update({aspect:!f.aspect}));
+  }
+  if(f.mode==='custom'){
+    const change=(i,p)=>update({elements:f.elements.map((e,j)=>i===j?{...e,...p}:e)});
+    button('Add text element',()=>update({elements:[...f.elements,{kind:'text',text:'Custom text',x:0,y:0,w:35,h:100,size:12,color:'#ffffff'}]}));
+    upload('Add image / logo / QR artwork',image=>update({elements:[...f.elements,{kind:'image',image,x:40,y:0,w:25,h:100}]}));button('Add shared logo / image',()=>chooseProtectedArtwork('',image=>update({elements:[...f.elements,{kind:'image',image,x:40,y:0,w:25,h:100}]})));
+    f.elements.forEach((e,i)=>{const t=document.createElement('strong');t.textContent='Element '+(i+1);holder.append(t);if(e.kind==='text'){field('Text','elementText','text',e.text,v=>change(i,{text:v}));field('Text size','elementSize','number',e.size,v=>change(i,{size:v}));field('Text color','elementColor','color',e.color,v=>change(i,{color:v}));}else upload('Replace element image',image=>change(i,{image}));for(const [k,label] of [['x','X (%)'],['y','Y (%)'],['w','Width (%)'],['h','Height (%)'],['opacity','Opacity (%)']])field(label,'element'+k,'number',e[k],v=>change(i,{[k]:v}));button('Remove element '+(i+1),()=>update({elements:f.elements.filter((_,j)=>j!==i)}));});
+  }
+  button('Apply to both sides',()=>{state.campaign.footerDesign={front:structuredClone(f),back:structuredClone(f)};edited('Footer copied to both sides.');});
+  button('Reset footer',()=>update(defaultFooter(branchFooterContact)));
+  button('Save Footer as Template',async()=>{const name=clean(prompt('Footer template name')||'').slice(0,80);if(!name)return;try{const stored=await powerFromDB('footer-templates')||[];const templates=[{name,design:f},...stored].slice(0,30);await powerToDB('footer-templates',templates);state.campaign.footerTemplates=templates;edited('Footer template saved.');}catch(e){feedback(e.message);}});
+  button('Retrieve Footer Template',async()=>{const local=await powerFromDB('footer-templates')||[],templates=local.length?local:state.campaign.footerTemplates||[];if(!templates.length){feedback('No saved footer templates.');return;}const name=prompt('Enter a template number:\n'+templates.map((t,i)=>(i+1)+'. '+t.name).join('\n'));const t=templates[Number(name)-1];if(t)update(t.design);});
+}
 function chooseAdvancedSub(menu,sub){
   if(!['campaign','cards','bulk','review','backup'].includes(menu))return;
   const desired=sub||({campaign:'text',cards:side,bulk:'csv',review:'validation',backup:'download'})[menu];
@@ -5803,8 +6237,8 @@ function chooseAdvancedSub(menu,sub){
   currentSub=desired;
   // Split shared panels into their previously existing sections, but keep IDs and handlers intact.
   if(menu==='campaign'){
-    const artwork=desired==='artwork';$('headlineArtwork').hidden=!artwork;
-    $('campaignFields').hidden=artwork;$('customLogoFields').hidden=artwork||state.campaign.brandHeader==='classic';
+    const component=['header','footer'].includes(desired),artwork=desired==='artwork';$('pageComponentEditor').hidden=!component;if(component)renderPageComponentEditor(desired);$('headlineArtwork').hidden=!artwork;
+    $('campaignFields').hidden=artwork||component;$('customLogoFields').hidden=artwork||component||state.campaign.brandHeader==='classic';
     for(const label of $('campaignFields').querySelectorAll('label')){
       const labels=['tech','bundles','back','footer'];
       label.hidden=artwork||(desired==='labels'?!labels.includes(label.dataset.field):labels.includes(label.dataset.field));
@@ -5821,7 +6255,7 @@ function chooseAdvancedSub(menu,sub){
   if(menu==='review'){
     const panel=$('panel-review');
     const approved=desired==='approval';
-    $('counts').hidden=approved;$('issues').hidden=approved;
+    $('counts').hidden=approved;$('issues').hidden=approved;$('clearReviewDemos').hidden=approved;$('clearAllDemos').hidden=approved;
     ['reviewer','reviewNote','submit','approve','changes'].forEach(id=>{const el=$(id);if(!el)return;const row=el.closest('label')||el.closest('.row');if(row)row.hidden=!approved;});
   }
   if(menu==='backup'){
@@ -6044,6 +6478,7 @@ function initDirectSectionControls(arrange){
   $('hideSelectedSection').onclick=()=>removeSectionFromFlyer(selectedLayoutSection);
   $('deleteSelectedSection').onclick=()=>askDeleteSection(selectedLayoutSection);
   $('restoreHiddenSections').onclick=()=>openSectionManager('manage');
+  const bg=document.createElement('button');bg.type='button';bg.textContent='Background & Watermark';bg.onclick=()=>{$('layoutSettings').click();setAppearanceTab('background');};selected.append(bg);
   const dialog=document.createElement('div');dialog.className='uiModalBackdrop';dialog.id='sectionDialog';dialog.hidden=true;
   dialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="sectionDialogTitle"><div class="modalHeading"><div><strong id="sectionDialogTitle">Manage flyer sections</strong><small>Changes update the flyer preview; all product records are preserved when hiding.</small></div><button type="button" id="closeSectionDialog" aria-label="Close section manager">×</button></div><div class="modalInner"><form id="sectionQuickAdd"><label>New section title<input id="quickSectionName" type="text" maxlength="45" required placeholder="e.g. Appliances Under ₱5,000"></label><label>Flyer side<select id="quickSectionPage"><option value="front">Front</option><option value="back">Back</option></select></label><button type="submit" class="primary">+ Add Section</button></form><p id="sectionInsertHint" hidden></p><p id="sectionQuickNote"></p><div id="quickSectionsList"></div><div class="settingsFoot"><span class="settingsHint">Maximum six custom sections. Deletion is limited to empty custom sections.</span><button type="button" id="doneSectionDialog">Done</button></div></div></div>';
   document.body.append(dialog);
@@ -6154,13 +6589,15 @@ function updateSectionHandles(){
 }
 
 async function boot() {
-  try {state=(await loadDatabase())||state;ptgReference=await readReference();}
+  let newProject=false;
+  try {const stored=await loadDatabase();newProject=!stored;state=stored||state;ptgReference=await readReference();}
   catch {feedback('Browser storage is unavailable. Download a project backup.');}
   state.campaign={...defaultCampaign,...state.campaign,brandHeader:brandHeaderChoice(state.campaign),
     headlineDesign:headlineDesignChoice(state.campaign)};
   registerCustomSections(state.campaign);
   if(state.campaign.sectionLayout)state.campaign.sectionLayout=sanitizeSectionLayout(state.campaign.sectionLayout);
   initStudioUI();setup();bind();initAdvancedStudio();bindCardArrange();initPowerTools();window.dispatchEvent(new Event('flyerstudio:ready'));
+  if(newProject)void applyNewProjectBranchFooter(state);
 }
 boot();
 // Flyer Studio Studio+ enhancements: local-safe improvements. No authentication secrets are persisted.

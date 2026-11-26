@@ -72,6 +72,9 @@
   window.addEventListener('resize',sync,{passive:true});
   sync();
  };
+ // IndexedDB/protected storage hydration can complete after DOMContentLoaded.
+ // Retry exactly once on the editor's own ready event; init is idempotent.
+ window.addEventListener('flyerstudio:ready',init,{once:true});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
  else init();
 })();

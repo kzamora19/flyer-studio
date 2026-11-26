@@ -14,7 +14,7 @@ assert.ok(navStart>=0&&navEnd>navStart,'Navigation definition present');
 const menus=new Function(main.slice(navStart,navEnd)+';return NAV_ITEMS;')();
 assert.deepEqual(menus.map(item=>item[0]),['campaign','cards','bulk','review','backup'],'All five menus remain');
 assert.equal(menus.find(item=>item[0]==='cards')[2].length,0,'Remove duplicated pinned Front Side/Back Side submenu');
-assert.equal(menus.find(item=>item[0]==='campaign')[2].length,3,'Keep campaign editing choices');
+assert.deepEqual(menus.find(item=>item[0]==='campaign')[2].map(([id])=>id),['text','artwork','labels','header','footer'],'Keep all campaign editing choices and new Header/Footer menus');
 assert.ok(html.includes('<button id="front" aria-pressed="true">Front</button>'),'Original working Front control retained');
 assert.ok(html.includes('<button id="back" aria-pressed="false">Back</button>'),'Original working Back control retained');
 assert.ok(main.includes("nav.append($('sidebarActions'))"),'Layout & Appearance joins the single-column main menu');

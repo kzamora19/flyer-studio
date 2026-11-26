@@ -9,6 +9,8 @@ const end=html.indexOf('function gridPositions(',start);
 assert.ok(start>0&&end>start,'Production canvas card renderers found');
 const calls={photos:[],copies:[],prices:[],fills:[]};
 const mock={
+ // This fixture checks the unchanged no-freebie layout; dedicated tests cover actual freebie geometry.
+ freebieArea(){return null},drawFreebiePanel(){},
  cardPrices(){return {promo:'₱9,999.00',secondary:[['SRP ₱12,999.00','#344865'],['SAVE ₱3,000.00','#a02716']]}},
  descriptionIncludesModel(){return false},
  fitCardCopy(ctx,name,model,w,h){

@@ -28,21 +28,26 @@ test('card arrangement preserves photo data, swaps, moves across pages, handles 
  `);
  run(assert);
 });
-test('freebie photo and wording are drawn in reserved card space by shared renderer',()=>{
+test('full card geometry is passed to renderer with freebie artwork',()=>{
  const run=new Function('assert',`
  ${placementCode}
  const state={campaign:{}};function slotCount(){return 2}
- const calls=[];const ctx={save(){},restore(){},beginPath(){},rect(){},clip(){},strokeRect(){}};
- function fill(){}function photo(ctx,img,x,y,w,h){calls.push(['photo',img,w,h])}
- function line(ctx,t){calls.push(['text',t])}function card(ctx,o,a,x,y,w,h){calls.push(['card',h])}
- ${slice(html,'function drawFreebieBand','function drawBrandHeader')}
+ const calls=[];function card(...args){calls.push(args)}
+ ${slice(html,'function drawSlots','function drawBrandHeader')}
  const o={section:'front',slot:0,freebieText:'FREE INSTALLATION'};
- drawSlots(ctx,{offers:[o],campaign:{},status:'Draft'},new Map(),[{key:'front',index:0,x:0,y:0,width:200,height:100}],null,new Map([[o,{image:'freebie',frame:{}}]]));
- assert.ok(calls.some(x=>x[0]==='photo'&&x[1]==='freebie'&&x[2]>0&&x[3]>0));
- assert.ok(calls.some(x=>x[0]==='text'));assert.ok(calls[0][1]<100);
+ const freebie={image:'freebie'};
+ drawSlots({}, {offers:[o],campaign:{},status:'Draft'},new Map(),[{key:'front',index:0,x:0,y:0,width:200,height:100}],null,new Map([[o,freebie]]));
+ assert.equal(calls.length,1);assert.equal(calls[0][6],100);assert.equal(calls[0][9],freebie);
  `);
  run(assert);
  assert.match(html,/drawSlots\(ctx,project,pictures,layout.cards,target,freebies\)/);
+});
+test('freebie settings are bounded and legacy projects receive safe defaults',()=>{
+ const code=slice(html,'function sanitizeFreebieAppearance','function showFreebieEditor');
+ const sanitize=new Function(code+'return sanitizeFreebieAppearance;')();
+ assert.deepEqual(sanitize(),{size:100,scale:100,x:50,y:50,fit:'fit',aspect:true,font:10});
+ assert.deepEqual(sanitize({size:250,scale:0,x:-5,y:300,fit:'fill',aspect:false,font:30}),{size:100,scale:50,x:0,y:100,fit:'fill',aspect:false,font:18});
+ assert.match(html,/offer.freebieAppearance=sanitizeFreebieAppearance\(row.freebieAppearance\)/);
 });
 test('catalog relay targets only the approved edge endpoint and accepts only validated store URLs',async()=>{
  const calls=[];
