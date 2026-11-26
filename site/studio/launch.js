@@ -5,7 +5,7 @@ const status=document.getElementById('status'),mount=document.getElementById('mo
 const cloudPanel=document.getElementById('cloudPanel'),cloudNote=document.getElementById('cloudMessage');
 const portal='https://kzamora19.github.io/first-megasaver-ptg/studios/';
 let timer=null,expiryTimer=null,active=false,checking=false,expiresAt=0,absoluteCutoff=0,expiryWarned=false;
-let privateKey=null,sessionId='',challenge='',draftPort=null,catalogPort=null;
+let privateKey=null,sessionId='',challenge='',draftPort=null,catalogPort=null,operationsPort=null;
 let proofQueue=Promise.resolve();
 // Background revocation checks and protected photo operations consume the
 // SAME rotating one-use PTG challenge. Always serialize them in the parent.
@@ -36,6 +36,7 @@ function lock(message){
  if(timer)clearInterval(timer);if(expiryTimer)clearTimeout(expiryTimer);
  if(draftPort){draftPort.close();draftPort=null;}
  if(catalogPort){catalogPort.close();catalogPort=null;}
+ if(operationsPort){operationsPort.close();operationsPort=null;}
  timer=null;expiryTimer=null;
  // The editor is origin-isolated: never reach into its DOM or storage.
  // Local backup must be completed before expiry, or via a future scoped bridge.
@@ -252,10 +253,26 @@ function installCatalogRelay(){
   });
  };
 }
+function installOperationsRelay(){
+ let port=null,seq=0,readyResolve;const pending=new Map(),ready=new Promise(resolve=>{readyResolve=resolve});
+ window.addEventListener('message',function receive(event){
+  if(event.source!==parent||event.data?.kind!=='megaflyer-protected-operations-port'||!event.ports?.[0])return;
+  window.removeEventListener('message',receive);port=event.ports[0];
+  port.onmessage=({data})=>{const entry=pending.get(data?.id);if(!entry)return;pending.delete(data.id);clearTimeout(entry.timer);if(data.ok)entry.resolve(data.value);else entry.reject(Error(data.error||'Protected operation unavailable.'));};
+  port.start();readyResolve();
+ });
+ window.__MEGAFLYER_OPERATIONS_RPC__=async function(fields){
+  let wait;try{await Promise.race([ready,new Promise((_,reject)=>{wait=setTimeout(()=>reject(Error('Protected operations are unavailable.')),5000);})]);}finally{clearTimeout(wait);}
+  return new Promise((resolve,reject)=>{
+   const id=++seq,timer=setTimeout(()=>{pending.delete(id);reject(Error('Protected operation timed out.'));},60000);
+   pending.set(id,{resolve,reject,timer});port.postMessage({id,fields});
+  });
+ };
+}
 function withCatalogRelay(html){
  // Installed locally after the signed editor package has passed verification.
  // Never share credentials, allow arbitrary URLs, or change the sandbox flags.
- const script='<script>('+installCatalogRelay.toString()+')();<\/script>';
+ const script='<script>('+installCatalogRelay.toString()+')();('+installOperationsRelay.toString()+')();<\/script>';
  const at=html.search(/<script(?:\s|>)/i);
  return at<0?html+script:html.slice(0,at)+script+html.slice(at);
 }
@@ -398,10 +415,29 @@ async function open(){
    }finally{catalogInFlight--;}
   };
   catalogPort.start();
+  const operationsChannel=new MessageChannel();operationsPort=operationsChannel.port1;
+  operationsPort.onmessage=async({data:m})=>{
+   if(!active||Date.now()>=expiresAt||mount.querySelector('iframe')!==frame||!Number.isSafeInteger(m?.id))return;
+   const port=operationsChannel.port1,fields=m.fields;
+   if(!fields||typeof fields!=='object'||Array.isArray(fields)||Object.hasOwn(fields,'studioProof')||!['permissions','approve','final','override','assets-list','asset-image'].includes(fields.action)||JSON.stringify(fields).length>95000){port.postMessage({id:m.id,ok:false,error:'Invalid protected operation.'});return;}
+   try{
+    const result=await withProof(async()=>{
+     if(!active||Date.now()>=expiresAt)throw Error('Session expired');
+     const signed=await signedRequest();
+     const res=await fetch('https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-studio-operations',{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',headers:{'Content-Type':'application/json',apikey:cfg.publishableKey||''},body:JSON.stringify({...fields,studioProof:{sessionId:signed.sessionId,challenge:signed.challenge,signature:signed.signature}}),signal:AbortSignal.timeout(25000)});
+     const data=await res.json().catch(()=>null);
+     if(!data?.studioProof||!validSession({...data.studioProof,ok:true}))throw Error('Protected authorization not verified.');
+     if(!active)throw Error('Studio closed');
+     recordAuth({...data.studioProof,ok:true});return {ok:res.ok,data};
+    });
+    if(active&&Date.now()<expiresAt)port.postMessage(result.ok?{id:m.id,ok:true,value:result.data.result}:{id:m.id,ok:false,error:result.data.error||'Access denied.'});
+   }catch{if(active)lock('Protected operation could not verify your PTG session. Reopen MegaFlyer.');}
+  };operationsPort.start();
   frame.addEventListener('load',()=>{
    if(active&&Date.now()<expiresAt&&frame.contentWindow){
     frame.contentWindow.postMessage({kind:'megaflyer-private-storage-port'},'*',[channel.port2]);
     frame.contentWindow.postMessage({kind:'megaflyer-public-catalog-port'},'*',[catalogChannel.port2]);
+    frame.contentWindow.postMessage({kind:'megaflyer-protected-operations-port'},'*',[operationsChannel.port2]);
    }
   },{once:true});
   // The original response has passed SHA-256 verification. Apply the local
