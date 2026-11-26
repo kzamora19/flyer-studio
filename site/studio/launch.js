@@ -200,8 +200,10 @@ async function relayStoreCatalog(message){
      !url.pathname.startsWith('/wp-content/uploads/')||url.href.length>2048)throw Error('Invalid store image URL.');
   p.set('mode','image');p.set('url',url.href);
  }else throw Error('Unsupported store photo action.');
- const response=await fetch(catalogEndpoint+'?'+p,{method:'GET',credentials:'omit',
-   redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(20000)});
+ let response;
+ try{response=await fetch(catalogEndpoint+'?'+p,{method:'GET',credentials:'omit',
+   redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(20000)});}
+ catch(error){throw Error(error.name==='TimeoutError'?'Store catalog request timed out.':'Cannot reach the store catalog service. Check the connection and try again.');}
  const type=response.headers.get('content-type')||'';
  if(!response.ok){
   const payload=await response.json().catch(()=>null);
@@ -375,7 +377,7 @@ async function open(){
    if(!active||Date.now()>=expiresAt||mount.querySelector('iframe')!==frame||
       !Number.isSafeInteger(message?.id))return;
    const port=catalogChannel.port1;
-   if(catalogInFlight>=8){port.postMessage({id:message.id,ok:false,error:'Too many store photo requests. Retry shortly.'});return;}
+   if(catalogInFlight>=16){port.postMessage({id:message.id,ok:false,error:'Too many store photo requests. Retry shortly.'});return;}
    catalogInFlight++;
    try{
     const value=await relayStoreCatalog(message);
