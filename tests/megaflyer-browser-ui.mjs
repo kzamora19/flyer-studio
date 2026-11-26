@@ -64,6 +64,50 @@ try{
  assert.equal(await page.locator('#back').getAttribute('aria-pressed'),'true');
  await page.locator('#front').click();
  assert.equal(await page.locator('#front').getAttribute('aria-pressed'),'true');
+ // Exercise new arrange mode in actual Chromium with a disposable project.
+ const arrangementBaseline=await page.evaluate(async()=>{
+  const snapshot=structuredClone(state);
+  const png=document.createElement('canvas');png.width=80;png.height=80;
+  const ctx=png.getContext('2d');ctx.fillStyle='#f000ef';ctx.fillRect(0,0,80,80);
+  const freebie=png.toDataURL('image/png');
+  const a={sku:'CARD-A',brand:'Test',name:'Test A',section:'front',slot:0,promo:'1000',photo:'',freebieText:'TEST FREEBIE',freebiePhoto:freebie};
+  const b={sku:'CARD-B',brand:'Test',name:'Test B',section:'front',slot:1,promo:'2000',photo:''};
+  state.offers=[a,b];state.status='Draft';side='front';slotTarget.section='front';slotTarget.slot='1';
+  setup();showTarget();
+  return {snapshot,freebie};
+ });
+ await page.locator('#arrangeCards').click();
+ assert.equal(await page.locator('#arrangeCards').getAttribute('aria-pressed'),'true');
+ const frontButtons=page.locator('#slotFields .sectionPicker').filter({hasText:'Front grid'}).locator('.numberGrid button');
+ await frontButtons.nth(0).click();await frontButtons.nth(1).click();
+ assert.equal(await page.evaluate(()=>placement(state.offers,'front').slots[1]?.sku),'CARD-A');
+ assert.equal(await page.evaluate(()=>placement(state.offers,'front').slots[1]?.freebiePhoto),arrangementBaseline.freebie);
+ await page.locator('#undoCards').click();
+ assert.equal(await page.evaluate(()=>placement(state.offers,'front').slots[0]?.sku),'CARD-A');
+ await page.locator('#redoCards').click();
+ assert.equal(await page.evaluate(()=>placement(state.offers,'front').slots[1]?.sku),'CARD-A');
+ await frontButtons.nth(1).click();await page.locator('#back').click();
+ const backButtons=page.locator('#slotFields .sectionPicker').filter({hasText:'Back grid'}).locator('.numberGrid button');
+ await backButtons.nth(0).click();
+ assert.equal(await page.evaluate(()=>placement(state.offers,'back').slots[0]?.sku),'CARD-A');
+ assert.equal(await page.evaluate(()=>placement(state.offers,'back').slots[0]?.freebiePhoto),arrangementBaseline.freebie);
+ const painted=await page.evaluate(async()=>{
+  const snapshot=structuredClone(state);snapshot.status='Approved';
+  const result=await render(snapshot,'back',1600);
+  const {canvas,layout,dimensions:d}=result;
+  const card=layout.cards.find(c=>c.key==='back'&&c.index===0);
+  const unit=canvas.width/d.pageWidth,scale=unit*d.width/800;
+  const x=Math.floor(d.bleed*unit+card.x*scale),y=Math.floor(d.bleed*unit+(card.y+card.height*.7)*scale);
+  const w=Math.max(1,Math.floor(card.width*scale)),h=Math.max(1,Math.floor(card.height*.3*scale));
+  const bytes=canvas.getContext('2d').getImageData(x,y,w,h).data;
+  let matching=0;for(let i=0;i<bytes.length;i+=4)if(bytes[i]>210&&bytes[i+1]<50&&bytes[i+2]>210)matching++;
+  return matching;
+ });
+ assert.ok(painted>20,'Actual export renderer must paint the uploaded freebie in the moved card');
+ await page.locator('#arrangeCards').click();
+ await page.evaluate(snapshot=>{state=snapshot;side='front';slotTarget.section='front';slotTarget.slot='1';setup();showTarget();},arrangementBaseline.snapshot);
+ await page.locator('#front').click();
+ console.log('PASS: live browser card swaps, undo/redo, cross-page transfer and actual freebie canvas pixels');
  // Regression: changing section layout must not put the selection toolbar inside the tab strip.
  await page.locator('#arrangeSections').click();
  await page.locator('#selectedSectionControls:visible').waitFor();
