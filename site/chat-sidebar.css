@@ -141,3 +141,37 @@ body.flyerChatLayout #sidebarContent .fields {grid-template-columns:minmax(0,1fr
  body.flyerChatLayout main>aside.chatMobileClosed #sidebarContent {display:none!important;}
  body.flyerChatLayout .stage {height:auto;overflow:visible;}
 }
+
+
+/* Branchline unified Studio navigation, desktop + mobile.
+   Only menu columns change; editor controls, flyers and exports are untouched. */
+body.flyerChatLayout #sidebarFixed,
+body.flyerChatLayout #studioChatHeader,
+body.flyerChatLayout #studioSubnav{
+  background:#102b4d!important;color:#eef7ff!important;
+  border-color:#30547d!important;background-image:none!important;
+  box-shadow:none!important;filter:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
+body.flyerChatLayout #studioNav>[data-nav],
+body.flyerChatLayout #studioNav #sidebarActions button,
+body.flyerChatLayout #editorMenuToggle,
+body.flyerChatLayout #studioChatTitle,
+body.flyerChatLayout #studioSubnav .navChildren button{
+  color:#eff8ff!important;background:transparent!important;box-shadow:none!important;
+}
+body.flyerChatLayout #studioNav>[data-nav]:hover,
+body.flyerChatLayout #studioNav #sidebarActions button:hover,
+body.flyerChatLayout #studioSubnav .navChildren button:hover{
+  background:#184d83!important;
+}
+body.flyerChatLayout #studioNav>[data-nav].active,
+body.flyerChatLayout #studioSubnav .navChildren button.active{
+  background:#165ba9!important;color:#fff!important;
+  box-shadow:inset 3px 0 #10d7e8!important;
+}
+body.flyerChatLayout #studioChatMobileClose{background:#194976!important;color:#fff!important;}
+@media(max-width:700px){
+ body.flyerChatLayout #sidebarFixed,
+ body.flyerChatLayout #studioSubnav{border-bottom:1px solid #30547d!important;}
+}
