@@ -4397,7 +4397,7 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
   const bundle=type==='bundles',compact=type==='tech';
   ctx.save();
   ctx.beginPath();ctx.roundRect(x,y,w,h,style?.cardRadius??9);
-  ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.fill();
+  ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.save();ctx.globalAlpha*=offer?(sanitizeSectionAppearance(style||{}).cardOpacity/100):1;ctx.fill();ctx.restore();
   ctx.strokeStyle=style?.borderColor||(bundle?'#f2bd45':'#c5d3e7');ctx.lineWidth=style?.borderWidth??1;ctx.stroke();
   if(!offer){ctx.restore();return;}
   if(compact){const area=techCard(ctx,offer,asset,x,y,w,h,style,freebieAsset);ctx.restore();return area;}
@@ -4519,6 +4519,20 @@ function defaultSectionLayout(){const base={
   return base;
 }
 const sectionLayoutLimits={height:[85,1100],gap:[0,30],cols:[1,8],rows:[1,10],borderWidth:[0,6],cardRadius:[0,30],headingHeight:[18,95],padding:[0,30],spacing:[0,50],sectionBorderWidth:[0,8],photoScale:[60,100]};
+const sectionAppearanceFields=['backgroundMode','backgroundColor','backgroundColor2','backgroundImage','backgroundOpacity','backgroundScale','backgroundX','backgroundY','backgroundRotation','backgroundFit','cardOpacity','cardColor','borderColor','borderWidth','cardRadius'];
+function sanitizeSectionAppearance(src={}){
+  const color=(v,f)=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v)?v:f;
+  const number=(key,min,max,f)=>src[key]==null||src[key]===''||!Number.isFinite(Number(src[key]))?f:Math.max(min,Math.min(max,Number(src[key])));
+  const modes=['default','solid','gradient','image','watermark','combined'];
+  const fits=['fit','fill','stretch','center','tile'];
+  return {backgroundMode:modes.includes(src.backgroundMode)?src.backgroundMode:src.backgroundImage?'image':'default',
+    backgroundColor:color(src.backgroundColor,src.panelColor||'#ffffff'),backgroundColor2:color(src.backgroundColor2,'#ffffff'),
+    backgroundImage:imageData(src.backgroundImage)?src.backgroundImage:'',
+    backgroundOpacity:number('backgroundOpacity',0,100,src.backgroundMode==='watermark'?20:100),
+    backgroundScale:number('backgroundScale',10,300,100),backgroundX:number('backgroundX',0,100,50),backgroundY:number('backgroundY',0,100,50),
+    backgroundRotation:number('backgroundRotation',-180,180,0),backgroundFit:fits.includes(src.backgroundFit)?src.backgroundFit:'fill',
+    cardOpacity:number('cardOpacity',0,100,100)};
+}
 function sanitizeSectionLayout(raw){
   const base=defaultSectionLayout(),out={};
   const safeColor=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
@@ -4535,7 +4549,7 @@ function sanitizeSectionLayout(raw){
     if(typeof src.headerText==='string')z.headerText=src.headerText.trim().slice(0,85);
     if(['left','center','right'].includes(src.headingAlign))z.headingAlign=src.headingAlign;
     if(['left','center','right'].includes(src.priceAlign))z.priceAlign=src.priceAlign;
-    if(imageData(src.backgroundImage))z.backgroundImage=src.backgroundImage;
+    Object.assign(z,sanitizeSectionAppearance({...z,...src}));
     for(const color of ['headerColor','panelColor','cardColor','emptyColor','borderColor','sectionBorder','priceColor'])if(safeColor(src[color]))z[color]=src[color];
     // 80 boxes per section at most; avoid generating an unbounded UI.
     if(z.cols*z.rows>80)z.rows=Math.max(1,Math.floor(80/z.cols));
@@ -4592,15 +4606,38 @@ function modernPageLayout(page,height,c,artwork){
   }
   return {modern:true,headline,sections:rectangles,cards,overflow:requested>available,bannerShift:0,splitHero:split};
 }
+function paintSectionBackground(ctx,z,area,bgAsset){
+  const a=sanitizeSectionAppearance(z),{x,y,width:w,height:h}=area;
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  let color=z.panelColor;
+  if(['solid','combined'].includes(a.backgroundMode))color=a.backgroundColor;
+  if(a.backgroundMode==='gradient'){
+    color=ctx.createLinearGradient(x,y,x+w,y+h);color.addColorStop(0,a.backgroundColor);color.addColorStop(1,a.backgroundColor2);
+  }
+  if(a.backgroundMode!=='default'||z.panelColor)fill(ctx,color||'#ffffff',x,y,w,h);
+  if(bgAsset&&['image','watermark','combined'].includes(a.backgroundMode)){
+    ctx.globalAlpha*=a.backgroundOpacity/100;
+    const f=a.backgroundFit,zoom=a.backgroundScale/100;
+    let iw=w,ih=h;
+    if(f!=='stretch'){
+      const factor=f==='fill'?Math.max(w/bgAsset.width,h/bgAsset.height):f==='center'||f==='tile'?1:Math.min(w/bgAsset.width,h/bgAsset.height);
+      iw=bgAsset.width*factor;ih=bgAsset.height*factor;
+    }
+    iw*=zoom;ih*=zoom;
+    const px=x+(w-iw)*a.backgroundX/100,py=y+(h-ih)*a.backgroundY/100;
+    ctx.translate(px+iw/2,py+ih/2);ctx.rotate(a.backgroundRotation*Math.PI/180);
+    if(f==='tile'){
+      // Bound tile work even for unusually tiny assets.
+      const tw=Math.max(12,iw),th=Math.max(12,ih),r=Math.hypot(w,h)*1.5;
+      for(let yy=-r;yy<r;yy+=th)for(let xx=-r;xx<r;xx+=tw)ctx.drawImage(bgAsset,xx,yy,tw,th);
+    }else ctx.drawImage(bgAsset,-iw/2,-ih/2,iw,ih);
+  }
+  ctx.restore();
+}
 function paintSection(ctx,campaign,area,bgAsset=null){
   const key=area.key,z=campaign.sectionLayout[key],h=area.headerHeight;
   const title=z.headerText||(key==='tech'?campaign.tech:key==='bundles'?campaign.bundles:key==='back'?campaign.back:sections[key]||'Front Products');
-  fill(ctx,z.panelColor,area.x,area.y,area.width,area.height);
-  if(bgAsset){
-    const scale=Math.max(area.width/bgAsset.width,area.height/bgAsset.height);
-    const w=bgAsset.width*scale,ht=bgAsset.height*scale;ctx.save();ctx.beginPath();ctx.rect(area.x,area.y,area.width,area.height);ctx.clip();
-    ctx.drawImage(bgAsset,area.x+(area.width-w)/2,area.y+(area.height-ht)/2,w,ht);ctx.restore();
-  }
+  paintSectionBackground(ctx,z,area,bgAsset);
   if(z.sectionBorderWidth){ctx.strokeStyle=z.sectionBorder;ctx.lineWidth=z.sectionBorderWidth;ctx.strokeRect(area.x,area.y,area.width,area.height);}
   if(!h||z.headerShape==='none')return;
   const x=area.x,y=area.y,w=area.width;
@@ -5796,6 +5833,37 @@ function renderAppearanceEditor(){
   head.append(appearanceField('Choose section','_section','select',selectedLayoutSection,v=>{selectedLayoutSection=v;renderAppearanceEditor()},Object.keys(sections).map(k=>[k,sections[k]])));
   head.append(appearanceField('Page','page','select',z.page,v=>moveSectionToPage(selectedLayoutSection,v),[['front','Front'],['back','Back']]));
   area.append(head);
+  if(activeSettingsTab==='background'){
+    const a=sanitizeSectionAppearance(z),key=selectedLayoutSection;
+    explain('Backgrounds are clipped to this section. Set product box opacity to zero to reveal artwork. Changes do not resize product photos.');
+    const update=(field,value)=>modifyLayout(cfg=>{const next={...cfg[key],[field]:value};if(field==='backgroundMode'&&value==='watermark')next.backgroundOpacity=20;Object.assign(cfg[key],sanitizeSectionAppearance(next));},'Section background updated.');
+    const mode=[['default','Default / None'],['solid','Solid Color'],['gradient','Gradient Color'],['image','Background Image'],['watermark','Decorative Watermark'],['combined','Combined Color and Image']];
+    area.append(appearanceField('Background mode','backgroundMode','select',a.backgroundMode,v=>update('backgroundMode',v),mode));
+    for(const [field,title] of [['backgroundColor','Background color'],['backgroundColor2','Gradient end color']]){
+      area.append(appearanceField(title,field,'color',a[field],v=>update(field,v)));
+      area.append(appearanceField(title+' HEX',field,'text',a[field],v=>update(field,v)));
+    }
+    const upload=document.createElement('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';
+    upload.onchange=async()=>{const file=upload.files?.[0],project=state;if(!file)return;try{const data=await readPhoto(file);if(state!==project||!sections[key])return;modifyLayout(cfg=>{cfg[key].backgroundImage=data;if(!['image','watermark','combined'].includes(cfg[key].backgroundMode))cfg[key].backgroundMode='image';},'Section background image attached.');}catch(e){feedback(e.message)}};
+    const label=document.createElement('label');label.textContent='Upload or replace background artwork';label.append(upload);area.append(label);
+    if(a.backgroundImage){const img=document.createElement('img');img.src=a.backgroundImage;img.alt='Section background';img.style.cssText='max-width:100%;max-height:100px;object-fit:contain';area.append(img);}
+    for(const [field,title,min,max] of [['backgroundOpacity','Image opacity (%)',0,100],['backgroundScale','Image scale (%)',10,300],['backgroundX','Horizontal position (%)',0,100],['backgroundY','Vertical position (%)',0,100],['backgroundRotation','Rotation (degrees)',-180,180],['cardOpacity','Product box opacity (%)',0,100]]){
+      const l=appearanceField(title,field,'number',a[field],v=>update(field,v));const input=l.querySelector('input');input.min=String(min);input.max=String(max);area.append(l);
+    }
+    area.append(appearanceField('Image fit','backgroundFit','select',a.backgroundFit,v=>update('backgroundFit',v),[['fit','Fit'],['fill','Fill'],['stretch','Stretch'],['center','Center'],['tile','Repeat / Tile']]));
+    for(const [field,title] of [['cardColor','Product box color'],['borderColor','Product box border']])area.append(appearanceField(title,field,'color',z[field],v=>setLayoutValue(key,field,v)));
+    for(const [field,title] of [['borderWidth','Border thickness'],['cardRadius','Corner radius']])area.append(appearanceField(title,field,'number',z[field],v=>setLayoutValue(key,field,v)));
+    const actions=document.createElement('div');actions.className='row';
+    const button=(title,handler)=>{const b=document.createElement('button');b.type='button';b.textContent=title;b.onclick=handler;actions.append(b);};
+    button('Transparent boxes',()=>update('cardOpacity',0));
+    button('Remove image',()=>update('backgroundImage',''));
+    button('Reset appearance',()=>modifyLayout(cfg=>{const d=defaultSectionLayout()[key];for(const field of sectionAppearanceFields)delete cfg[key][field];Object.assign(cfg[key],sanitizeSectionAppearance(d),Object.fromEntries(['cardColor','borderColor','borderWidth','cardRadius'].map(f=>[f,d[f]])));},'Section appearance reset.'));
+    function copyTo(keys,from){modifyLayout(cfg=>{const source={...cfg[from],...sanitizeSectionAppearance(cfg[from])};for(const target of keys)for(const field of sectionAppearanceFields)cfg[target][field]=source[field];},'Section appearance copied.');}
+    button('Apply to current page',()=>copyTo(Object.keys(conf).filter(k=>conf[k].page===z.page),key));
+    button('Apply to both pages',()=>copyTo(Object.keys(conf),key));
+    area.append(actions,appearanceField('Copy appearance from another section','copyBackground','select','',v=>{if(conf[v])copyTo([key],v)},[['','Choose section'],...Object.keys(conf).filter(k=>k!==key).map(k=>[k,sections[k]])]));
+    return;
+  }
   if(activeSettingsTab==='sections'){
     explain('Style each section independently. The orange raised heading for Perfect Bundles and the slim red strip for Holiday Best Buys are available as presets.');
     const group=document.createElement('div');group.className='settingsGroup';
@@ -5855,7 +5923,7 @@ function initAdvancedStudio(){
   const settings=$('settingsDialog');
   const intro=settings.querySelector('.modalInner');
   const tabs=document.createElement('div');tabs.id='appearanceTabs';tabs.className='modalTabs';
-  for(const [id,label] of [['colors','Colors'],['fonts','Fonts'],['sections','Sections'],['cards','Cards'],['boxes','Boxes'],['layout','Arrange'],['print','Print']]){
+  for(const [id,label] of [['colors','Colors'],['fonts','Fonts'],['sections','Sections'],['background','Background & Watermark'],['cards','Cards'],['boxes','Boxes'],['layout','Arrange'],['print','Print']]){
     const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.appearance=id;b.onclick=()=>setAppearanceTab(id);tabs.append(b);
   }
   intro.prepend(tabs);
