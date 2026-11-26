@@ -2683,7 +2683,7 @@ body.modalOpen{overflow:auto!important}
 <p class="muted">Only visible sections on selected sides are reviewed and exported. Hidden products are retained.</p>
 <div class="muted" id="counts"></div>
 <div class="issue" id="issues"></div>
-<button type="button" id="clearReviewDemos">Clear demo products on selected visible sides</button>
+<button type="button" id="clearReviewDemos">Clear demo products on selected visible sides</button><button type="button" id="clearAllDemos">Clear demo products in entire project</button>
 <label>Reviewed by <input id="reviewer" maxlength="80" autocomplete="name"></label>
 <label>Review note <textarea id="reviewNote" maxlength="400" rows="2"></textarea></label>
 <div class="row"><button id="submit" class="primary">Submit for review</button><button id="approve">Approve</button><button id="changes">Request changes</button></div>
@@ -3196,6 +3196,7 @@ function placement(offers,key,campaign=state.campaign) {
   return {slots,extra};
 }
 function overflow(offers,key) { return placement(offers,key).extra; }
+function isDemoOffer(o){return Boolean(o.demo||String(o.sku).startsWith('DEMO-'));}
 function reviewScope(project=state){return ['front','back','both'].includes(project.reviewScope)?project.reviewScope:'both';}
 function reviewPages(project=state){const scope=reviewScope(project);return scope==='both'?['front','back']:[scope];}
 function reviewSectionKeys(project=state){return [...new Set(reviewPages(project).flatMap(page=>pageSectionKeys(project.campaign,page)))].filter(key=>Object.hasOwn(sections,key));}
@@ -3262,8 +3263,9 @@ function refresh() {
   const printSize=Number(state.campaign.bleed)>0?paper+' with 3 mm bleed':paper;
   const scope=reviewScope(), scopeLabel=scope==='both'?'both sides':scope+' only';
   $('reviewScope').value=scope;
-  $('clearReviewDemos').disabled=!reviewOffers().some(o=>o.demo||String(o.sku).startsWith('DEMO-'));
-  $('png').textContent='Download PNG · '+(scope==='both'?'current side':scope+' only');
+  $('clearReviewDemos').disabled=!reviewOffers().some(isDemoOffer);
+  $('clearAllDemos').disabled=!state.offers.some(isDemoOffer);
+  $('png').textContent='Download PNG · '+(scope==='both'?'both sides':scope+' only');
   $('printPdf').textContent='Download print PDF · '+scopeLabel;
   $('printInfo').textContent=printSize+' · PDF: '+scopeLabel+'. '+(state.status==='Approved'?'Approved export.':'Drafts include a watermark.');
   $('exportInfo').textContent=printSize+' · 300 ppi exports · Unapproved exports are marked DRAFT.';
@@ -4903,7 +4905,7 @@ async function render(project,page,pixelWidth,target) {
   layout.freebieWarnings=drawSlots(ctx,project,pictures,layout.cards,target,freebies);
   fill(ctx,c.blue,-edge,h-29,800+edge*2,29+edge);
   line(ctx,c.footer,17,h-11,765,10,'#ffffff',500);
-  if(project.status!=='Approved') {
+  if(project.status!=='Approved'||!reviewPages(project).includes(page)) {
     ctx.save();ctx.translate(400,h*.59);ctx.rotate(-.44);
     ctx.globalAlpha=.16;ctx.textAlign='center';ctx.font='900 136px Arial';ctx.fillStyle='#19376e';
     ctx.fillText('DRAFT',0,0);ctx.restore();
@@ -4986,19 +4988,22 @@ async function exportFile(format) {
     const width=Math.round(d.pageWidth/25.4*300);
     const name='megasaver-flyer'+(snapshot.status==='Approved'?'':'-draft');
     if(format==='png') {
-      const {canvas,layout}=await render(snapshot,page,width);
-      if(layout.freebieWarnings?.length)throw Error('Freebie cannot fit: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Adjust card layout before exporting.');
-      const blob=await canvasBlob(canvas,'image/png');
-      download(await png300(blob),name+'-'+page+'.png');
+      const files=[];
+      for(const face of faces){
+        const {canvas,layout}=await render(snapshot,face,width);
+        if(layout.freebieWarnings?.length)throw Error('Freebie cannot fit: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Adjust card layout before exporting.');
+        files.push({face,blob:await png300(await canvasBlob(canvas,'image/png'))});
+      }
+      for(const file of files)download(file.blob,name+'-'+file.face+'.png');
     } else {
       const pages=[];
-      for(const face of ['front','back']) {
+      for(const face of faces) {
         const {canvas,layout}=await render(snapshot,face,width);
         if(layout.freebieWarnings?.length)throw Error('Freebie cannot fit: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Adjust card layout before exporting.');
         const jpeg=await canvasBlob(canvas,'image/jpeg');
         pages.push({width:canvas.width,height:canvas.height,data:new Uint8Array(await jpeg.arrayBuffer())});
       }
-      download(pdfFile(pages,d),name+'.pdf');
+      download(pdfFile(pages,d),name+(faces.length===1?'-'+faces[0]:'')+'.pdf');
     }
     feedback('Export downloaded.');
     if(format==='pdf') printStatus.textContent='PDF downloaded. Open it to print.';
@@ -5212,7 +5217,13 @@ function bind() {
     showTarget();refresh();
   };
   $('reviewScope').onchange=()=>{const next=$('reviewScope').value;if(next===reviewScope()||!['front','back','both'].includes(next))return;state.reviewScope=next;edited('Review and export scope updated.');};
-  $('clearReviewDemos').onclick=()=>{const demos=new Set(reviewOffers().filter(o=>o.demo||String(o.sku).startsWith('DEMO-')));if(!demos.size||!window.confirm('Remove '+demos.size+' demo product(s) from selected visible sides? Hidden and unselected products will be retained.'))return;state.offers=state.offers.filter(o=>!demos.has(o));selected=offerKey(state.offers[0]);offerEditor();edited('Removed '+demos.size+' demo product(s).');};
+  function clearDemos(all){
+    const demos=new Set((all?state.offers:reviewOffers()).filter(isDemoOffer));
+    if(!demos.size||!window.confirm('Remove '+demos.size+' demo product(s) '+(all?'from the entire project, including hidden and unselected sections?':'from selected visible sides? Hidden and unselected products will be retained.')))return;
+    state.offers=state.offers.filter(o=>!demos.has(o));selected=offerKey(state.offers[0]);offerEditor();showTarget();edited('Removed '+demos.size+' demo product(s).');
+  }
+  $('clearReviewDemos').onclick=()=>clearDemos(false);
+  $('clearAllDemos').onclick=()=>clearDemos(true);
   $('png').onclick=()=>exportFile('png');
   $('printPdf').onclick=()=>exportFile('pdf');
   $('submit').onclick=()=>transition('In review');
@@ -5925,7 +5936,7 @@ function chooseAdvancedSub(menu,sub){
   if(menu==='review'){
     const panel=$('panel-review');
     const approved=desired==='approval';
-    $('counts').hidden=approved;$('issues').hidden=approved;$('clearReviewDemos').hidden=approved;
+    $('counts').hidden=approved;$('issues').hidden=approved;$('clearReviewDemos').hidden=approved;$('clearAllDemos').hidden=approved;
     ['reviewer','reviewNote','submit','approve','changes'].forEach(id=>{const el=$(id);if(!el)return;const row=el.closest('label')||el.closest('.row');if(row)row.hidden=!approved;});
   }
   if(menu==='backup'){
