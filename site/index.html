@@ -3286,6 +3286,9 @@ function refresh() {
     target.height=canvas.height;
     target.getContext('2d').drawImage(canvas,0,0);
     previewLayout={page,layout,dimensions};
+    const warning=layout.freebieWarnings?.find(item=>item.key===slotTarget.section&&item.index+1===Number(slotTarget.slot));
+    if(warning)$('freebieStatus').textContent='Not enough right-side space for this freebie. Increase card height or adjust the layout.';
+    if(layout.freebieWarnings?.length)feedback('Freebie needs more right-side space: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Increase card height or adjust layout.');
     updatePreviewHighlight();
     updateSectionHandles();
     if(arrangeMode) drawRowGuides(target,layout,dimensions);
@@ -4378,6 +4381,7 @@ function techCard(ctx,offer,asset,x,y,w,h,style=null,freebieAsset=null) {
     fill(ctx,'#ffe07c',badgeX,photoY,badgeWidth,13);
     line(ctx,offer.badge,badgeX+3,photoY+10,Math.max(1,badgeWidth-6),9,'#5e320a');
   }
+  return freebie;
 }
 function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
   const bundle=type==='bundles',compact=type==='tech';
@@ -4386,7 +4390,7 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
   ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.fill();
   ctx.strokeStyle=style?.borderColor||(bundle?'#f2bd45':'#c5d3e7');ctx.lineWidth=style?.borderWidth??1;ctx.stroke();
   if(!offer){ctx.restore();return;}
-  if(compact){techCard(ctx,offer,asset,x,y,w,h,style,freebieAsset);ctx.restore();return;}
+  if(compact){const area=techCard(ctx,offer,asset,x,y,w,h,style,freebieAsset);ctx.restore();return area;}
   const inset=Math.max(3,Math.min(8,w*.07)),inner=Math.max(1,w-2*inset),photoInset=Math.max(2,Math.min(5,w*.05));
   const quantity=bundle?bundleQuantity(offer):null;
   const prices=cardPrices(offer,Boolean(quantity));
@@ -4456,6 +4460,7 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
     line(ctx,offer.badge,badgeX+3,imageY+10,Math.max(1,badgeWidth-6),9,'#5e320a');
   }
   ctx.restore();
+  return freebie;
 }
 function gridPositions(key,x,y,w,h,columns,rows) {
   const gap=6, width=(w-gap*(columns-1))/columns,height=(h-gap*(rows-1))/rows;
@@ -4638,18 +4643,23 @@ function pageLayout(page,height,campaign,artwork) {
   };
 }
 function drawSlots(ctx,project,pictures,positions,target,freebies=new Map()) {
+  const warnings=[];
   const bySection=Object.fromEntries([...new Set(positions.map(position=>position.key))]
     .map(key=>[key,placement(project.offers,key,project.campaign).slots]));
   for(const {key,index,x,y,width,height} of positions) {
     const offer=bySection[key][index];
     const active=key===target?.section&&index+1===Number(target.slot);
     const style=project.campaign.sectionLayout?.[key];
-    if(offer||project.status!=='Approved'||active)card(ctx,offer,pictures.get(offer),x,y,width,height,key,style,freebies.get(offer));
+    if(offer||project.status!=='Approved'||active){
+      const area=card(ctx,offer,pictures.get(offer),x,y,width,height,key,style,freebies.get(offer));
+      if(offer&&(offer.freebieText||offer.freebiePhoto)&&!area)warnings.push({key,index,sku:offer.sku});
+    }
     if(active) {
       ctx.strokeStyle='#086fd5';ctx.lineWidth=3;
       ctx.strokeRect(x+2,y+2,width-4,height-4);
     }
   }
+  return warnings;
 }
 function drawBrandHeader(ctx,c,logo,edge) {
   fill(ctx,c.brandHeader==='classic'?officialBrandBlue:c.blue,-edge,-edge,800+2*edge,75+brandHeaderOffset(c)+edge);
@@ -4882,7 +4892,7 @@ async function render(project,page,pixelWidth,target) {
     fill(ctx,c.red,16,461+offset+shift,768,27);
     fit(ctx,c.back.toUpperCase(),27,481+offset+shift,740,17,'#ffffff',typefaces[c.sectionFont]);
   }
-  drawSlots(ctx,project,pictures,layout.cards,target,freebies);
+  layout.freebieWarnings=drawSlots(ctx,project,pictures,layout.cards,target,freebies);
   fill(ctx,c.blue,-edge,h-29,800+edge*2,29+edge);
   line(ctx,c.footer,17,h-11,765,10,'#ffffff',500);
   if(project.status!=='Approved') {
@@ -4968,13 +4978,15 @@ async function exportFile(format) {
     const width=Math.round(d.pageWidth/25.4*300);
     const name='megasaver-flyer'+(snapshot.status==='Approved'?'':'-draft');
     if(format==='png') {
-      const {canvas}=await render(snapshot,page,width);
+      const {canvas,layout}=await render(snapshot,page,width);
+      if(layout.freebieWarnings?.length)throw Error('Freebie cannot fit: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Adjust card layout before exporting.');
       const blob=await canvasBlob(canvas,'image/png');
       download(await png300(blob),name+'-'+page+'.png');
     } else {
       const pages=[];
       for(const face of ['front','back']) {
-        const {canvas}=await render(snapshot,face,width);
+        const {canvas,layout}=await render(snapshot,face,width);
+        if(layout.freebieWarnings?.length)throw Error('Freebie cannot fit: '+layout.freebieWarnings.map(item=>item.sku).join(', ')+'. Adjust card layout before exporting.');
         const jpeg=await canvasBlob(canvas,'image/jpeg');
         pages.push({width:canvas.width,height:canvas.height,data:new Uint8Array(await jpeg.arrayBuffer())});
       }
