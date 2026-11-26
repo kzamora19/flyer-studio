@@ -4651,6 +4651,29 @@ function paintSectionBackground(ctx,z,area,bgAsset,skipDecorative=false){
   }
   ctx.restore();
 }
+// A whole-page decorative watermark is one continuous composition across
+// product display areas only, not an overlay spanning brand/banner/footer artwork.
+function watermarkProductAreas(layout,footerTop){
+  const limit=(r)=>{const x=Math.max(0,r.x),y=Math.max(0,r.y),right=Math.min(800,r.x+r.width),bottom=Math.min(footerTop,r.y+r.height);return {key:r.key,x,y,width:right-x,height:bottom-y};};
+  if(layout.modern)return layout.sections.map(r=>limit({...r,y:r.y+(r.headerHeight||0),height:r.height-(r.headerHeight||0)})).filter(r=>r.width>0&&r.height>0);
+  const groups=new Map();
+  for(const r of layout.cards){
+    if(r.width<=0||r.height<=0)continue;
+    const prev=groups.get(r.key),right=r.x+r.width,bottom=r.y+r.height;
+    if(!prev)groups.set(r.key,{key:r.key,x:r.x,y:r.y,width:r.width,height:r.height});
+    else{const x=Math.min(prev.x,r.x),y=Math.min(prev.y,r.y);groups.set(r.key,{key:r.key,x,y,width:Math.max(prev.x+prev.width,right)-x,height:Math.max(prev.y+prev.height,bottom)-y});}
+  }
+  return [...groups.values()].map(limit).filter(r=>r.width>0&&r.height>0);
+}
+function drawProductAreaWatermark(ctx,raw,areas,img){
+  if(!areas.length)return;
+  const x=Math.min(...areas.map(r=>r.x)),y=Math.min(...areas.map(r=>r.y)),right=Math.max(...areas.map(r=>r.x+r.width)),bottom=Math.max(...areas.map(r=>r.y+r.height));
+  ctx.save();ctx.beginPath();
+  for(const r of areas)ctx.rect(r.x,r.y,r.width,r.height);
+  ctx.clip();
+  drawDecorativeWatermark(ctx,raw,{x,y,width:right-x,height:bottom-y},img);
+  ctx.restore();
+}
 function drawDecorativeWatermark(ctx,raw,area,img){
   const a=sanitizePageWatermark(raw),{x,y,width:w,height:h}=area;
   if(a.type==='none'||a.opacity<=0||w<=0||h<=0)return;
@@ -5023,8 +5046,9 @@ async function render(project,page,pixelWidth,target,exportMode=null) {
   // then sit ABOVE opaque fills but BELOW logos, headings, photos and prices.
   if(layout.modern)for(const section of layout.sections)paintSectionBackground(ctx,c.sectionLayout[section.key],section,sectionImages.get(section.key),true);
   drawSlots(ctx,project,pictures,layout.cards,target,freebies,'background');
-  drawDecorativeWatermark(ctx,pageMark,{x:0,y:0,width:800,height:h},pageMarkImage);
-  if(layout.modern)for(const section of layout.sections){const item=sectionMarks.get(section.key);if(item)drawDecorativeWatermark(ctx,item.mark,section,item.image);}
+  const watermarkAreas=watermarkProductAreas(layout,h-footerHeight(c,page));
+  drawProductAreaWatermark(ctx,pageMark,watermarkAreas,pageMarkImage);
+  for(const area of watermarkAreas){const item=sectionMarks.get(area.key);if(item)drawDecorativeWatermark(ctx,item.mark,area,item.image);}
   drawBrandHeader(ctx,c,logo,edge);
   banner(ctx,c,layout.headline,parts,artwork);
   if(layout.modern) {
@@ -5941,10 +5965,10 @@ function setAppearanceTab(tab){
 }
 function renderWatermarkEditor(area,conf){
   if(!conf[selectedLayoutSection])selectedLayoutSection=Object.keys(conf)[0];
-  const hint=document.createElement('p');hint.className='settingsHint';hint.textContent='Decorative artwork appears behind flyer content, including inside opaque product boxes. The DRAFT approval mark is independent.';area.append(hint);
+  const hint=document.createElement('p');hint.className='settingsHint';hint.textContent='Decorative watermark applies only to the product display area, including opaque product boxes. Brand header, promotional artwork, section headings and footer are excluded. The DRAFT approval mark is independent.';area.append(hint);
   const field=(label,id,type,value,onChange,options)=>appearanceField(label,id,type,value,onChange,options);
   const scope=watermarkScope;
-  area.append(field('Watermark scope','wmScope','select',scope,v=>{watermarkScope=v;renderAppearanceEditor()},[['page','Whole page'],['section','Selected section']]));
+  area.append(field('Watermark scope','wmScope','select',scope,v=>{watermarkScope=v;renderAppearanceEditor()},[['page','Whole page (products only)'],['section','Selected section (products only)']]));
   if(scope==='page')area.append(field('Page','wmPage','select',watermarkPage,v=>{watermarkPage=v;renderAppearanceEditor()},[['front','Front'],['back','Back']]));
   else area.append(field('Section','wmSection','select',selectedLayoutSection,v=>{selectedLayoutSection=v;renderAppearanceEditor()},Object.keys(conf).map(k=>[k,sections[k]+(conf[k].enabled===false?' (hidden)':'')])));
   const key=selectedLayoutSection,page=watermarkPage,project=state;
