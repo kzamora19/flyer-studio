@@ -14,7 +14,7 @@ create table if not exists public.flyer_review_audit (
  warnings jsonb not null default '[]'::jsonb check(jsonb_typeof(warnings)='array'),
  blocking jsonb not null default '[]'::jsonb check(jsonb_typeof(blocking)='array'),
  approval_id uuid references public.flyer_review_audit(id),
- check(action <> 'override' or (actor_role='SYSTEM_ADMIN' and length(trim(reason)) between 10 and 1000)),
+ check(action <> 'override' or (actor_role='SYSTEM_ADMIN' and reason is not null and length(trim(reason)) between 10 and 1000 and format in ('png','pdf'))),
  check(action <> 'approve' or (actor_role in ('SYSTEM_ADMIN','BRANCH_ADMIN') and format='approval' and jsonb_array_length(blocking)=0)),
  check(action <> 'final' or (approval_id is not null and format in ('png','pdf') and jsonb_array_length(blocking)=0))
 );
