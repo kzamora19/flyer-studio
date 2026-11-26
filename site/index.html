@@ -2688,6 +2688,7 @@ body.modalOpen{overflow:auto!important}
 <div class="row toolbar">
 <button id="front" aria-pressed="true">Front</button><button id="back" aria-pressed="false">Back</button>
 <button id="arrangeRows" aria-pressed="false" title="Drag a product row to change its position">Arrange rows</button>
+<button id="arrangeCards" aria-pressed="false" type="button">Arrange cards</button><button id="undoCards" type="button" hidden disabled>Undo cards</button><button id="redoCards" type="button" hidden disabled>Redo cards</button>
 </div>
 <p class="muted" id="arrangeHelp" hidden>Drag a product row to a new position. Products move with their row.</p>
 <canvas id="preview" class="paper" width="800" height="1131" aria-label="Front flyer preview"></canvas>
@@ -2841,6 +2842,108 @@ let database, renderVersion=0, previewLayout=null, arrangeMode=false, rowDrag=nu
 let ptgReference=[], ptgMatches=[];
 const slotTarget={section:'front',slot:'1'};
 let cardPhotoOffer=null, cardPhotoRequest=0;
+let cardArrangeMode=false,cardMoveSource=null,cardMovePointer=null;
+const cardMoveUndo=[],cardMoveRedo=[];
+function cardMoveEqual(a,b){return a&&b&&a.section===b.section&&a.index===b.index;}
+function cardMoveLabel(a){return sections[a.section]+' · Card '+(a.index+1);}
+function cardMoveAt(event){
+  const p=previewPoint(event);
+  const b=p&&previewLayout.layout.cards.find(c=>p.x>=c.x&&p.x<=c.x+c.width&&p.y>=c.y&&p.y<=c.y+c.height);
+  return b?{section:b.key,index:b.index}:null;
+}
+function updateCardMoveControls(){
+  $('arrangeCards').setAttribute('aria-pressed',String(cardArrangeMode));
+  for(const [id,stack] of [['undoCards',cardMoveUndo],['redoCards',cardMoveRedo]]){
+    $(id).hidden=!cardArrangeMode;$(id).disabled=!stack.length||stack.at(-1).project!==state;
+  }
+  if(cardArrangeMode)$('arrangeHelp').textContent=cardMoveSource?
+    'Selected '+cardMoveLabel(cardMoveSource)+'. Choose a destination on either side.':
+    'Drag a card or select two boxes to move or swap them.';
+}
+function stopCardArrange(){cardArrangeMode=false;cardMoveSource=null;cardMovePointer=null;updateCardMoveControls();}
+function cardMoveSnapshot(offers){return offers.map(offer=>({offer,section:offer.section,slot:offer.slot}));}
+function applyCardMoveSnapshot(snapshot){for(const item of snapshot){
+  item.offer.section=item.section;
+  if(item.slot===undefined)delete item.offer.slot;else item.offer.slot=item.slot;
+}}
+function cardMoveRefresh(message){
+  cardMoveSource=null;highlightSelection=null;selected=offerKey(targetedOffer());
+  offerEditor();showTarget();edited(message);
+}
+function moveCard(from,to){
+  if(cardMoveEqual(from,to))return;
+  if((from.section==='bundles')!==(to.section==='bundles'))throw Error('Bundle cards may only be exchanged with other bundle slots.');
+  const a=placement(state.offers,from.section),b=from.section===to.section?a:placement(state.offers,to.section);
+  if(a.extra.length||b.extra.length)throw Error('Resolve unplaced products in these sections before moving cards.');
+  if(from.index<0||from.index>=a.slots.length||to.index<0||to.index>=b.slots.length)throw Error('Card slot is no longer available.');
+  const first=a.slots[from.index],second=b.slots[to.index];
+  if(!first)throw Error('Select an occupied card first.');
+  const affected=[...new Set([...a.slots,...b.slots].filter(Boolean))];
+  const before=cardMoveSnapshot(affected);
+  a.slots.forEach((offer,i)=>{if(offer)offer.slot=i;});
+  if(a!==b)b.slots.forEach((offer,i)=>{if(offer)offer.slot=i;});
+  first.section=to.section;first.slot=to.index;
+  if(second){second.section=from.section;second.slot=from.index;}
+  cardMoveUndo.push({project:state,before,after:cardMoveSnapshot(affected)});
+  if(cardMoveUndo.length>50)cardMoveUndo.shift();
+  cardMoveRedo.length=0;
+  slotTarget.section=to.section;slotTarget.slot=String(to.index+1);
+  cardMoveRefresh(second?'Swapped '+cardMoveLabel(from)+' and '+cardMoveLabel(to)+'.':'Moved card to '+cardMoveLabel(to)+'.');
+}
+function chooseCardMove(target){
+  if(!target)return;
+  if(!cardMoveSource){
+    if(!placement(state.offers,target.section).slots[target.index]){feedback('Select an occupied card first.');return;}
+    cardMoveSource=target;
+    highlightSelection={kind:'slot',section:target.section,slot:target.index+1};
+    updateCardMoveControls();updatePreviewHighlight();return;
+  }
+  if(cardMoveEqual(cardMoveSource,target)){cardMoveSource=null;highlightSelection=null;updateCardMoveControls();updatePreviewHighlight();return;}
+  try{moveCard(cardMoveSource,target);}catch(e){feedback(e.message);}
+}
+function restoreCardMove(undo){
+  const from=undo?cardMoveUndo:cardMoveRedo,to=undo?cardMoveRedo:cardMoveUndo;
+  const entry=from.at(-1);if(!entry||entry.project!==state)return;
+  const expected=undo?entry.after:entry.before;
+  if(expected.some(x=>!state.offers.includes(x.offer)||x.offer.section!==x.section||x.offer.slot!==x.slot)){
+    cardMoveUndo.length=0;cardMoveRedo.length=0;updateCardMoveControls();feedback('Card layout changed; previous arrangement history cleared.');return;
+  }
+  applyCardMoveSnapshot(undo?entry.before:entry.after);
+  from.pop();to.push(entry);cardMoveRefresh(undo?'Card arrangement undone.':'Card arrangement redone.');
+}
+function bindCardArrange(){
+  $('arrangeCards').onclick=()=>{
+    if(!cardArrangeMode){
+      if(arrangeMode)$('arrangeRows').click();
+      if(sectionArrangeMode)$('arrangeSections').click();
+      cardArrangeMode=true;cardMoveSource=null;hideDialog('editCardDialog');
+    }else stopCardArrange();
+    refresh();
+  };
+  $('undoCards').onclick=()=>restoreCardMove(true);
+  $('redoCards').onclick=()=>restoreCardMove(false);
+  for(const id of ['arrangeRows','arrangeSections']){
+    $(id)?.addEventListener('click',()=>{if(cardArrangeMode)stopCardArrange();},true);
+  }
+  const canvas=$('preview');
+  canvas.addEventListener('pointerdown',e=>{
+    if(!cardArrangeMode||e.button!==0)return;
+    const start=cardMoveAt(e);if(!start)return;
+    cardMovePointer={start,x:e.clientX,y:e.clientY,id:e.pointerId};
+    canvas.setPointerCapture(e.pointerId);e.preventDefault();e.stopImmediatePropagation();
+  },true);
+  canvas.addEventListener('pointerup',e=>{
+    if(!cardArrangeMode||!cardMovePointer||cardMovePointer.id!==e.pointerId)return;
+    const p=cardMovePointer;cardMovePointer=null;
+    const dest=cardMoveAt(e);
+    if(dest&&Math.hypot(e.clientX-p.x,e.clientY-p.y)>8&&!cardMoveEqual(p.start,dest)){
+      try{moveCard(p.start,dest);}catch(error){feedback(error.message);}
+    }else chooseCardMove(dest);
+    e.preventDefault();e.stopImmediatePropagation();
+  },true);
+  canvas.addEventListener('pointercancel',()=>{cardMovePointer=null;},true);
+  canvas.addEventListener('click',e=>{if(cardArrangeMode){e.preventDefault();e.stopImmediatePropagation();}},true);
+}
 let cardPhotoBundle=null, stagedBundlePhoto=null;
 const ptgProject='https://agknxlowackphvwyvxge.supabase.co';
 const ptgPublicKey='sb_publishable_kv2q3dnNQt4ij0mgkOLbQQ_S2MO9FvG';
@@ -3156,10 +3259,11 @@ function refresh() {
   $('front').setAttribute('aria-pressed',String(side==='front'));
   $('back').setAttribute('aria-pressed',String(side==='back'));
   $('arrangeRows').setAttribute('aria-pressed',String(arrangeMode));
-  $('arrangeHelp').hidden=!arrangeMode&&!sectionArrangeMode;
+  $('arrangeHelp').hidden=!arrangeMode&&!sectionArrangeMode&&!cardArrangeMode;
+  updateCardMoveControls();
   $('preview').setAttribute('aria-label',side+' flyer preview');
-  $('preview').style.cursor=arrangeMode?'grab':'pointer';
-  $('preview').style.touchAction=arrangeMode?'none':'';
+  $('preview').style.cursor=arrangeMode||cardArrangeMode?'grab':'pointer';
+  $('preview').style.touchAction=arrangeMode||cardArrangeMode?'none':'';
   const version=++renderVersion;
   const page=side;
   const previewPixels=Math.max(1200,Math.min(2400,Math.round(($('preview').clientWidth||800)*(window.devicePixelRatio||1)*1.8)));
@@ -3305,7 +3409,7 @@ function showTarget() {
       button.title=sections[key]+' · Card '+(i+1)+(placements.slots[i]?' · '+(placements.slots[i].name||placements.slots[i].sku):' · Empty');
       button.classList.toggle('filled',Boolean(placements.slots[i]));
       button.setAttribute('aria-pressed',String(key===slotTarget.section&&i+1===Number(slotTarget.slot)));
-      button.onclick=()=>openCard(key,i+1);
+      button.onclick=()=>cardArrangeMode?chooseCardMove({section:key,index:i}):openCard(key,i+1);
       grid.append(button);
     }
     panel.append(grid);holder.append(panel);
@@ -3463,7 +3567,7 @@ function showFreebieEditor() {
   $('freebieClearPhoto').disabled=!offer.freebiePhoto;
   $('freebieClear').disabled=!offer.freebieText&&!offer.freebiePhoto;
   $('freebieStatus').textContent=offer.freebiePhoto?
-    'Freebie photo added to this card.':'Add wording, a photo, or both.';
+    'Freebie photo loaded for this card.':'Add wording, a photo, or both.';
 }
 function bundlePhotoSelection(sku) {
   return stagedBundlePhoto?.sku===sku&&stagedBundlePhoto.slot===slotTarget.slot?stagedBundlePhoto:null;
@@ -4421,13 +4525,32 @@ function pageLayout(page,height,campaign,artwork) {
         slotCount(campaign,'front'),5,false,campaign.frontRowOrder)]
   };
 }
-function drawSlots(ctx,project,pictures,positions,target) {
+function drawFreebieBand(ctx,offer,asset,x,y,w,h,style){
+  ctx.save();
+  ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  fill(ctx,style?.cardColor||'#ffffff',x,y,w,h);
+  ctx.strokeStyle=style?.borderColor||'#c5d3e7';ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+  const pad=Math.max(2,Math.min(5,h*.1));
+  const text=offer.freebieText||'';
+  const imageWidth=asset?(text?Math.min(w*.43,h*2):w-pad*2):0;
+  if(asset)photo(ctx,asset.image,x+pad,y+pad,imageWidth,h-pad*2,asset.frame);
+  if(text){
+    const tx=x+pad+(asset?imageWidth+pad:0);
+    line(ctx,text,tx,y+h*.62,Math.max(1,x+w-pad-tx),Math.min(13,h*.46),'#193568',800);
+  }
+  ctx.restore();
+}
+function drawSlots(ctx,project,pictures,positions,target,freebies=new Map()) {
   const bySection=Object.fromEntries([...new Set(positions.map(position=>position.key))]
     .map(key=>[key,placement(project.offers,key,project.campaign).slots]));
   for(const {key,index,x,y,width,height} of positions) {
     const offer=bySection[key][index];
     const active=key===target?.section&&index+1===Number(target.slot);
-    if(offer||project.status!=='Approved'||active) card(ctx,offer,pictures.get(offer),x,y,width,height,key,project.campaign.sectionLayout?.[key]);
+    const style=project.campaign.sectionLayout?.[key];
+    const hasFreebie=Boolean(offer&&(offer.freebieText||freebies.has(offer)));
+    const band=hasFreebie?Math.min(height*.3,Math.max(12,height*.24)):0;
+    if(offer||project.status!=='Approved'||active)card(ctx,offer,pictures.get(offer),x,y,width,height-band,key,style);
+    if(hasFreebie)drawFreebieBand(ctx,offer,freebies.get(offer),x,y+height-band,width,band,style);
     if(active) {
       ctx.strokeStyle='#086fd5';ctx.lineWidth=3;
       ctx.strokeRect(x+2,y+2,width-4,height-4);
@@ -4641,6 +4764,7 @@ async function render(project,page,pixelWidth,target) {
   const keys=pageSectionKeys(c,page);
   const placed=keys.flatMap(key=>placement(project.offers,key,c).slots.filter(Boolean));
   const pictures=new Map(await Promise.all(placed.filter(offer=>offer.photo).map(async offer=>[offer,await loadProductPhoto(offer.photo)])));
+  const freebies=new Map(await Promise.all(placed.filter(offer=>offer.freebiePhoto).map(async offer=>[offer,await loadProductPhoto(offer.freebiePhoto)])));
   const logoSource=c.brandHeader==='classic'?officialWordmark:c.logo;
   const [logo,artwork]=await Promise.all([logoSource,source].map(value=>value?loadImage(value):null));
   const sectionImages=new Map(await Promise.all(keys.filter(key=>c.sectionLayout?.[key]?.backgroundImage).map(async key=>[key,await loadImage(c.sectionLayout[key].backgroundImage)])));
@@ -4664,7 +4788,7 @@ async function render(project,page,pixelWidth,target) {
     fill(ctx,c.red,16,461+offset+shift,768,27);
     fit(ctx,c.back.toUpperCase(),27,481+offset+shift,740,17,'#ffffff',typefaces[c.sectionFont]);
   }
-  drawSlots(ctx,project,pictures,layout.cards,target);
+  drawSlots(ctx,project,pictures,layout.cards,target,freebies);
   fill(ctx,c.blue,-edge,h-29,800+edge*2,29+edge);
   line(ctx,c.footer,17,h-11,765,10,'#ffffff',500);
   if(project.status!=='Approved') {
@@ -4782,6 +4906,7 @@ function transition(target) {
 }
 function bind() {
   showTarget();
+  bindCardArrange();
   if(ptgLocalOrigin()) {
     $('livePTG').hidden=false;
     $('ptgConnection').textContent='Sign in with your existing PTG username and password. No CSV is needed for live lookup.';
@@ -4851,8 +4976,9 @@ function bind() {
     if(!offer) return;
     const image=await readPhoto(file);
     if(!state.offers.includes(offer)) return;
+    if(targetedOffer()!==offer)throw Error('Card selection changed; select the intended card and retry.');
     offer.freebiePhoto=image;
-    edited('Freebie photo added to '+offer.sku+'.');
+    edited('Freebie photo loaded for '+offer.sku+'.');
   });
   $('freebieClearPhoto').onclick=()=>{
     const offer=targetedOffer();
