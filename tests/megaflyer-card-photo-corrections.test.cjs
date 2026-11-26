@@ -40,7 +40,7 @@ test('full card geometry is passed to renderer with freebie artwork',()=>{
  assert.equal(calls.length,1);assert.equal(calls[0][6],100);assert.equal(calls[0][9],freebie);
  `);
  run(assert);
- assert.match(html,/drawSlots\(ctx,project,pictures,layout.cards,target,freebies\)/);
+ assert.match(html,/drawSlots\(ctx,project,pictures,layout.cards,target,freebies,'content'\)/);
 });
 test('freebie settings are bounded and legacy projects receive safe defaults',()=>{
  const code=slice(html,'function sanitizeFreebieAppearance','function showFreebieEditor');

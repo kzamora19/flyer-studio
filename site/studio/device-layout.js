@@ -63,8 +63,52 @@ body.frameChatLayout #pinNav,body:has(#sidebarFixed #studioNav) #sidebarFixed{ba
   body.bl-flyer-mobile-menu #studioNav #sidebarActions button::before{position:static!important;transform:none!important;}
  }
 
+ /* Real SVG artwork eliminates invisible text and pseudo-glyph offsets. */
+ @media(min-width:821px){
+  body:has(#sidebarFixed #studioNav) #sidebarFixed #studioNav>[data-nav],
+  body:has(#sidebarFixed #studioNav) #sidebarFixed #sidebarActions button,
+  body:has(#sidebarFixed #studioNav) #sidebarFixed #editorMenuToggle{
+   display:grid!important;place-items:center!important;position:relative!important;
+   padding:0!important;gap:0!important;text-indent:0!important;font-size:0!important;
+   box-sizing:border-box!important;
+  }
+  body:has(#sidebarFixed #studioNav) #sidebarFixed #studioNav>[data-nav]::before,
+  body:has(#sidebarFixed #studioNav) #sidebarFixed #sidebarActions button::before,
+  body:has(#sidebarFixed #studioNav) #sidebarFixed #editorMenuToggle::before{content:none!important;display:none!important;}
+  body:has(#sidebarFixed #studioNav) #sidebarFixed .bl-centered-menu-icon{
+   display:block!important;position:absolute!important;inset:0!important;margin:auto!important;
+   width:22px!important;height:22px!important;min-width:22px!important;max-width:none!important;
+   transform:none!important;flex:none!important;pointer-events:none!important;
+  }
+ }
+ @media(max-width:820px){.bl-centered-menu-icon{display:none!important;}}
+
  `;
  function wire(){
+  const shapes={
+   menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+   campaign:'<path d="m5 19 4-1 10-10-4-4L5 14l-1 6zM13 6l4 4"/>',
+   cards:'<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16"/>',
+   bulk:'<path d="M12 20V4m-6 6 6-6 6 6"/>',
+   review:'<path d="m5 12 5 5 9-11"/>',
+   backup:'<rect x="5" y="5" width="14" height="14" rx="1"/><rect x="8" y="8" width="8" height="8" rx=".5"/>',
+   settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/><circle cx="12" cy="12" r="7"/>'
+  };
+  function installCenteredIcons(){
+   const fixed=document.getElementById("sidebarFixed");if(!fixed)return false;
+   for(const button of fixed.querySelectorAll("#studioNav>[data-nav],#sidebarActions button,#editorMenuToggle")){
+    if(button.querySelector(".bl-centered-menu-icon"))continue;
+    const name=button.id==="editorMenuToggle"?"menu":button.dataset.nav||"settings";
+    const span=document.createElement("span");span.className="bl-centered-menu-icon";span.setAttribute("aria-hidden","true");
+    span.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(shapes[name]||shapes.settings)+'</svg>';
+    button.append(span);
+   }
+   return true;
+  }
+  window.addEventListener("flyerstudio:ready",installCenteredIcons,{once:true});
+  const centeredObserver=new MutationObserver(()=>installCenteredIcons());
+  centeredObserver.observe(document.body,{childList:true,subtree:true});
+  installCenteredIcons();
   const query=matchMedia("(max-width:820px)");
   let placeholder=null, toggle=null, heading=null;
   let observer;

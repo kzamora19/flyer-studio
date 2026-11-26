@@ -21,16 +21,14 @@ try{
  await page.setViewportSize({width:1200,height:800});await page.locator(".editorMenuHeading #editorMenuToggle").waitFor();
  await page.locator(".editorMenuHeading #editorMenuToggle").evaluate(el=>{if(el.getAttribute("aria-expanded")==="false")el.click()});
  const center=await page.locator("#studioNav>[data-nav]").evaluateAll(buttons=>buttons.map(b=>{
-   const style=getComputedStyle(b,"::before"),rect=b.getBoundingClientRect();
-   return {position:style.position,left:parseFloat(style.left),top:parseFloat(style.top),width:rect.width,height:rect.height,transform:style.transform};
+   const icon=b.querySelector(".bl-centered-menu-icon"),r=b.getBoundingClientRect(),g=icon.getBoundingClientRect();
+   return {visible:g.width>0&&g.height>0,dx:g.x+g.width/2-r.x-r.width/2,dy:g.y+g.height/2-r.y-r.height/2,pseudo:getComputedStyle(b,"::before").display};
  }));
  assert.ok(center.length>0);
  for(const g of center){
-   assert.equal(g.position,"absolute");
-   assert.ok(Math.abs(g.left-g.width/2)<=2&&Math.abs(g.top-g.height/2)<=2,"Protected icon must be centered in its button");
-   assert.notEqual(g.transform,"none");
+   assert.ok(g.visible&&Math.abs(g.dx)<=1&&Math.abs(g.dy)<=1,"Visible SVG center must equal button center: "+JSON.stringify(g));
+   assert.equal(g.pseudo,"none");
  }
-
  await page.close();
  }
  console.log("PASS protected MegaFlyer icon menu, no overlapping content, preserved controls, restored desktop");
