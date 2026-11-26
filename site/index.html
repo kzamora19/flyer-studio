@@ -2705,8 +2705,7 @@ body.modalOpen{overflow:auto!important}
 <section class="stage" aria-label="Flyer preview">
 <div class="row toolbar">
 <button id="front" aria-pressed="true">Front</button><button id="back" aria-pressed="false">Back</button>
-<button id="arrangeRows" aria-pressed="false" title="Drag a product row to change its position">Arrange rows</button>
-<button id="arrangeCards" aria-pressed="false" type="button">Arrange cards</button><button id="undoCards" type="button" hidden disabled>Undo cards</button><button id="redoCards" type="button" hidden disabled>Redo cards</button>
+<button id="arrangeCards" aria-pressed="false" type="button">Arrange cards</button><button id="undoCards" type="button" hidden disabled>Undo cards</button><button id="redoCards" type="button" hidden disabled>Redo cards</button><button id="arrangeRows" aria-pressed="false" title="Drag a product row to change its position">Arrange rows</button>
 </div>
 <p class="muted" id="arrangeHelp" hidden>Drag a product row to a new position. Products move with their row.</p>
 <canvas id="preview" class="paper" width="800" height="1131" aria-label="Front flyer preview"></canvas>
@@ -4083,6 +4082,7 @@ function validatedBackup(data) {
     if(type==='color'&&!/^#[0-9a-f]{6}$/i.test(value)) throw Error('Invalid brand color in backup.');
     campaign[key]=value;
   }
+  if(data.campaign.pageWatermarks&&typeof data.campaign.pageWatermarks==='object')campaign.pageWatermarks=Object.fromEntries(['front','back'].map(p=>[p,sanitizePageWatermark(data.campaign.pageWatermarks[p])]));
   if(data.campaign.footerDesign&&typeof data.campaign.footerDesign==='object')campaign.footerDesign=Object.fromEntries(['front','back'].filter(p=>data.campaign.footerDesign[p]).map(p=>[p,sanitizeFooter(data.campaign.footerDesign[p])]));
   if(data.campaign.headerDesign&&typeof data.campaign.headerDesign==='object')campaign.headerDesign=Object.fromEntries(['front','back'].map(p=>[p,{extraHeight:pageCampaign(data.campaign,p)._headerExtra}]));
   if(Array.isArray(data.campaign.footerTemplates))campaign.footerTemplates=data.campaign.footerTemplates.slice(0,30).map(t=>({name:String(t.name||'Footer').slice(0,80),design:sanitizeFooter(t.design)}));
@@ -4338,9 +4338,8 @@ function drawCardCopy(ctx,layout,x,y,width) {
 function freebieArea(ctx,offer,asset,box,photoBox,copyBox,price){
   if(!offer||(!offer.freebieText&&!asset))return null;
   const gap=Math.max(2,Math.min(4,box.w*.018)),right=box.x+box.w-box.inset;
-  let left=Math.max(box.x+box.w*.53,copyBox.x);
-  const stacked=photoBox.x+photoBox.w>left-gap&&photoBox.x<right;
-  const topLimit=Math.max(copyBox.y,stacked?photoBox.y+photoBox.h+gap:copyBox.y);
+  let left=copyBox.x;
+  const topLimit=copyBox.y;
   const bottomLimit=box.y+box.h-box.inset;
   // Measure the real fitted price text, keeping its original alignment and baseline.
   function rightEdge(text,size,weight,family,align,x){
@@ -4355,8 +4354,7 @@ function freebieArea(ctx,offer,asset,box,photoBox,copyBox,price){
   // prices, reserve the panel immediately above the existing price area.
   let bottom=bottomLimit;
   if(priceRight+gap>left){
-    if(right-priceRight-gap>=Math.max(10,box.w*.23))left=priceRight+gap;
-    else bottom=Math.min(bottom,price.y-price.size-gap);
+    bottom=Math.min(bottom,price.y-price.size-gap);
   }
   const available=bottom-topLimit;
   const a=sanitizeFreebieAppearance(offer.freebieAppearance);
@@ -4365,8 +4363,8 @@ function freebieArea(ctx,offer,asset,box,photoBox,copyBox,price){
   const wide=box.w>=230||box.w>=195&&box.w/box.h>=2.1;
   const copyEnd=copyBox.y+(copyBox.required||0)+gap;
   const roomAfterCopy=Math.max(0,bottom-Math.max(topLimit,copyEnd));
-  const preferred=wide?Math.min(box.h*.58,Math.max(available*.52,roomAfterCopy)):Math.min(Math.max(6,box.h*.25),available*.68);
-  const reserved=wide?Math.min(preferred,Math.max(roomAfterCopy,available*.40)):preferred;
+  const preferred=Math.min(box.h*.58,Math.max(available*.42,roomAfterCopy));
+  const reserved=Math.min(preferred,available*.72);
   const panelHeight=Math.min(available,reserved)*a.areaHeight/100;
   if(right-left<4||panelHeight<3)return null;
   return {x:left,y:bottom-panelHeight,w:right-left,h:panelHeight,wide};
@@ -4378,7 +4376,7 @@ function drawFreebiePanel(ctx,offer,asset,area){
   ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
   const text=String(offer.freebieText||'');
   const usableW=Math.max(.1,w-pad*2),usableH=Math.max(.1,h-pad*2);
-  const side=Boolean(asset&&text&&(a.layout==='side'||a.layout==='auto'&&area.wide&&usableW>=90&&usableW/usableH>=1.65)&&usableW>=28);
+  const side=Boolean(asset&&text&&(a.layout==='side'||a.layout==='auto')&&usableW>2);
   const gap=side?Math.min(4,usableW*.04):0;
   let imageW=usableW,imageH=usableH,textX=x+pad,textY=y+pad,textW=usableW,textH=usableH;
   if(side){
@@ -4419,85 +4417,22 @@ function drawFreebiePanel(ctx,offer,asset,area){
   ctx.restore();
 }
 function techCard(ctx,offer,asset,x,y,w,h,style=null,freebieAsset=null) {
-  const inset=Math.max(4,Math.min(9,w*.03)),inner=Math.max(1,w-inset*2);
-  const prices=cardPrices(offer),secondaryStep=h<110?Math.max(5,h*.07):11;
-  const priceSize=Math.min(17,Math.max(5,h*.13));
-  const priceY=y+h-Math.max(3,inset/2)-prices.secondary.length*secondaryStep;
-  const label=offer.brand?offer.brand.toUpperCase():offer.sku;
-  line(ctx,label,x+inset,y+Math.min(14,h*.16),inner,Math.min(10,h*.13),'#193568',800);
-  const ratio=asset?.frame?.height?asset.frame.width/asset.frame.height:1;
-  const imageOnTop=Boolean(asset&&ratio>=1.32&&h>=180&&w>=140);
-  const gap=Math.max(3,Math.min(7,w*.025)),photoScale=(style?.photoScale??100)/100;
-  const copyBottom=Math.max(y+16,priceY-priceSize-3);
-  const name=offer.flyerDescription||offer.name;
-  const variant=descriptionIncludesModel([name],offer.model)?'':(offer.items||offer.model||'');
-  let detailX,detailWidth,textTop,photoX,photoY,photoWidth,photoHeight;
-  if(imageOnTop){
-    photoX=x+inset+(inner*(1-photoScale))/2;photoWidth=inner*photoScale;
-    photoY=y+18;
-    photoHeight=Math.max(0,Math.min(h*.44,(copyBottom-photoY)*.58));
-    detailX=x+inset;detailWidth=inner;textTop=photoY+photoHeight+4;
-  }else{
-    // A placeholder never monopolizes half the card. The enlarged text panel
-    // accommodates full model names such as REDMI 17 5G 4+128GB.
-    // Give the actual product photograph substantially more room.
-    const photoFraction=asset?.image?.width?.valueOf()? .50:.36;
-    photoX=x+inset;photoY=y+19;
-    photoWidth=Math.max(0,inner*photoFraction*photoScale);
-    photoHeight=Math.max(0,Math.min(h-24,copyBottom-photoY-3));
-    detailX=photoX+photoWidth+gap;
-    detailWidth=Math.max(1,x+w-inset-detailX);textTop=y+20;
-  }
-  let copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,copyBottom-textTop),12);
-  if(!imageOnTop&&asset&&copy.size<7&&photoWidth>inner*.43){
-    // Keep unusually long model descriptions legible without reverting to a tiny photograph.
-    photoWidth=inner*.43*photoScale;
-    detailX=photoX+photoWidth+gap;
-    detailWidth=Math.max(1,x+w-inset-detailX);
-    copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,copyBottom-textTop),12);
-  }
-  // Prefer larger, readable words over an oversized image when possible.
-  if(imageOnTop&&copy.size<7&&photoHeight>10){
-    const smallerPhoto=Math.max(8,photoHeight-(7-copy.size)*5);
-    photoHeight=smallerPhoto;textTop=photoY+photoHeight+4;
-    copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,copyBottom-textTop),12);
-  }
-  if(asset&&photoHeight>0)photo(ctx,asset.image,photoX,photoY,photoWidth,photoHeight,asset.frame);
-  else if(photoHeight>0){
-    fill(ctx,'#edf2fa',photoX,photoY,photoWidth,photoHeight);
-    line(ctx,'NO PHOTO',photoX+2,photoY+photoHeight/2+2,Math.max(1,photoWidth-4),7,'#506584');
-  }
-  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:photoY,w:photoWidth,h:photoHeight},{x:detailX,y:textTop,required:copy.required},
-    {promo:prices.promo,secondary:prices.secondary,align:style?.priceAlign||'left',x:style?.priceAlign==='center'?x+w/2:style?.priceAlign==='right'?x+w-inset:x+inset,y:priceY,size:priceSize,width:inner,secondarySize:Math.min(9,Math.max(4,h*.085))});
-  if(freebie)copy=fitCardCopy(ctx,name,variant,detailWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-textTop),12);
-  drawCardCopy(ctx,copy,detailX,textTop,detailWidth);
-  drawFreebiePanel(ctx,offer,freebieAsset,freebie);
-  // Price occupies its own full-width footer, not the narrower description column.
-  const align=style?.priceAlign||'left',priceX=align==='center'?x+inset+inner/2:align==='right'?x+inset+inner:x+inset;
-  ctx.save();ctx.textAlign=align==='center'?'center':align==='right'?'right':'left';
-  fit(ctx,prices.promo,priceX,priceY,inner,priceSize,style?.priceColor||'#b51d22');ctx.restore();
-  prices.secondary.forEach(([text,color],index)=>line(ctx,text,x+inset,priceY+(index+1)*secondaryStep,inner,Math.min(9,Math.max(4,h*.085)),color,600));
-  if(offer.badge&&photoWidth>6){
-    ctx.font='700 9px Arial';const badgeWidth=Math.min(photoWidth,ctx.measureText(offer.badge).width+10),badgeX=photoX+photoWidth-badgeWidth;
-    fill(ctx,'#ffe07c',badgeX,photoY,badgeWidth,13);
-    line(ctx,offer.badge,badgeX+3,photoY+10,Math.max(1,badgeWidth-6),9,'#5e320a');
-  }
-  return freebie;
+  return card(ctx,offer,asset,x,y,w,h,'tech',style,freebieAsset);
 }
-function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
+function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null,pass='all') {
   const bundle=type==='bundles',compact=type==='tech';
   ctx.save();
-  ctx.beginPath();ctx.roundRect(x,y,w,h,style?.cardRadius??9);
-  ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.save();if(offer&&Number.isFinite(style?.cardOpacity))ctx.globalAlpha*=style.cardOpacity/100;ctx.fill();ctx.restore();
-  ctx.strokeStyle=style?.borderColor||(bundle?'#f2bd45':'#c5d3e7');ctx.lineWidth=style?.borderWidth??1;ctx.stroke();
-  if(!offer){ctx.restore();return;}
-  if(compact){const area=techCard(ctx,offer,asset,x,y,w,h,style,freebieAsset);ctx.restore();return area;}
-  const inset=Math.max(3,Math.min(8,w*.07)),inner=Math.max(1,w-2*inset),photoInset=Math.max(2,Math.min(5,w*.05));
-  const quantity=bundle?bundleQuantity(offer):null;
-  const prices=cardPrices(offer,Boolean(quantity));
-  const priceSpacing=h<100?Math.max(4,h*.087):(bundle?10:11);
-  const promoSize=Math.max(4,Math.min(19,h*.2));
-  const priceY=y+h-Math.max(3,inset/1.8)-prices.secondary.length*priceSpacing;
+  if(pass!=='content'){
+    ctx.beginPath();ctx.roundRect(x,y,w,h,style?.cardRadius??9);
+    ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.save();if(offer&&Number.isFinite(style?.cardOpacity))ctx.globalAlpha*=style.cardOpacity/100;ctx.fill();ctx.restore();
+    ctx.strokeStyle=style?.borderColor||(bundle?'#f2bd45':'#c5d3e7');ctx.lineWidth=style?.borderWidth??1;ctx.stroke();
+  }
+  if(pass==='background'||!offer){ctx.restore();return;}
+  const inset=compact?Math.max(4,Math.min(9,w*.03)):Math.max(3,Math.min(8,w*.07)),inner=Math.max(1,w-2*inset);
+  const quantity=bundle?bundleQuantity(offer):null,prices=cardPrices(offer,Boolean(quantity));
+  const priceSpacing=compact?(h<110?Math.max(5,h*.07):11):(h<100?Math.max(4,h*.087):(bundle?10:11));
+  const promoSize=compact?Math.min(17,Math.max(5,h*.13)):Math.max(4,Math.min(19,h*.2));
+  const priceY=y+h-Math.max(3,inset/(compact?2:1.8))-prices.secondary.length*priceSpacing;
   const imageY=y+Math.min(17,Math.max(8,h*.17));
   const copyBottom=Math.max(imageY+.5,priceY-promoSize-3);
   const label=offer.brand?offer.brand.toUpperCase():offer.sku;
@@ -4505,63 +4440,27 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
   const title=bundle?bundleCaption(offer):offer.flyerDescription||offer.name;
   const showModel=!(bundle&&offer.bundleBarcode)&&!descriptionIncludesModel([title],offer.model);
   const variant=offer.items||(showModel?offer.model:'');
-  const contentSpace=Math.max(.5,copyBottom-imageY);
-  // Short front/back cards need a photo column rather than a tiny strip above the text.
-  const compactPhoto= !bundle && w>=95 && h<=135;
-  const photoScale=(style?.photoScale??100)/100;
-  let photoHeight,copyTop,copy,photoWidth,photoX,copyX=x+inset,copyWidth=inner;
-  if(compactPhoto){
-    const availableWidth=Math.max(1,w-photoInset*2);
-    const photoFraction=asset?.image?.width?.valueOf()? .48:.37;
-    photoWidth=availableWidth*photoFraction*photoScale;
-    photoX=x+photoInset;
-    photoHeight=Math.max(0,copyBottom-imageY-2);
-    copyX=photoX+photoWidth+Math.max(3,w*.025);
-    copyWidth=Math.max(1,x+w-inset-copyX);
-    copyTop=imageY;
-    copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,photoHeight),11);
-    if(asset&&copy.size<6.7&&photoWidth>availableWidth*.42){
-      photoWidth=availableWidth*.42*photoScale;
-      copyX=photoX+photoWidth+Math.max(3,w*.025);
-      copyWidth=Math.max(1,x+w-inset-copyX);
-      copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,photoHeight),11);
-    }
-  }else{
-    const desiredFraction=asset?.image?.width?.valueOf()? .49:.38;
-    photoHeight=Math.max(0,Math.min(h*desiredFraction,contentSpace*.61));
-    copyTop=imageY+photoHeight+3;
-    copy=fitCardCopy(ctx,title,variant,inner,Math.max(.5,copyBottom-copyTop),bundle?9:11);
-    if(copy.size<5.5&&photoHeight>6){
-      photoHeight=Math.max(5,photoHeight-(5.5-copy.size)*4);
-      copyTop=imageY+photoHeight+3;
-      copy=fitCardCopy(ctx,title,variant,inner,Math.max(.5,copyBottom-copyTop),bundle?9:11);
-    }
-    photoWidth=Math.max(0,(w-photoInset*2)*photoScale);
-    photoX=x+(w-photoWidth)/2;
-  }
-  if(asset&&quantity&&photoHeight>0)promoBundlePhoto(ctx,asset,{x:photoX,y:imageY,width:photoWidth,height:photoHeight},quantity);
-  else if(asset&&photoHeight>0)photo(ctx,asset.image,photoX,imageY,photoWidth,photoHeight,asset.frame);
-  else if(photoHeight>0){
-    fill(ctx,'#edf2fa',photoX,imageY,photoWidth,photoHeight);
-    line(ctx,'PHOTO NEEDED',photoX+3,imageY+photoHeight/2+3,Math.max(1,photoWidth-6),Math.min(9,h*.11),'#506584');
-  }
+  const gap=Math.max(2,Math.min(6,w*.025)),lane=inner*(asset?.image?.width? .48:.37);
+  const photoScale=Math.max(.6,Math.min(1,(style?.photoScale??100)/100));
+  const photoWidth=Math.max(.1,lane*photoScale),photoX=x+inset+(lane-photoWidth)/2;
+  const photoHeight=Math.max(.1,copyBottom-imageY-2),copyX=x+inset+lane+gap;
+  const copyWidth=Math.max(.1,x+w-inset-copyX),copyTop=imageY,preferred=compact?12:bundle?9:11;
+  let copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,copyBottom-copyTop),preferred);
+  if(asset&&quantity)promoBundlePhoto(ctx,asset,{x:photoX,y:imageY,width:photoWidth,height:photoHeight},quantity);
+  else if(asset)photo(ctx,asset.image,photoX,imageY,photoWidth,photoHeight,asset.frame);
+  else{fill(ctx,'#edf2fa',photoX,imageY,photoWidth,photoHeight);line(ctx,'PHOTO NEEDED',photoX+2,imageY+photoHeight/2+2,Math.max(.1,photoWidth-4),Math.min(9,h*.11),'#506584');}
   const align=style?.priceAlign||'left',priceX=align==='center'?x+w/2:align==='right'?x+w-inset:x+inset;
-  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:imageY,w:photoWidth,h:photoHeight},{x:copyX,y:copyTop,required:copy.required},
-    {promo:prices.promo,secondary:prices.secondary,align,x:priceX,y:priceY,size:promoSize,width:inner,secondarySize:Math.min(10,Math.max(3,h*.1))});
-  if(freebie)copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-copyTop),bundle?9:11);
+  const secondarySize=compact?Math.min(9,Math.max(4,h*.085)):Math.min(10,Math.max(3,h*.1));
+  const freebie=freebieArea(ctx,offer,freebieAsset,{x,y,w,h,inset},{x:photoX,y:imageY,w:photoWidth,h:photoHeight},{x:copyX,y:copyTop,required:copy.required},{promo:prices.promo,secondary:prices.secondary,align,x:priceX,y:priceY,size:promoSize,width:inner,secondarySize});
+  if(freebie)copy=fitCardCopy(ctx,title,variant,copyWidth,Math.max(.5,Math.min(copyBottom,freebie.y-2)-copyTop),preferred);
   drawCardCopy(ctx,copy,copyX,copyTop,copyWidth);
   drawFreebiePanel(ctx,offer,freebieAsset,freebie);
   ctx.textAlign=align==='center'?'center':align==='right'?'right':'left';
   fit(ctx,prices.promo,priceX,priceY,inner,promoSize,style?.priceColor||'#b51d22');
   ctx.textAlign='left';
-  prices.secondary.forEach(([text,color],index)=>line(ctx,text,x+inset,priceY+(index+1)*priceSpacing,inner,Math.min(10,Math.max(3,h*.1)),color,600));
-  if(offer.badge&&photoWidth>6){
-    ctx.font='700 9px Arial';const badgeWidth=Math.min(photoWidth,ctx.measureText(offer.badge).width+10),badgeX=photoX+photoWidth-badgeWidth;
-    fill(ctx,'#ffe07c',badgeX,imageY,badgeWidth,13);
-    line(ctx,offer.badge,badgeX+3,imageY+10,Math.max(1,badgeWidth-6),9,'#5e320a');
-  }
-  ctx.restore();
-  return freebie;
+  prices.secondary.forEach(([text,color],index)=>line(ctx,text,x+inset,priceY+(index+1)*priceSpacing,inner,secondarySize,color,600));
+  if(offer.badge&&photoWidth>6){ctx.font='700 9px Arial';const badgeWidth=Math.min(photoWidth,ctx.measureText(offer.badge).width+10),badgeX=photoX+photoWidth-badgeWidth;fill(ctx,'#ffe07c',badgeX,imageY,badgeWidth,13);line(ctx,offer.badge,badgeX+3,imageY+10,Math.max(1,badgeWidth-6),9,'#5e320a');}
+  ctx.restore();return freebie;
 }
 function gridPositions(key,x,y,w,h,columns,rows) {
   const gap=6, width=(w-gap*(columns-1))/columns,height=(h-gap*(rows-1))/rows;
@@ -4611,6 +4510,14 @@ function defaultSectionLayout(){const base={
 }
 const sectionLayoutLimits={height:[85,1100],gap:[0,30],cols:[1,8],rows:[1,10],borderWidth:[0,6],cardRadius:[0,30],headingHeight:[18,95],padding:[0,30],spacing:[0,50],sectionBorderWidth:[0,8],photoScale:[60,100]};
 const sectionAppearanceFields=['backgroundMode','backgroundColor','backgroundColor2','backgroundImage','backgroundOpacity','backgroundScale','backgroundX','backgroundY','backgroundRotation','backgroundFit','cardOpacity','cardColor','borderColor','borderWidth','cardRadius'];
+function sanitizePageWatermark(raw={}){
+  const n=(v,min,max,d)=>v==null||v===''||!Number.isFinite(Number(v))?d:Math.max(min,Math.min(max,Number(v)));
+  return {type:['text','image'].includes(raw.type)?raw.type:'none',text:String(raw.text||'').slice(0,100),image:imageData(raw.image)?raw.image:'',opacity:n(raw.opacity,0,100,18),scale:n(raw.scale,10,300,100),x:n(raw.x,0,100,50),y:n(raw.y,0,100,50),rotation:n(raw.rotation,-180,180,0)};
+}
+function sectionWatermark(z={}){
+  if(z.watermark&&typeof z.watermark==='object')return sanitizePageWatermark(z.watermark);
+  return sanitizePageWatermark(z.backgroundMode==='watermark'?{type:z.backgroundImage?'image':'none',image:z.backgroundImage,opacity:z.backgroundOpacity,scale:z.backgroundScale,x:z.backgroundX,y:z.backgroundY,rotation:z.backgroundRotation}:{});
+}
 function sanitizeSectionAppearance(src={}){
   const color=(v,f)=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v)?v:f;
   const number=(key,min,max,f)=>src[key]==null||src[key]===''||!Number.isFinite(Number(src[key]))?f:Math.max(min,Math.min(max,Number(src[key])));
@@ -4622,7 +4529,7 @@ function sanitizeSectionAppearance(src={}){
     backgroundOpacity:number('backgroundOpacity',0,100,src.backgroundMode==='watermark'?20:100),
     backgroundScale:number('backgroundScale',10,300,100),backgroundX:number('backgroundX',0,100,50),backgroundY:number('backgroundY',0,100,50),
     backgroundRotation:number('backgroundRotation',-180,180,0),backgroundFit:fits.includes(src.backgroundFit)?src.backgroundFit:'fill',
-    cardOpacity:number('cardOpacity',0,100,100)};
+    cardOpacity:number('cardOpacity',0,100,100),watermark:sectionWatermark(src)};
 }
 function sanitizeSectionLayout(raw){
   const base=defaultSectionLayout(),out={};
@@ -4697,7 +4604,7 @@ function modernPageLayout(page,height,c,artwork){
   }
   return {modern:true,headline,sections:rectangles,cards,overflow:requested>available,bannerShift:0,splitHero:split};
 }
-function paintSectionBackground(ctx,z,area,bgAsset){
+function paintSectionBackground(ctx,z,area,bgAsset,skipDecorative=false){
   const a=sanitizeSectionAppearance(z),{x,y,width:w,height:h}=area;
   ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
   let color=z.panelColor;
@@ -4706,7 +4613,7 @@ function paintSectionBackground(ctx,z,area,bgAsset){
     color=ctx.createLinearGradient(x,y,x+w,y+h);color.addColorStop(0,a.backgroundColor);color.addColorStop(1,a.backgroundColor2);
   }
   if(a.backgroundMode!=='default'||z.panelColor)fill(ctx,color||'#ffffff',x,y,w,h);
-  if(bgAsset&&['image','watermark','combined'].includes(a.backgroundMode)){
+  if(bgAsset&&['image','watermark','combined'].includes(a.backgroundMode)&&!(skipDecorative&&a.backgroundMode==='watermark')){
     ctx.globalAlpha*=a.backgroundOpacity/100;
     const f=a.backgroundFit,zoom=a.backgroundScale/100;
     let iw=w,ih=h;
@@ -4725,10 +4632,26 @@ function paintSectionBackground(ctx,z,area,bgAsset){
   }
   ctx.restore();
 }
-function paintSection(ctx,campaign,area,bgAsset=null){
+function drawDecorativeWatermark(ctx,raw,area,img){
+  const a=sanitizePageWatermark(raw),{x,y,width:w,height:h}=area;
+  if(a.type==='none'||a.opacity<=0||w<=0||h<=0)return;
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.globalAlpha*=a.opacity/100;
+  if(a.type==='image'&&img){
+    const factor=Math.min(w/img.width,h/img.height)*a.scale/100,iw=img.width*factor,ih=img.height*factor;
+    ctx.translate(x+(w-iw)*a.x/100+iw/2,y+(h-ih)*a.y/100+ih/2);ctx.rotate(a.rotation*Math.PI/180);
+    ctx.drawImage(img,-iw/2,-ih/2,iw,ih);
+  }else if(a.type==='text'&&a.text){
+    ctx.translate(x+w*a.x/100,y+h*a.y/100);ctx.rotate(a.rotation*Math.PI/180);
+    ctx.fillStyle='#19376e';ctx.textAlign='center';ctx.textBaseline='middle';
+    const size=Math.min(w*.16,h*.32)*a.scale/100;ctx.font='900 '+size+'px Arial, sans-serif';
+    ctx.fillText(a.text,0,0,w*.95);
+  }
+  ctx.restore();
+}
+function paintSection(ctx,campaign,area,bgAsset=null,skipBackground=false){
   const key=area.key,z=campaign.sectionLayout[key],h=area.headerHeight;
   const title=z.headerText||(key==='tech'?campaign.tech:key==='bundles'?campaign.bundles:key==='back'?campaign.back:sections[key]||'Front Products');
-  paintSectionBackground(ctx,z,area,bgAsset);
+  if(!skipBackground)paintSectionBackground(ctx,z,area,bgAsset);
   if(z.sectionBorderWidth){ctx.strokeStyle=z.sectionBorder;ctx.lineWidth=z.sectionBorderWidth;ctx.strokeRect(area.x,area.y,area.width,area.height);}
   if(!h||z.headerShape==='none')return;
   const x=area.x,y=area.y,w=area.width;
@@ -4838,7 +4761,7 @@ function pageLayout(page,height,campaign,artwork) {
         slotCount(campaign,'front'),5,false,campaign.frontRowOrder)]
   };
 }
-function drawSlots(ctx,project,pictures,positions,target,freebies=new Map()) {
+function drawSlots(ctx,project,pictures,positions,target,freebies=new Map(),pass='all') {
   const warnings=[];
   const bySection=Object.fromEntries([...new Set(positions.map(position=>position.key))]
     .map(key=>[key,placement(project.offers,key,project.campaign).slots]));
@@ -4847,10 +4770,10 @@ function drawSlots(ctx,project,pictures,positions,target,freebies=new Map()) {
     const active=key===target?.section&&index+1===Number(target.slot);
     const style=project.campaign.sectionLayout?.[key];
     if(offer||project.status!=='Approved'||active){
-      const area=card(ctx,offer,pictures.get(offer),x,y,width,height,key,style,freebies.get(offer));
-      if(offer&&(offer.freebieText||offer.freebiePhoto)&&!area)warnings.push({key,index,sku:offer.sku});
+      const area=card(ctx,offer,pictures.get(offer),x,y,width,height,key,style,freebies.get(offer),pass);
+      if(pass!=='background'&&offer&&(offer.freebieText||offer.freebiePhoto)&&!area)warnings.push({key,index,sku:offer.sku});
     }
-    if(active) {
+    if(active&&pass!=='background') {
       ctx.strokeStyle='#086fd5';ctx.lineWidth=3;
       ctx.strokeRect(x+2,y+2,width-4,height-4);
     }
@@ -5068,6 +4991,8 @@ async function render(project,page,pixelWidth,target,exportMode=null) {
   const logoSource=c.brandHeader==='classic'?officialWordmark:c.logo;
   const [logo,artwork]=await Promise.all([logoSource,source].map(value=>value?loadImage(value):null));
   const sectionImages=new Map(await Promise.all(keys.filter(key=>c.sectionLayout?.[key]?.backgroundImage).map(async key=>[key,await loadImage(c.sectionLayout[key].backgroundImage)])));
+  const pageMark=sanitizePageWatermark(c.pageWatermarks?.[page]),pageMarkImage=pageMark.type==='image'&&pageMark.image?await loadImage(pageMark.image):null;
+  const sectionMarks=new Map(await Promise.all(keys.map(async key=>{const mark=sectionWatermark(c.sectionLayout?.[key]);return [key,{mark,image:mark.type==='image'&&mark.image?await loadImage(mark.image):null}]})));
   const footer=footerFor(c,page);
   const layout=pageLayout(page,h-(footerHeight(c,page)-29),c,artwork);
   layout.pageWarnings=pageGeometryWarnings(layout,h,footerHeight(c,page));
@@ -5075,10 +5000,16 @@ async function render(project,page,pixelWidth,target,exportMode=null) {
   ctx.setTransform(scale,0,0,scale,extrusion,extrusion);
   const edge=extrusion/scale;
   const offset=brandHeaderOffset(c);
+  // Paint paper, section surfaces and card shells first. Decorative marks
+  // then sit ABOVE opaque fills but BELOW logos, headings, photos and prices.
+  if(layout.modern)for(const section of layout.sections)paintSectionBackground(ctx,c.sectionLayout[section.key],section,sectionImages.get(section.key),true);
+  drawSlots(ctx,project,pictures,layout.cards,target,freebies,'background');
+  drawDecorativeWatermark(ctx,pageMark,{x:0,y:0,width:800,height:h},pageMarkImage);
+  if(layout.modern)for(const section of layout.sections){const item=sectionMarks.get(section.key);if(item)drawDecorativeWatermark(ctx,item.mark,section,item.image);}
   drawBrandHeader(ctx,c,logo,edge);
   banner(ctx,c,layout.headline,parts,artwork);
   if(layout.modern) {
-    for(const section of layout.sections)paintSection(ctx,c,section,sectionImages.get(section.key));
+    for(const section of layout.sections)paintSection(ctx,c,section,sectionImages.get(section.key),true);
   } else if(layout.tech) {
     const tech=layout.tech;
     fill(ctx,c.blue,tech.x,tech.y,tech.width,tech.height);
@@ -5090,7 +5021,7 @@ async function render(project,page,pixelWidth,target,exportMode=null) {
     fill(ctx,c.red,16,461+offset+shift,768,27);
     fit(ctx,c.back.toUpperCase(),27,481+offset+shift,740,17,'#ffffff',typefaces[c.sectionFont]);
   }
-  layout.freebieWarnings=drawSlots(ctx,project,pictures,layout.cards,target,freebies);
+  layout.freebieWarnings=drawSlots(ctx,project,pictures,layout.cards,target,freebies,'content');
   layout.footerWarnings=await drawFooter(ctx,footer,h,edge);
   if(exportMode==='draft'||(exportMode!=='authorized-final'&&(project.status!=='Approved'||!reviewPages(project).includes(page)))) {
     ctx.save();ctx.translate(400,h*.59);ctx.rotate(-.44);
@@ -5847,6 +5778,7 @@ function updatePreviewHighlight(){
 /* Flyer Studio advanced layout and modal UX. All edits remain in campaign state and existing backups. */
 /* Fix 2026-11-18: persistent row reordering, TechZone left/right placement, extra section management, HiDPI previews. */
 let selectedLayoutSection='tech',activeSettingsTab='colors',settingsSnapshot=null,appearanceOriginalFields=null;
+let watermarkScope='page',watermarkPage='front';
 let sectionArrangeMode=false, sectionDrag=null;
 const layoutUndo=[],layoutRedo=[];
 function layoutSnapshot(){return {layout:structuredClone(state.campaign.sectionLayout||null),customSections:structuredClone(state.campaign.customSections||[])};}
@@ -5964,6 +5896,45 @@ function setAppearanceTab(tab){
   for(const button of $('appearanceTabs').querySelectorAll('button'))button.classList.toggle('active',button.dataset.appearance===tab);
   renderAppearanceEditor();
 }
+function renderWatermarkEditor(area,conf){
+  if(!conf[selectedLayoutSection])selectedLayoutSection=Object.keys(conf)[0];
+  const hint=document.createElement('p');hint.className='settingsHint';hint.textContent='Decorative artwork appears behind flyer content, including inside opaque product boxes. The DRAFT approval mark is independent.';area.append(hint);
+  const field=(label,id,type,value,onChange,options)=>appearanceField(label,id,type,value,onChange,options);
+  const scope=watermarkScope;
+  area.append(field('Watermark scope','wmScope','select',scope,v=>{watermarkScope=v;renderAppearanceEditor()},[['page','Whole page'],['section','Selected section']]));
+  if(scope==='page')area.append(field('Page','wmPage','select',watermarkPage,v=>{watermarkPage=v;renderAppearanceEditor()},[['front','Front'],['back','Back']]));
+  else area.append(field('Section','wmSection','select',selectedLayoutSection,v=>{selectedLayoutSection=v;renderAppearanceEditor()},Object.keys(conf).map(k=>[k,sections[k]+(conf[k].enabled===false?' (hidden)':'')])));
+  const key=selectedLayoutSection,page=watermarkPage,project=state;
+  const current=()=>scope==='page'?sanitizePageWatermark(project.campaign.pageWatermarks?.[page]):sectionWatermark(project.campaign.sectionLayout?.[key]||conf[key]);
+  const mark=current();
+  function update(patch){
+    if(state!==project)return;
+    const next=sanitizePageWatermark({...current(),...patch});
+    if(scope==='page'){project.campaign.pageWatermarks={...project.campaign.pageWatermarks,[page]:next};edited('Page watermark updated.');renderAppearanceEditor();}
+    else modifyLayout(cfg=>{cfg[key].watermark=next;if(cfg[key].backgroundMode==='watermark')cfg[key].backgroundMode='default';},'Section watermark updated.');
+  }
+  const actions=document.createElement('div');actions.className='row';
+  const button=(label,handler)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=handler;actions.append(b)};
+  area.append(field('Watermark type','wmType','select',mark.type,v=>update({type:v}),[['none','None'],['text','Text'],['image','Decorative image']]));
+  if(mark.type==='text')area.append(field('Watermark wording','wmText','text',mark.text,v=>update({text:v})));
+  if(mark.type==='image'){
+    const label=document.createElement('label');label.textContent='Upload or replace watermark image';
+    const upload=document.createElement('input');upload.type='file';upload.accept='image/png,image/jpeg,image/webp';
+    upload.onchange=async()=>{const file=upload.files?.[0];if(!file)return;try{const image=await readPhoto(file);if(state===project)update({type:'image',image});}catch(e){feedback(e.message)}};
+    label.append(upload);area.append(label);
+    if(mark.image){const img=document.createElement('img');img.src=mark.image;img.alt='Saved decorative watermark';img.style.cssText='max-width:100%;max-height:100px;object-fit:contain';area.append(img);}
+    button('Choose shared artwork',()=>chooseProtectedArtwork('backgrounds',image=>update({type:'image',image})));
+  }
+  if(mark.type!=='none'){
+    for(const [k,label,min,max] of [['opacity','Opacity (%)',0,100],['scale','Size (%)',10,300],['x','Horizontal position (%)',0,100],['y','Vertical position (%)',0,100],['rotation','Rotation (degrees)',-180,180]]){
+      const l=field(label,k,'number',mark[k],v=>update({[k]:v}));const input=l.querySelector('input');input.min=min;input.max=max;area.append(l);
+    }
+    button('Remove watermark',()=>update({type:'none',image:'',text:''}));
+    if(scope==='page')button('Apply to both sides',()=>{if(state!==project)return;project.campaign.pageWatermarks={front:{...mark},back:{...mark}};edited('Watermark applied to both sides.');renderAppearanceEditor();});
+  }
+  button('Advanced section background settings',()=>{activeSettingsTab='sectionBackground';renderAppearanceEditor();});
+  area.append(actions);
+}
 function renderAppearanceEditor(){
   const area=settingsTabContent();if(!area)return;
   if(appearanceOriginalFields&&area.contains(appearanceOriginalFields)){area.after(appearanceOriginalFields);appearanceOriginalFields.hidden=true;}
@@ -5984,6 +5955,10 @@ function renderAppearanceEditor(){
   }
   const original=appearanceOriginalFields;original.hidden=true;
   const conf=state.campaign.sectionLayout||defaultSectionLayout();
+  if(activeSettingsTab==='background'){
+    renderWatermarkEditor(area,conf);
+    return;
+  }
   if(!conf[selectedLayoutSection])selectedLayoutSection=Object.keys(conf)[0];
   const z=conf[selectedLayoutSection],sectionName=sections[selectedLayoutSection];
   if(previewLayout?.page===z.page){highlightSelection={kind:'field',key:selectedLayoutSection};updatePreviewHighlight();}
@@ -6066,7 +6041,8 @@ function renderAppearanceEditor(){
   head.append(appearanceField('Choose section','_section','select',selectedLayoutSection,v=>{selectedLayoutSection=v;renderAppearanceEditor()},Object.keys(sections).map(k=>[k,sections[k]])));
   head.append(appearanceField('Page','page','select',z.page,v=>moveSectionToPage(selectedLayoutSection,v),[['front','Front'],['back','Back']]));
   area.append(head);
-  if(activeSettingsTab==='background'){
+  if(activeSettingsTab==='sectionBackground'){
+    const back=document.createElement('button');back.type='button';back.textContent='Back to simple watermark';back.onclick=()=>setAppearanceTab('background');area.append(back);
     const a=sanitizeSectionAppearance(z),key=selectedLayoutSection;
     explain('Backgrounds are clipped to this section. Set product box opacity to zero to reveal artwork. Changes do not resize product photos.');
     const update=(field,value)=>modifyLayout(cfg=>{const next={...cfg[key],[field]:value};if(field==='backgroundMode'&&value==='watermark')next.backgroundOpacity=20;Object.assign(cfg[key],sanitizeSectionAppearance(next));},'Section background updated.');
@@ -6172,7 +6148,7 @@ function initAdvancedStudio(){
   $('settingsSave').onclick=()=>{settingsSnapshot=null;hideDialog('settingsDialog')};
   settings.addEventListener('click',e=>{if(e.target===settings){e.stopImmediatePropagation();cancelAppearance();}},true);
   // Track the complete campaign, since the original form can edit colors and fonts live.
-  $('layoutSettings').onclick=()=>{settingsSnapshot=structuredClone(state.campaign);selectedLayoutSection='tech';setAppearanceTab('colors');updateHistoryButtons();showDialog('settingsDialog')};
+  $('layoutSettings').onclick=()=>{settingsSnapshot=structuredClone(state.campaign);selectedLayoutSection='tech';watermarkPage=side;setAppearanceTab('colors');updateHistoryButtons();showDialog('settingsDialog')};
   const origClose=hideDialog;
   // Pressing Escape in the existing keydown listener closes via hideDialog; treat that as cancel too.
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!settings.hidden&&settingsSnapshot){
