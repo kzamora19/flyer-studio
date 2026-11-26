@@ -3507,6 +3507,7 @@ function addBundleProduct() {
   $('barcode').focus();
 }
 function resetCardPhotos() {
+  const oldLibraryNotice=$('smartPhotoNativeSaved');if(oldLibraryNotice)oldLibraryNotice.textContent='';
   cardPhotoRequest++;
   $('cardPhotoChoices').replaceChildren();
   $('findCardPhotos').disabled=false;
@@ -3576,11 +3577,19 @@ const flyerCatalogEndpoint='https://tzklsscoiwnmeantcefw.supabase.co/functions/v
 const onGitHubFlyer=()=>location.origin==='https://kzamora19.github.io'&&location.pathname.startsWith('/flyer-studio/');
 function catalogImageURL(url) {return onGitHubFlyer()?flyerCatalogEndpoint+'?'+new URLSearchParams({mode:'image',url}):'/catalog/image?'+new URLSearchParams({url});}
 async function catalogFetch(url) {
+  if(typeof window.__MEGAFLYER_CATALOG_RPC__==='function'){
+    const route=new URL(url,'https://catalog.invalid');
+    const mode=route.pathname==='/catalog/photos'?'photos':route.pathname==='/catalog/image'?'image':route.searchParams.get('mode');
+    const fields=mode==='photos'?{mode,sku:route.searchParams.get('sku')||'',model:route.searchParams.get('model')||''}:{mode,url:route.searchParams.get('url')||''};
+    return window.__MEGAFLYER_CATALOG_RPC__(fields);
+  }
   if(onGitHubFlyer() && url.startsWith('/catalog/photos?')) url=flyerCatalogEndpoint+'?mode=photos&'+url.split('?')[1];
-  const response=await fetch(url);
+  let response;
+  try{response=await fetch(url,{signal:AbortSignal.timeout(20000)});}
+  catch(error){throw Error(error.name==='TimeoutError'?'Store photo request timed out.':'Cannot connect to the store photo service. Check your connection or reopen MegaFlyer.');}
   if(response.ok) return response;
   const result=await response.json().catch(()=>null);
-  throw Error(result?.error||'The store photo request failed. Try again or upload a photo.');
+  throw Error(result?.error||'The store photo request failed (HTTP '+response.status+'). Try again or upload a photo.');
 }
 async function composeBundlePhotos(found) {
   const assets=await Promise.all(found.map(async ({photo})=>{
@@ -3690,8 +3699,23 @@ async function findCardPhotos() {
     $('cardPhotoChoices').replaceChildren(...photos.map((photo,index)=>{
       const choice=document.createElement('div');
       const preview=document.createElement('img');
-      if(onGitHubFlyer()) preview.crossOrigin='anonymous';
-      preview.src=catalogImageURL(photo.preview);
+      // Use the same restricted route for thumbnails and full-size images.
+      // Direct cross-origin IMG requests from the opaque frame cannot use
+      // the launcher origin allowlist.
+      void (async()=>{
+        try{
+          const blob=await (await catalogFetch(catalogImageURL(photo.preview))).blob();
+          if(request!==cardPhotoRequest)return;
+          const objectURL=URL.createObjectURL(blob);
+          preview.onload=preview.onerror=()=>URL.revokeObjectURL(objectURL);
+          preview.src=objectURL;
+        }catch(error){
+          if(request===cardPhotoRequest){
+            preview.alt='Preview unavailable: '+error.message;
+            use.disabled=true;
+          }
+        }
+      })();
       preview.alt=photo.title+' — photo '+(index+1);
       preview.style.cssText='width:100%;height:108px;object-fit:contain;background:white';
       const details=document.createElement('a');
