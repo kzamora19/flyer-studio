@@ -12,6 +12,11 @@ let requestVersion=0,nativeNoticeVersion=0;
 let nativeNoticeOffer=null,nativeNoticeKey='';
 function sameSelection(selected){const current=selection();return Boolean(current&&selected&&current.offer===selected.offer&&current.product.productKey===selected.product.productKey);}
 function currentSession(){
+ // The protected launcher has already verified the PTG session. These fixed
+ // bridge markers are not credentials; the parent signs and verifies each call.
+ if(window.__MEGAFLYER_PRIVATE_DB__&&typeof window.__MEGAFLYER_PTG_RPC__==='function'&&
+    typeof window.__MEGAFLYER_PHOTO_RPC__==='function')
+  return {id:'ptg-proof-session',token:'signed-studio-proof'};
  const p=typeof ptgSession!=='undefined'?ptgSession:null;
  return p?.token&&p?.id?{token:p.token,id:String(p.id)}:null;
 }
@@ -98,9 +103,13 @@ async function uploadFile(file,replacing=null,alreadyApplied=false){
  const result=await request(replacing?'replace':'upload',{
   ...payload,...(replacing?{id:replacing.id}:{})
  });
+ if(!result?.ok||typeof result.photoId!=='string')throw Error('The library did not confirm the photo save.');
+ const confirmed=await request('resolve',{product:selected.product});
+ if(!Array.isArray(confirmed?.photos)||!confirmed.photos.some(photo=>photo.id===result.photoId))
+  throw Error('Photo save was acknowledged, but recall could not be confirmed.');
  if(sameSelection(selected)){
   await sync(true);
-  if(sameSelection(selected))notice(result.reused?'Photo already saved — existing library copy reused.':'Product photo saved in the shared library.',true);
+  if(sameSelection(selected))notice(result.reused?'Photo already saved — existing library copy reused.':'Product photo saved and verified in the shared library.',true);
  }
  return result;
 }
@@ -257,8 +266,8 @@ function init(){
      if(!offer.photo||offer.photo===before)continue;
      if(!opt.checked){saved.textContent='Shared saving excluded.';return;}
      setSaved('Saving product photo to shared library…');
-     try{await uploadFile(file,null,true);
-      setSaved('Product photo saved in shared library.');
+     try{const result=await uploadFile(file,null,true);
+      setSaved(result?.ok?'Product photo saved in shared library.':'Photo applied to this flyer only.');
      }catch(error){
       setSaved('Flyer image retained; library save unavailable: '+error.message);
      }
