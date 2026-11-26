@@ -2574,7 +2574,7 @@ body.modalOpen{overflow:auto!important}
 <label>Back headline image <input id="backArtworkUpload" type="file" accept="image/png,image/jpeg,image/webp"></label>
 <div class="row"><button type="button" id="backArtworkClear">Remove back image</button><span id="backArtworkStatus" class="muted"></span></div>
 </details>
-<div id="campaignFields"></div>
+<div id="campaignFields"></div><div id="pageComponentEditor" hidden></div>
 <div id="customLogoFields" hidden>
 <label>Logo image <input type="file" id="logo" accept="image/png,image/jpeg,image/webp"></label>
 <button id="clearLogo">Remove logo</button>
@@ -2824,7 +2824,7 @@ function brandHeaderChoice(campaign) {
   if(Object.hasOwn(brandHeaders,campaign.brandHeader)) return campaign.brandHeader;
   return campaign.logo||!/^(?:FIRST|1ST) MEGASAVER$/i.test(clean(campaign.brand))?'custom':'classic';
 }
-function brandHeaderOffset(campaign) {return campaign.brandHeader==='classic'?19:0;}
+function brandHeaderOffset(campaign) {return (campaign.brandHeader==='classic'?19:0)+(campaign._headerExtra||0);}
 function headlineDesignChoice(campaign) {
   if(Object.hasOwn(headlineDesigns,campaign.headlineDesign)) return campaign.headlineDesign;
   return sevenDaySale(campaign.title)?'poster':'plain';
@@ -2845,7 +2845,7 @@ const examples = [
   ['DEMO-FRIDGE','back','Two-door refrigerator','18999','21999'],
   ['DEMO-WASH','back','Twin-tub washer','7499','8999']
 ];
-const blank = () => ({version:1,campaign:{...defaultCampaign,footer:''},offers:[],status:'Draft',history:[]});
+const blank = () => ({version:1,campaign:{...defaultCampaign,footer:'',footerDesign:{front:defaultFooter(),back:defaultFooter()}},offers:[],reviewScope:'both',status:'Draft',history:[]});
 let state = blank();
 state.campaign.footer=defaultCampaign.footer;
 state.offers=examples.map(([sku,section,name,promo,regular,items=''])=>({sku,section,name,promo,regular,items,brand:'',model:'',badge:'',photo:'',demo:true}));
@@ -4043,6 +4043,9 @@ function validatedBackup(data) {
     if(type==='color'&&!/^#[0-9a-f]{6}$/i.test(value)) throw Error('Invalid brand color in backup.');
     campaign[key]=value;
   }
+  if(data.campaign.footerDesign&&typeof data.campaign.footerDesign==='object')campaign.footerDesign=Object.fromEntries(['front','back'].filter(p=>data.campaign.footerDesign[p]).map(p=>[p,sanitizeFooter(data.campaign.footerDesign[p])]));
+  if(data.campaign.headerDesign&&typeof data.campaign.headerDesign==='object')campaign.headerDesign=Object.fromEntries(['front','back'].map(p=>[p,{extraHeight:pageCampaign(data.campaign,p)._headerExtra}]));
+  if(Array.isArray(data.campaign.footerTemplates))campaign.footerTemplates=data.campaign.footerTemplates.slice(0,30).map(t=>({name:String(t.name||'Footer').slice(0,80),design:sanitizeFooter(t.design)}));
   campaign.logo=imageData(data.campaign.logo)?data.campaign.logo:'';
   for(const key of Object.values(artworkFields)) campaign[key]=imageData(data.campaign[key])?data.campaign[key]:'';
   for(const key of Object.values(rowOrderFields)) {
@@ -4085,6 +4088,27 @@ function validatedBackup(data) {
   });
   return {version:1,campaign,offers,reviewScope:reviewScope(data),status:'Draft',history:[]};
 }
+function defaultFooter(){return {mode:'standard',height:34,color:'#142c78',left:'Until supplies last. Terms and conditions apply.',right:'',leftSize:11,rightSize:12,leftFont:'current',rightFont:'current',leftWeight:500,rightWeight:700,leftColor:'#ffffff',rightColor:'#ffffff',leftAlign:'left',rightAlign:'right',leftPadding:16,rightPadding:16,padding:8,spacing:10,inset:0,borderColor:'#142c78',borderWidth:0,image:'',backgroundImage:'',imageFit:'fit',imageOpacity:100,imageScale:100,imageX:50,imageY:50,aspect:true,elements:[]};}
+function sanitizeFooter(raw){
+  const d=defaultFooter(),v=raw&&typeof raw==='object'?raw:{},out={...d};
+  const num=(k,min,max)=>v[k]==null||v[k]===''||!Number.isFinite(Number(v[k]))?d[k]:Math.max(min,Math.min(max,Number(v[k])));
+  if(['none','standard','text','image','imageText','custom','legacy'].includes(v.mode))out.mode=v.mode;
+  for(const k of ['color','leftColor','rightColor','borderColor'])if(/^#[0-9a-f]{6}$/i.test(v[k]||''))out[k]=v[k];
+  for(const k of ['left','right'])if(typeof v[k]==='string')out[k]=v[k].slice(0,300);
+  for(const k of ['leftFont','rightFont'])if(Object.hasOwn(typefaces,v[k]))out[k]=v[k];
+  for(const k of ['leftAlign','rightAlign'])if(['left','center','right'].includes(v[k]))out[k]=v[k];
+  for(const [k,min,max] of [['height',18,180],['leftSize',8,24],['rightSize',8,24],['leftWeight',400,900],['rightWeight',400,900],['padding',0,40],['spacing',0,40],['leftPadding',0,40],['rightPadding',0,40],['inset',0,40],['borderWidth',0,6],['imageOpacity',0,100],['imageScale',10,300],['imageX',0,100],['imageY',0,100]])out[k]=num(k,min,max);
+  for(const k of ['image','backgroundImage'])out[k]=imageData(v[k])?v[k]:'';
+  out.aspect=v.aspect!==false;out.imageFit=['fit','fill','stretch'].includes(v.imageFit)?v.imageFit:'fit';
+  out.elements=(Array.isArray(v.elements)?v.elements:[]).slice(0,24).map(e=>{
+    const n=(k,min,max,f)=>Number.isFinite(Number(e?.[k]))?Math.max(min,Math.min(max,Number(e[k]))):f;
+    return {kind:e?.kind==='image'?'image':'text',text:String(e?.text||'').slice(0,300),image:imageData(e?.image)?e.image:'',x:n('x',0,100,0),y:n('y',0,100,0),w:n('w',1,100,25),h:n('h',1,100,100),size:n('size',4,30,12),color:/^#[0-9a-f]{6}$/i.test(e?.color||'')?e.color:'#ffffff',opacity:n('opacity',0,100,100)};
+  });
+  return out;
+}
+function footerFor(c,page){return c.footerDesign?.[page]?sanitizeFooter(c.footerDesign[page]):{...defaultFooter(),mode:'legacy',height:29,left:c.footer||'',color:c.blue||'#142c78'};}
+function footerHeight(c,page){const f=footerFor(c,page);return f.mode==='none'?0:f.height;}
+function pageCampaign(c,page){return {...c,_headerExtra:Math.max(0,Math.min(100,Number(c.headerDesign?.[page]?.extraHeight)||0))};}
 function dimensions(campaign) {
   const [width,height]=campaign.paper==='letter'?[215.9,279.4]:[210,297];
   const bleed=Number(campaign.bleed);
@@ -4397,7 +4421,7 @@ function card(ctx,offer,asset,x,y,w,h,type,style=null,freebieAsset=null) {
   const bundle=type==='bundles',compact=type==='tech';
   ctx.save();
   ctx.beginPath();ctx.roundRect(x,y,w,h,style?.cardRadius??9);
-  ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.save();ctx.globalAlpha*=offer?(sanitizeSectionAppearance(style||{}).cardOpacity/100):1;ctx.fill();ctx.restore();
+  ctx.fillStyle=offer?(style?.cardColor||'#ffffff'):(style?.emptyColor||'#f1f4f9');ctx.save();if(offer&&Number.isFinite(style?.cardOpacity))ctx.globalAlpha*=style.cardOpacity/100;ctx.fill();ctx.restore();
   ctx.strokeStyle=style?.borderColor||(bundle?'#f2bd45':'#c5d3e7');ctx.lineWidth=style?.borderWidth??1;ctx.stroke();
   if(!offer){ctx.restore();return;}
   if(compact){const area=techCard(ctx,offer,asset,x,y,w,h,style,freebieAsset);ctx.restore();return area;}
@@ -4658,6 +4682,64 @@ function paintSection(ctx,campaign,area,bgAsset=null){
   line(ctx,draw,textX,y+h-7,w-48,textSize,'#ffffff',font.weight,font.family);
 }
 
+function pageGeometryWarnings(layout,height,footerHeight){
+  const warnings=[];
+  if(layout.overflow)warnings.push('Requested section heights exceed the available page space.');
+  const bottom=height-footerHeight;
+  if(layout.headline.y+layout.headline.height>bottom)warnings.push('Header or banner overlaps the footer.');
+  for(const area of layout.sections||[])if(area.y+area.height>bottom+.01)warnings.push('Section overlaps the footer: '+area.key);
+  for(const box of layout.cards)if(box.width<12||box.height<12||box.y+box.height>bottom+.01||box.x<0||box.x+box.width>800.01)warnings.push('Product box needs more space: '+box.key+' '+(box.index+1));
+  return [...new Set(warnings)];
+}
+function footerImage(ctx,image,x,y,w,h,f){
+  if(!image||w<=0||h<=0)return;
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();ctx.globalAlpha*=f.imageOpacity/100;
+  const factor=f.imageFit==='fill'?Math.max(w/image.width,h/image.height):Math.min(w/image.width,h/image.height);
+  let iw=f.aspect&&f.imageFit!=='stretch'?image.width*factor:w,ih=f.aspect&&f.imageFit!=='stretch'?image.height*factor:h;
+  iw*=f.imageScale/100;ih*=f.imageScale/100;
+  ctx.drawImage(image,x+(w-iw)*f.imageX/100,y+(h-ih)*f.imageY/100,iw,ih);ctx.restore();
+}
+function footerText(ctx,text,x,y,w,h,f,side,warnings){
+  if(!text)return;
+  const face=typefaces[f[side+'Font']]||typefaces.current,weight=f[side+'Weight'],size=f[side+'Size'];
+  const actual=fittedCanvasSize(ctx,text,w,Math.min(size,h*.7),weight,face.family);
+  if(actual<8)warnings.push(side+' footer text does not fit at a readable size.');
+  ctx.save();ctx.textAlign=f[side+'Align'];ctx.textBaseline='middle';
+  const align=ctx.textAlign,tx=align==='center'?x+w/2:align==='right'?x+w:x;
+  line(ctx,text,tx,y+h/2,w,actual,f[side+'Color'],weight,face.family);ctx.restore();
+}
+async function drawFooter(ctx,f,pageHeight,edge){
+  const warnings=[];if(f.mode==='none')return warnings;
+  const y=pageHeight-f.height,x=f.inset,w=800-2*x;
+  if(f.mode==='legacy'){fill(ctx,f.color,-edge,y,800+2*edge,f.height+edge);line(ctx,f.left,17,pageHeight-11,765,10,'#ffffff',500);return warnings;}
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,f.height);ctx.clip();
+  fill(ctx,f.color,x,y,w,f.height);
+  if(f.backgroundImage)footerImage(ctx,await loadImage(f.backgroundImage),x,y,w,f.height,{...f,imageFit:'fill'});
+  const pad=f.padding,inner=Math.max(1,w-pad*2);
+  if(['standard','text','imageText'].includes(f.mode)){
+    let start=x+pad,available=inner;
+    if(f.mode==='imageText'&&f.image){const iw=inner*.3;footerImage(ctx,await loadImage(f.image),start,y+2,iw,f.height-4,f);start+=iw+f.spacing;available-=iw+f.spacing;}
+    const gap=f.spacing,lp=f.leftPadding,rp=f.rightPadding,split=f.left&&f.right?(available-gap)*.58:available;
+    footerText(ctx,f.left,start+lp,y,Math.max(1,split-lp),f.height,f,'left',warnings);
+    if(f.right){const rightStart=f.left?start+split+gap:start;footerText(ctx,f.right,rightStart,y,Math.max(1,start+available-rightStart-rp),f.height,f,'right',warnings);}
+  }else if(f.mode==='image'){
+    if(!f.image)warnings.push('Footer image is missing.');
+    else footerImage(ctx,await loadImage(f.image),x+pad,y+2,inner,f.height-4,f);
+  }else if(f.mode==='custom'){
+    for(const e of f.elements){
+      const ex=x+w*e.x/100,ey=y+f.height*e.y/100,ew=w*e.w/100,eh=f.height*e.h/100;
+      if(ex+ew>x+w+.01||ey+eh>pageHeight+.01){warnings.push('A custom footer element extends outside the footer.');continue;}
+      ctx.save();ctx.globalAlpha*=e.opacity/100;
+      if(e.kind==='image'&&e.image)footerImage(ctx,await loadImage(e.image),ex,ey,ew,eh,{...f,imageOpacity:100,imageScale:100,imageX:50,imageY:50,imageFit:'fit',aspect:true});
+      else if(e.kind==='text')footerText(ctx,e.text,ex,ey,ew,eh,{...f,leftSize:e.size,leftColor:e.color},'left',warnings);
+      ctx.restore();
+    }
+  }
+  if(f.borderWidth){ctx.strokeStyle=f.borderColor;ctx.lineWidth=f.borderWidth;ctx.strokeRect(x,y,w,f.height);}
+  ctx.restore();
+  if(!f.inset){fill(ctx,f.color,-edge,y,edge,f.height+edge);fill(ctx,f.color,800,y,edge,f.height+edge);fill(ctx,f.color,0,pageHeight,800,edge);}
+  return warnings;
+}
 function pageLayout(page,height,campaign,artwork) {
   if(campaign.sectionLayout)return modernPageLayout(page,height,campaign,artwork);
   const offset=brandHeaderOffset(campaign);
@@ -4896,7 +4978,7 @@ function banner(ctx,c,box,parts,artwork) {
   fit(ctx,c.dates,x+20,y+h*.85,w-40,18,'#ffffff');
 }
 async function render(project,page,pixelWidth,target) {
-  const c=project.campaign, d=dimensions(c);
+  const c=pageCampaign(project.campaign,page), d=dimensions(c);
   const source=headlineArtworkSource(c,page);
   const parts=source?null:posterParts(c);
   if(document.fonts) {
@@ -4919,7 +5001,9 @@ async function render(project,page,pixelWidth,target) {
   const logoSource=c.brandHeader==='classic'?officialWordmark:c.logo;
   const [logo,artwork]=await Promise.all([logoSource,source].map(value=>value?loadImage(value):null));
   const sectionImages=new Map(await Promise.all(keys.filter(key=>c.sectionLayout?.[key]?.backgroundImage).map(async key=>[key,await loadImage(c.sectionLayout[key].backgroundImage)])));
-  const layout=pageLayout(page,h,c,artwork);
+  const footer=footerFor(c,page);
+  const layout=pageLayout(page,h-(footerHeight(c,page)-29),c,artwork);
+  layout.pageWarnings=pageGeometryWarnings(layout,h,footerHeight(c,page));
   ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.setTransform(scale,0,0,scale,extrusion,extrusion);
   const edge=extrusion/scale;
@@ -4940,8 +5024,7 @@ async function render(project,page,pixelWidth,target) {
     fit(ctx,c.back.toUpperCase(),27,481+offset+shift,740,17,'#ffffff',typefaces[c.sectionFont]);
   }
   layout.freebieWarnings=drawSlots(ctx,project,pictures,layout.cards,target,freebies);
-  fill(ctx,c.blue,-edge,h-29,800+edge*2,29+edge);
-  line(ctx,c.footer,17,h-11,765,10,'#ffffff',500);
+  layout.footerWarnings=await drawFooter(ctx,footer,h,edge);
   if(project.status!=='Approved'||!reviewPages(project).includes(page)) {
     ctx.save();ctx.translate(400,h*.59);ctx.rotate(-.44);
     ctx.globalAlpha=.16;ctx.textAlign='center';ctx.font='900 136px Arial';ctx.fillStyle='#19376e';
@@ -5367,7 +5450,7 @@ let currentMenu='cards', currentSub='';
 let highlightSelection=null;
 let modalCardTab='lookup';
 const NAV_ITEMS=[
-  ['campaign','Campaign & Branding',[['text','Headlines & Text'],['artwork','Sale Artwork'],['labels','Section Labels']]],
+  ['campaign','Campaign & Branding',[['text','Headlines & Text'],['artwork','Sale Artwork'],['labels','Section Labels'],['header','Header'],['footer','Footer']]],
   ['cards','Edit Flyer Cards',[]],
   ['bulk','Bulk Import',[]],
   ['review','Review & Approval',[]],
@@ -5752,6 +5835,7 @@ function renderAppearanceEditor(){
   }
   const original=appearanceOriginalFields;original.hidden=true;
   const conf=state.campaign.sectionLayout||defaultSectionLayout();
+  if(!conf[selectedLayoutSection])selectedLayoutSection=Object.keys(conf)[0];
   const z=conf[selectedLayoutSection],sectionName=sections[selectedLayoutSection];
   if(previewLayout?.page===z.page){highlightSelection={kind:'field',key:selectedLayoutSection};updatePreviewHighlight();}
   if($('sectionOverflow')){
@@ -5974,6 +6058,54 @@ function cancelAppearance(){
   if(settingsSnapshot){state.campaign=settingsSnapshot;registerCustomSections(state.campaign);settingsSnapshot=null;layoutUndo.length=0;layoutRedo.length=0;setup();edited('Layout settings canceled; previous campaign restored.');}
   hideDialog('settingsDialog');
 }
+function renderPageComponentEditor(kind){
+  const holder=$('pageComponentEditor');holder.replaceChildren();
+  const page=side,other=page==='front'?'back':'front';
+  const heading=document.createElement('h2');heading.textContent=(page==='front'?'Front':'Back')+' '+kind;holder.append(heading);
+  const button=(label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;holder.append(b);return b;};
+  const field=(label,k,type,value,fn,options)=>holder.append(appearanceField(label,k,type,value,fn,options));
+  button('Edit '+other+' '+kind,()=>{side=other;showTarget();refresh();renderPageComponentEditor(kind);});
+  if(kind==='header'){
+    field('Extra brand-header height','extraHeight','number',pageCampaign(state.campaign,page)._headerExtra,v=>{state.campaign.headerDesign??={};state.campaign.headerDesign[page]={extraHeight:Math.max(0,Math.min(100,Number(v)||0))};edited('Header height changed.');});
+    button('Edit existing header artwork',()=>chooseAdvancedSub('campaign','artwork'));
+    button('Copy header height to other side',()=>{state.campaign.headerDesign??={};state.campaign.headerDesign[other]={extraHeight:pageCampaign(state.campaign,page)._headerExtra};edited('Header settings copied.');});
+    return;
+  }
+  const f=footerFor(state.campaign,page);
+  const update=(patch)=>{state.campaign.footerDesign??={};state.campaign.footerDesign[page]=sanitizeFooter({...footerFor(state.campaign,page),...patch});edited('Footer updated.');renderPageComponentEditor('footer');};
+  field('Footer mode','footerMode','select',f.mode,v=>update(v==='standard'&&f.mode==='legacy'?{...defaultFooter(),left:f.left||defaultFooter().left,mode:v}:{mode:v}),[['legacy','Original project footer'],['none','No Footer'],['standard','Standard Single-Row Footer'],['text','Custom Text Footer'],['image','Image Only'],['imageText','Image + Text'],['custom','Custom Footer Layout']]);
+  if(f.mode==='legacy'){button('Adopt standard single-row footer',()=>update({...defaultFooter(),left:f.left||defaultFooter().left}));return;}
+  if(f.mode==='none')return;
+  for(const [k,label] of [['height','Footer height'],['padding','Padding'],['spacing','Spacing'],['inset','Inset from sides'],['borderWidth','Border thickness']])field(label,k,'number',f[k],v=>update({[k]:v}));
+  for(const [k,label] of [['color','Background color'],['borderColor','Border color']])field(label,k,'color',f[k],v=>update({[k]:v}));
+  const upload=(label,apply)=>{const l=document.createElement('label');l.textContent=label;const input=document.createElement('input');input.type='file';input.accept='image/png,image/jpeg,image/webp';l.append(input);holder.append(l);input.onchange=async()=>{const file=input.files?.[0],project=state;if(!file)return;try{const data=await readPhoto(file);if(state!==project)return;apply(data);}catch(e){feedback(e.message);}};};
+  upload('Footer background artwork',data=>update({backgroundImage:data}));button('Remove footer background',()=>update({backgroundImage:''}));
+  if(['standard','text','imageText'].includes(f.mode)){
+    for(const [k,title] of [['left','Left disclaimer / text'],['right','Right contact / text']]){
+      field(title,k,'text',f[k],v=>update({[k]:v}));
+      field(title+' font',k+'Font','select',f[k+'Font'],v=>update({[k+'Font']:v}),Object.entries(typefaces).map(([id,font])=>[id,font.label]));
+      for(const attr of ['Size','Weight','Padding'])field(title+' '+attr,k+attr,'number',f[k+attr],v=>update({[k+attr]:v}));
+      field(title+' color',k+'Color','color',f[k+'Color'],v=>update({[k+'Color']:v}));
+      field(title+' alignment',k+'Align','select',f[k+'Align'],v=>update({[k+'Align']:v}),[['left','Left'],['center','Center'],['right','Right']]);
+    }
+    button('Use Santiago Branch contact numbers',()=>update({right:'0919-081-7993 / 0919-079-5426'}));
+  }
+  if(['image','imageText'].includes(f.mode)){
+    upload('Footer image (upload or replace)',data=>update({image:data}));button('Remove image',()=>update({image:''}));
+    for(const [k,label] of [['imageOpacity','Image opacity (%)'],['imageScale','Image scale (%)'],['imageX','Image horizontal position (%)'],['imageY','Image vertical position (%)']])field(label,k,'number',f[k],v=>update({[k]:v}));
+    field('Image fit','imageFit','select',f.imageFit,v=>update({imageFit:v}),[['fit','Fit'],['fill','Fill'],['stretch','Stretch']]);button(f.aspect?'Unlock aspect ratio':'Lock aspect ratio',()=>update({aspect:!f.aspect}));
+  }
+  if(f.mode==='custom'){
+    const change=(i,p)=>update({elements:f.elements.map((e,j)=>i===j?{...e,...p}:e)});
+    button('Add text element',()=>update({elements:[...f.elements,{kind:'text',text:'Custom text',x:0,y:0,w:35,h:100,size:12,color:'#ffffff'}]}));
+    upload('Add image / logo / QR artwork',image=>update({elements:[...f.elements,{kind:'image',image,x:40,y:0,w:25,h:100}]}));
+    f.elements.forEach((e,i)=>{const t=document.createElement('strong');t.textContent='Element '+(i+1);holder.append(t);if(e.kind==='text'){field('Text','elementText','text',e.text,v=>change(i,{text:v}));field('Text size','elementSize','number',e.size,v=>change(i,{size:v}));field('Text color','elementColor','color',e.color,v=>change(i,{color:v}));}else upload('Replace element image',image=>change(i,{image}));for(const [k,label] of [['x','X (%)'],['y','Y (%)'],['w','Width (%)'],['h','Height (%)'],['opacity','Opacity (%)']])field(label,'element'+k,'number',e[k],v=>change(i,{[k]:v}));button('Remove element '+(i+1),()=>update({elements:f.elements.filter((_,j)=>j!==i)}));});
+  }
+  button('Apply to both sides',()=>{state.campaign.footerDesign={front:structuredClone(f),back:structuredClone(f)};edited('Footer copied to both sides.');});
+  button('Reset footer',()=>update(defaultFooter()));
+  button('Save Footer as Template',async()=>{const name=clean(prompt('Footer template name')||'').slice(0,80);if(!name)return;try{const stored=await powerFromDB('footer-templates')||[];const templates=[{name,design:f},...stored].slice(0,30);await powerToDB('footer-templates',templates);state.campaign.footerTemplates=templates;edited('Footer template saved.');}catch(e){feedback(e.message);}});
+  button('Retrieve Footer Template',async()=>{const local=await powerFromDB('footer-templates')||[],templates=local.length?local:state.campaign.footerTemplates||[];if(!templates.length){feedback('No saved footer templates.');return;}const name=prompt('Enter a template number:\n'+templates.map((t,i)=>(i+1)+'. '+t.name).join('\n'));const t=templates[Number(name)-1];if(t)update(t.design);});
+}
 function chooseAdvancedSub(menu,sub){
   if(!['campaign','cards','bulk','review','backup'].includes(menu))return;
   const desired=sub||({campaign:'text',cards:side,bulk:'csv',review:'validation',backup:'download'})[menu];
@@ -5986,8 +6118,8 @@ function chooseAdvancedSub(menu,sub){
   currentSub=desired;
   // Split shared panels into their previously existing sections, but keep IDs and handlers intact.
   if(menu==='campaign'){
-    const artwork=desired==='artwork';$('headlineArtwork').hidden=!artwork;
-    $('campaignFields').hidden=artwork;$('customLogoFields').hidden=artwork||state.campaign.brandHeader==='classic';
+    const component=['header','footer'].includes(desired),artwork=desired==='artwork';$('pageComponentEditor').hidden=!component;if(component)renderPageComponentEditor(desired);$('headlineArtwork').hidden=!artwork;
+    $('campaignFields').hidden=artwork||component;$('customLogoFields').hidden=artwork||component||state.campaign.brandHeader==='classic';
     for(const label of $('campaignFields').querySelectorAll('label')){
       const labels=['tech','bundles','back','footer'];
       label.hidden=artwork||(desired==='labels'?!labels.includes(label.dataset.field):labels.includes(label.dataset.field));
@@ -6227,6 +6359,7 @@ function initDirectSectionControls(arrange){
   $('hideSelectedSection').onclick=()=>removeSectionFromFlyer(selectedLayoutSection);
   $('deleteSelectedSection').onclick=()=>askDeleteSection(selectedLayoutSection);
   $('restoreHiddenSections').onclick=()=>openSectionManager('manage');
+  const bg=document.createElement('button');bg.type='button';bg.textContent='Background & Watermark';bg.onclick=()=>{$('layoutSettings').click();setAppearanceTab('background');};selected.append(bg);
   const dialog=document.createElement('div');dialog.className='uiModalBackdrop';dialog.id='sectionDialog';dialog.hidden=true;
   dialog.innerHTML='<div class="uiModalBox" role="dialog" aria-modal="false" aria-labelledby="sectionDialogTitle"><div class="modalHeading"><div><strong id="sectionDialogTitle">Manage flyer sections</strong><small>Changes update the flyer preview; all product records are preserved when hiding.</small></div><button type="button" id="closeSectionDialog" aria-label="Close section manager">×</button></div><div class="modalInner"><form id="sectionQuickAdd"><label>New section title<input id="quickSectionName" type="text" maxlength="45" required placeholder="e.g. Appliances Under ₱5,000"></label><label>Flyer side<select id="quickSectionPage"><option value="front">Front</option><option value="back">Back</option></select></label><button type="submit" class="primary">+ Add Section</button></form><p id="sectionInsertHint" hidden></p><p id="sectionQuickNote"></p><div id="quickSectionsList"></div><div class="settingsFoot"><span class="settingsHint">Maximum six custom sections. Deletion is limited to empty custom sections.</span><button type="button" id="doneSectionDialog">Done</button></div></div></div>';
   document.body.append(dialog);
