@@ -1,0 +1,46 @@
+name: MegaFlyer live catalog diagnostic
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'site/studio/launch.js'
+      - 'site/index.html'
+      - 'supabase/functions/flyer-catalog/**'
+      - '.github/workflows/megaflyer-catalog-live-check.yml'
+permissions:
+  contents: read
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify live store catalog from allowed browser origin
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const endpoint='https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-catalog';
+          const origin='https://kzamora19.github.io';
+          const query=new URLSearchParams({mode:'photos',sku:'00060593',model:'AH-X10BEF'});
+          const res=await fetch(endpoint+'?'+query,{headers:{Origin:origin},redirect:'error',signal:AbortSignal.timeout(30000)});
+          console.log('Lookup HTTP:',res.status,'CORS:',res.headers.get('access-control-allow-origin'));
+          assert.equal(res.headers.get('access-control-allow-origin'),origin);
+          const payload=await res.json();
+          assert.ok(res.ok,payload.error||'Catalog endpoint failed');
+          assert.ok(Array.isArray(payload.photos),'Catalog did not return a photo array');
+          console.log('Matching photos:',payload.photos.length);
+          assert.ok(payload.photos.length,'No matching store photo found for AH-X10BEF');
+          const candidate=payload.photos[0];
+          const image=await fetch(endpoint+'?'+new URLSearchParams({mode:'image',url:candidate.original}),{headers:{Origin:origin},redirect:'error',signal:AbortSignal.timeout(30000)});
+          assert.ok(image.ok,'Image proxy HTTP '+image.status);
+          assert.equal(image.headers.get('access-control-allow-origin'),origin);
+          assert.match(image.headers.get('content-type')||'',/^image\/(png|jpeg|webp)/);
+          const size=(await image.arrayBuffer()).byteLength;
+          assert.ok(size>0&&size<=20*1024*1024,'Invalid image size');
+          console.log('Image successfully retrieved:',size,'bytes');
+          const isolated=await fetch(endpoint+'?'+query,{headers:{Origin:'null'},signal:AbortSignal.timeout(30000)});
+          assert.equal(isolated.status,403,'Opaque origin must remain blocked');
+          console.log('PASS: authorized catalog lookup, real image download, opaque origin restriction');
+          NODE
