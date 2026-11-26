@@ -47,6 +47,11 @@ helpers.banner(squareCtx,{red:'#c62820'}, {x:16,y:83,width:330,height:330},null,
 assert.equal(squareCtx.draws.length,0,'No needless background for matching artwork');
 assert.equal(foreground.length,1,'One foreground image for square artwork');
 assert.ok(src.includes('banner(ctx,c,layout.headline,parts,artwork)'),'Live preview uses common banner renderer');
-assert.ok(src.includes('await render(snapshot,page,width)'),'PNG uses common banner renderer');
-assert.ok(src.includes('await render(snapshot,face,width)'),'Both PDF pages use common banner renderer');
+const exportStart=src.indexOf('async function exportFile(format)');
+const exportEnd=src.indexOf('async function transition(',exportStart);
+assert.ok(exportStart>=0&&exportEnd>exportStart,'Unified export function found');
+const exporter=src.slice(exportStart,exportEnd);
+assert.match(exporter,/for\(const face of faces\)\{\s*const \{canvas,layout\}=await render\(snapshot,face,width,undefined,renderMode\);/,'All selected faces use the common renderer and verified render mode');
+assert.match(exporter,/if\(format==='png'\)files\.push\(\{face,blob:await png300\(await canvasBlob\(canvas,'image\/png'\)\)\}\)/,'PNG uses the common rendered canvas');
+assert.match(exporter,/else \{const jpeg=await canvasBlob\(canvas,'image\/jpeg'\);pages\.push/,'PDF uses the common rendered canvas');
 console.log('PASS: banner geometry, background clipping, canvas state and shared PNG/PDF rendering.');
