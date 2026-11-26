@@ -1,0 +1,49 @@
+name: MegaFlyer private candidate validation (no deployment)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/megaflyer-private-candidate.yml'
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 8906c710de8f72f0607109c142518588df87e207
+          path: historical-build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebuild candidate with pinned protected packaging
+        run: |
+          mkdir -p scripts staging
+          cp historical-build/scripts/build-private-flyer.mjs scripts/
+          cp historical-build/staging/editor-storage-bridge.js staging/
+          node scripts/build-private-flyer.mjs "$RUNNER_TEMP/flyer-candidate"
+      - name: Validate candidate integrity and compatibility (no upload)
+        env:
+          CANDIDATE: ${{ runner.temp }}/flyer-candidate
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import assert from 'node:assert/strict';
+          import {enableProtectedPtgLookup} from './historical-build/supabase/functions/_shared/flyer-protected-ptg-compat.mjs';
+          const dir=process.env.CANDIDATE;
+          const raw=readFileSync(dir+'/private/studio.html','utf8');
+          const manifest=JSON.parse(readFileSync(dir+'/manifest.json','utf8'));
+          assert.equal(createHash('sha256').update(raw).digest('hex'),manifest.sha256);
+          assert.equal(Buffer.byteLength(raw),manifest.bytes);
+          const html=enableProtectedPtgLookup(raw);
+          for(const marker of ['id="arrangeCards"','function drawFreebieBand','__MEGAFLYER_CATALOG_RPC__','__MEGAFLYER_PRIVATE_DB__','__MEGAFLYER_PHOTO_RPC__','protectedPtgConnected'])assert.ok(html.includes(marker),'Missing '+marker);
+          for(const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi))if(m[1].trim())new Function(m[1]);
+          assert.ok(!readFileSync(dir+'/public/index.html','utf8').includes('function drawFreebieBand'));
+          console.log('Candidate SHA-256:',manifest.sha256,'bytes:',manifest.bytes);
+          console.log('PASS: private candidate build, PTG compatibility, photo/card features, script syntax, and public entry separation. No upload or deployment.');
+          NODE
