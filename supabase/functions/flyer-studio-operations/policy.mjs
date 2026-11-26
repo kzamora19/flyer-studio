@@ -14,3 +14,7 @@ export function validReviewPayload(body){
  if(body.action==='final')return uuid(body.approvalId)&&body.blocking.length===0;
  return typeof body.reason==='string'&&body.reason.trim().length>=10&&body.reason.trim().length<=1000&&body.acknowledged===true;
 }
+
+// Only the verified PTG branch code can select a built-in branch default.
+// Unknown branches and unassigned System Admins keep an editable blank contact.
+export const footerContactForBranch=code=>code==='STG'?'0919-081-7993 / 0919-079-5426':'';
