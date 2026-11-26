@@ -1,0 +1,43 @@
+'use strict';
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const policy=import('../supabase/functions/flyer-studio-operations/policy.mjs');
+const projectId='16a3aadd-52fe-4d12-80af-43369cafbc78';
+const approvalId='16a3aadd-52fe-4d12-80af-43369cafbc79';
+const base={projectId,digest:'a'.repeat(64),scope:'both',warnings:[],blocking:[]};
+test('canonical roles, no display-name authority',async()=>{
+ const {validRole,permissions}=await policy;
+ for(const role of ['SYSTEM_ADMIN','BRANCH_ADMIN','BRANCH_USER'])assert.ok(validRole(role));
+ for(const role of ['Team Leader','System Admin','admin','system_admin','',null,undefined,{}]){
+  assert.equal(validRole(role),false);
+  assert.deepEqual(permissions(role),{canApprove:false,canOverride:false});
+ }
+ assert.deepEqual(permissions('SYSTEM_ADMIN'),{canApprove:true,canOverride:true});
+ assert.deepEqual(permissions('BRANCH_ADMIN'),{canApprove:true,canOverride:false});
+ assert.deepEqual(permissions('BRANCH_USER'),{canApprove:false,canOverride:false});
+});
+test('review scope, blocking errors and authorization request validation',async()=>{
+ const {validReviewPayload:valid}=await policy;
+ for(const scope of ['front','back','both']){
+  const approve={...base,scope,action:'approve',format:'approval'};
+  assert.ok(valid(approve));
+  for(const format of ['png','pdf']){
+   const final={...base,scope,action:'final',format,approvalId};
+   assert.ok(valid(final));
+   assert.equal(valid({...final,blocking:['Unresolved product']}),false);
+   assert.equal(valid({...final,approvalId:'fake'}),false);
+   const override={...base,scope,action:'override',format,reason:'Approved exception for missing photo',acknowledged:true,blocking:['Missing photo']};
+   assert.ok(valid(override));
+   for(const bad of [{acknowledged:false},{reason:'short'},{reason:' '.repeat(12)},{reason:'x'.repeat(1001)}])assert.equal(valid({...override,...bad}),false);
+  }
+  for(const bad of [{scope:'all'},{projectId:'bad'},{digest:'f'.repeat(63)},{digest:'z'.repeat(64)},{blocking:['x']},{warnings:['x'.repeat(401)]},{warnings:Array(101).fill('x')},{format:'png'}])assert.equal(valid({...approve,...bad}),false);
+ }
+});
+test('asset requests accept only known categories and UUID identifiers',async()=>{
+ const {validReviewPayload:valid}=await policy;
+ for(const category of ['','logos','banners','backgrounds','templates','decorations','other'])assert.ok(valid({action:'assets-list',category}));
+ for(const category of ['../private','unknown',null,undefined])assert.equal(valid({action:'assets-list',category}),false);
+ assert.ok(valid({action:'asset-image',assetId:projectId}));
+ assert.equal(valid({action:'asset-image',assetId:'../secret.png'}),false);
+ for(const bad of [null,[],{},'approve',{action:'unknown'}])assert.equal(valid(bad),false);
+});
