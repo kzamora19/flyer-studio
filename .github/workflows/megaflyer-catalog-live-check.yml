@@ -24,7 +24,17 @@ jobs:
           const endpoint='https://tzklsscoiwnmeantcefw.supabase.co/functions/v1/flyer-catalog';
           const origin='https://kzamora19.github.io';
           const query=new URLSearchParams({mode:'photos',sku:'00060593',model:'AH-X10BEF'});
-          const res=await fetch(endpoint+'?'+query,{headers:{Origin:origin},redirect:'error',signal:AbortSignal.timeout(30000)});
+          async function request(params){
+            for(let attempt=1;attempt<=2;attempt++){
+              let res;
+              try{res=await fetch(endpoint+'?'+params,{headers:{Origin:origin},redirect:'error',signal:AbortSignal.timeout(18000)});}
+              catch(e){if(attempt===2)throw e;console.log('Temporary catalog transport failure; retrying.');await new Promise(r=>setTimeout(r,800));continue;}
+              console.log('Catalog attempt',attempt,'HTTP',res.status);
+              if(attempt===1&&[502,503,504].includes(res.status)){await res.body?.cancel();await new Promise(r=>setTimeout(r,800));continue;}
+              return res;
+            }
+          }
+          const res=await request(query);
           console.log('Lookup HTTP:',res.status,'CORS:',res.headers.get('access-control-allow-origin'));
           assert.equal(res.headers.get('access-control-allow-origin'),origin);
           const payload=await res.json();
@@ -33,7 +43,7 @@ jobs:
           console.log('Matching photos:',payload.photos.length);
           assert.ok(payload.photos.length,'No matching store photo found for AH-X10BEF');
           const candidate=payload.photos[0];
-          const image=await fetch(endpoint+'?'+new URLSearchParams({mode:'image',url:candidate.original}),{headers:{Origin:origin},redirect:'error',signal:AbortSignal.timeout(30000)});
+          const image=await request(new URLSearchParams({mode:'image',url:candidate.original}));
           assert.ok(image.ok,'Image proxy HTTP '+image.status);
           assert.equal(image.headers.get('access-control-allow-origin'),origin);
           assert.match(image.headers.get('content-type')||'',/^image\/(png|jpeg|webp)/);
