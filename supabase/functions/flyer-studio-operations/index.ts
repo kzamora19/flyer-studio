@@ -1,6 +1,6 @@
 // Development candidate. Deploy only with the canonical PTG proof-role contract and review audit migration.
 import {createClient} from "npm:@supabase/supabase-js@2.49.8";
-import {validRole,permissions,validReviewPayload,uuid} from "./policy.mjs";
+import {validRole,permissions,validReviewPayload,uuid,footerContactForBranch} from "./policy.mjs";
 const url=Deno.env.get("SUPABASE_URL")||"";
 function serviceKey(){
  const direct=Deno.env.get("SUPABASE_SECRET_KEY");if(direct)return direct;
@@ -47,7 +47,7 @@ Deno.serve(async(req)=>{
  // Canonical role from the server-only proof authority. Never trust workspaceIdentity.role or user-supplied labels.
  if(!validRole(proof.roleKey))return done(503,"PTG canonical role authority is not enabled.");
  const rights=permissions(proof.roleKey);
- if(body.action==="permissions")return done(200,rights);
+ if(body.action==="permissions"){const footerContact=footerContactForBranch(proof.branchCode);return done(200,footerContact?{...rights,footerContact}:rights); }
  try{
   if(body.action==="assets-list"){
    let q=db.from("flyer_shared_assets").select("id,name,category,mime_type,byte_size").order("name").limit(200);
