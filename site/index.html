@@ -2679,8 +2679,11 @@ body.modalOpen{overflow:auto!important}
 </div>
 </details>
 <details open><summary>Review &amp; approval</summary>
+<label>Flyer scope <select id="reviewScope"><option value="both">Both sides</option><option value="front">Front only</option><option value="back">Back only</option></select></label>
+<p class="muted">Only visible sections on selected sides are reviewed and exported. Hidden products are retained.</p>
 <div class="muted" id="counts"></div>
 <div class="issue" id="issues"></div>
+<button type="button" id="clearReviewDemos">Clear demo products on selected visible sides</button>
 <label>Reviewed by <input id="reviewer" maxlength="80" autocomplete="name"></label>
 <label>Review note <textarea id="reviewNote" maxlength="400" rows="2"></textarea></label>
 <div class="row"><button id="submit" class="primary">Submit for review</button><button id="approve">Approve</button><button id="changes">Request changes</button></div>
@@ -3193,22 +3196,22 @@ function placement(offers,key,campaign=state.campaign) {
   return {slots,extra};
 }
 function overflow(offers,key) { return placement(offers,key).extra; }
+function reviewScope(project=state){return ['front','back','both'].includes(project.reviewScope)?project.reviewScope:'both';}
+function reviewPages(project=state){const scope=reviewScope(project);return scope==='both'?['front','back']:[scope];}
+function reviewSectionKeys(project=state){return [...new Set(reviewPages(project).flatMap(page=>pageSectionKeys(project.campaign,page)))].filter(key=>Object.hasOwn(sections,key));}
+function reviewOffers(project=state){const keys=new Set(reviewSectionKeys(project));return project.offers.filter(offer=>keys.has(offer.section));}
 function preflight() {
   const issues=[];
-  const campaign=state.campaign;
+  const campaign=state.campaign, pages=reviewPages(), keys=reviewSectionKeys(), offers=reviewOffers();
   if(campaign.brandHeader!=='classic'&&!campaign.brand) issues.push('Enter the brand.');
-  const usesEditableBanner=Object.keys(artworkFields).some(page=>!headlineArtworkSource(campaign,page));
+  const usesEditableBanner=pages.some(page=>!headlineArtworkSource(campaign,page));
   if(usesEditableBanner&&(!campaign.title||!campaign.dates)) {
     issues.push('Enter the headline and sale dates for any side using editable text.');
   }
-  if(backPresetActive(campaign)&&!campaign.dates) issues.push('Enter sale dates for the back artwork.');
-  if(!state.offers.length) issues.push('Add at least one offer.');
+  if(pages.includes('back')&&backPresetActive(campaign)&&!campaign.dates) issues.push('Enter sale dates for the back artwork.');
+  if(!offers.length) issues.push('Add at least one offer to the selected visible sides.');
   if(campaign.sectionLayout){
-    for(const key of Object.keys(sections)){
-      if(campaign.sectionLayout[key]?.enabled===false&&group(state.offers,key).length)
-        issues.push('Hidden section contains products: '+sections[key]+'. Restore it before approval.');
-    }
-    for(const page of ['front','back']){
+    for(const page of pages){
       const keys=pageSectionKeys(campaign,page);
       if(!keys.length)continue;
       const estimated=keys.reduce((total,key,index)=>total+campaign.sectionLayout[key].height+(index<keys.length-1?campaign.sectionLayout[key].spacing:0),0);
@@ -3216,21 +3219,21 @@ function preflight() {
       if(estimated>max)issues.push(page+' section heights exceed available space. Reduce section heights or move a section.');
     }
   }
-  for(const key of Object.keys(sections)) {
-    const extra=overflow(state.offers,key);
+  for(const key of keys) {
+    const extra=overflow(offers,key);
     if(extra.length) issues.push(sections[key]+' overflow: '+extra.map(offer=>offer.sku).join(', '));
   }
-  const missing=state.offers.filter(offer=>!offer.photo);
+  const missing=offers.filter(offer=>!offer.photo);
   if(missing.length) issues.push('Exact photos missing: '+missing.map(offer=>offer.sku).join(', '));
-  const invalid=state.offers.filter(offer=>!offer.name||!validPrice(offer.promo)||Number(offer.promo)<=0||
+  const invalid=offers.filter(offer=>!offer.name||!validPrice(offer.promo)||Number(offer.promo)<=0||
     (offer.regular&&(!validPrice(offer.regular)||Number(offer.regular)<Number(offer.promo)))||
     (offer.section==='bundles'&&!offer.bundleBarcode&&!offer.items));
   if(invalid.length) issues.push('Check names, prices or bundle contents: '+invalid.map(offer=>offer.sku).join(', '));
   const duplicateBarcodes=new Map();
-  for(const offer of state.offers){const key=skuKey(offer.sku);duplicateBarcodes.set(key,(duplicateBarcodes.get(key)||0)+1);}
+  for(const offer of offers){const key=skuKey(offer.sku);duplicateBarcodes.set(key,(duplicateBarcodes.get(key)||0)+1);}
   for(const [barcode,count] of duplicateBarcodes)if(count>1)
     issues.push('Duplicate barcode '+barcode+' is used on '+count+' flyer cards. Confirm duplicates before approval.');
-  if(state.offers.some(offer=>offer.demo)) issues.push('Remove or replace all DEMO offers before approval.');
+  if(offers.some(offer=>offer.demo||String(offer.sku).startsWith('DEMO-'))) issues.push('Remove or replace DEMO offers on selected visible sides before approval.');
   return issues;
 }
 function refresh() {
@@ -3257,9 +3260,14 @@ function refresh() {
   statusBadge.title=statusHelp[state.status]||'Current flyer review status.';
   const paper=state.campaign.paper==='letter'?'US Letter':'A4';
   const printSize=Number(state.campaign.bleed)>0?paper+' with 3 mm bleed':paper;
-  $('printInfo').textContent=printSize+' · Open the PDF to print. '+(state.status==='Approved'?'The PDF includes front and back.':'Drafts include a watermark.');
+  const scope=reviewScope(), scopeLabel=scope==='both'?'both sides':scope+' only';
+  $('reviewScope').value=scope;
+  $('clearReviewDemos').disabled=!reviewOffers().some(o=>o.demo||String(o.sku).startsWith('DEMO-'));
+  $('png').textContent='Download PNG · '+(scope==='both'?'current side':scope+' only');
+  $('printPdf').textContent='Download print PDF · '+scopeLabel;
+  $('printInfo').textContent=printSize+' · PDF: '+scopeLabel+'. '+(state.status==='Approved'?'Approved export.':'Drafts include a watermark.');
   $('exportInfo').textContent=printSize+' · 300 ppi exports · Unapproved exports are marked DRAFT.';
-  $('counts').textContent=Object.keys(sections).map(key=>sections[key]+' '+group(state.offers,key).length+'/'+slotCount(state.campaign,key)).join(' · ');
+  $('counts').textContent=reviewSectionKeys().map(key=>sections[key]+' '+group(state.offers,key).length+'/'+slotCount(state.campaign,key)).join(' · ');
   const issues=preflight();
   $('issues').replaceChildren(...issues.map(issue=>Object.assign(document.createElement('div'),{textContent:issue})));
   $('submit').disabled=issues.length>0||!['Draft','Changes requested'].includes(state.status);
@@ -4073,7 +4081,7 @@ function validatedBackup(data) {
     offer.demo=Boolean(row.demo)||offer.sku.startsWith('DEMO-');
     return offer;
   });
-  return {version:1,campaign,offers,status:'Draft',history:[]};
+  return {version:1,campaign,offers,reviewScope:reviewScope(data),status:'Draft',history:[]};
 }
 function dimensions(campaign) {
   const [width,height]=campaign.paper==='letter'?[215.9,279.4]:[210,297];
@@ -4970,10 +4978,10 @@ async function exportFile(format) {
   controls.forEach(button=>button.disabled=true);
   if(format==='pdf') {
     printStatus.hidden=false;
-    printStatus.textContent='Preparing both sides…';
+    printStatus.textContent='Preparing selected sides…';
   }
   try {
-    const snapshot=structuredClone(state), page=side;
+    const snapshot=structuredClone(state), faces=reviewPages(snapshot), page=faces.includes(side)?side:faces[0];
     const d=dimensions(snapshot.campaign);
     const width=Math.round(d.pageWidth/25.4*300);
     const name='megasaver-flyer'+(snapshot.status==='Approved'?'':'-draft');
@@ -5001,7 +5009,7 @@ async function exportFile(format) {
 }
 function transition(target) {
   const expected=target==='In review'?$('submit'):target==='Approved'?$('approve'):$('changes');
-  if(expected.disabled) return;
+  if(expected.disabled||(target!=='Changes requested'&&preflight().length)) return;
   const person=clean($('reviewer').value),note=clean($('reviewNote').value);
   if(!person) {feedback('Enter the reviewer’s name.');$('reviewer').focus();return;}
   if(target==='Changes requested'&&!note) {feedback('Enter the changes needed.');$('reviewNote').focus();return;}
@@ -5203,6 +5211,8 @@ function bind() {
     if(currentMenu==='cards')selectNav('cards',face);
     showTarget();refresh();
   };
+  $('reviewScope').onchange=()=>{const next=$('reviewScope').value;if(next===reviewScope()||!['front','back','both'].includes(next))return;state.reviewScope=next;edited('Review and export scope updated.');};
+  $('clearReviewDemos').onclick=()=>{const demos=new Set(reviewOffers().filter(o=>o.demo||String(o.sku).startsWith('DEMO-')));if(!demos.size||!window.confirm('Remove '+demos.size+' demo product(s) from selected visible sides? Hidden and unselected products will be retained.'))return;state.offers=state.offers.filter(o=>!demos.has(o));selected=offerKey(state.offers[0]);offerEditor();edited('Removed '+demos.size+' demo product(s).');};
   $('png').onclick=()=>exportFile('png');
   $('printPdf').onclick=()=>exportFile('pdf');
   $('submit').onclick=()=>transition('In review');
@@ -5915,7 +5925,7 @@ function chooseAdvancedSub(menu,sub){
   if(menu==='review'){
     const panel=$('panel-review');
     const approved=desired==='approval';
-    $('counts').hidden=approved;$('issues').hidden=approved;
+    $('counts').hidden=approved;$('issues').hidden=approved;$('clearReviewDemos').hidden=approved;
     ['reviewer','reviewNote','submit','approve','changes'].forEach(id=>{const el=$(id);if(!el)return;const row=el.closest('label')||el.closest('.row');if(row)row.hidden=!approved;});
   }
   if(menu==='backup'){
