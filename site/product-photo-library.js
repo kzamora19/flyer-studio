@@ -8,8 +8,15 @@ if(!MATCH)return;
 const $=id=>document.getElementById(id);
 const TYPES=new Set(['image/png','image/jpeg','image/webp']);
 let active=null,records=[],match='none',canManage=false,session='',stamp='',busy=false,allVisible=false;
-let requestVersion=0;
+let requestVersion=0,nativeNoticeVersion=0;
+let nativeNoticeOffer=null,nativeNoticeKey='';
+function sameSelection(selected){const current=selection();return Boolean(current&&selected&&current.offer===selected.offer&&current.product.productKey===selected.product.productKey);}
 function currentSession(){
+ // The protected launcher has already verified the PTG session. These fixed
+ // bridge markers are not credentials; the parent signs and verifies each call.
+ if(window.__MEGAFLYER_PRIVATE_DB__&&typeof window.__MEGAFLYER_PTG_RPC__==='function'&&
+    typeof window.__MEGAFLYER_PHOTO_RPC__==='function')
+  return {id:'ptg-proof-session',token:'signed-studio-proof'};
  const p=typeof ptgSession!=='undefined'?ptgSession:null;
  return p?.token&&p?.id?{token:p.token,id:String(p.id)}:null;
 }
@@ -96,8 +103,15 @@ async function uploadFile(file,replacing=null,alreadyApplied=false){
  const result=await request(replacing?'replace':'upload',{
   ...payload,...(replacing?{id:replacing.id}:{})
  });
- notice(result.reused?'Photo already saved — existing library copy reused.':'Product photo saved in the shared library.',true);
- await sync(true);
+ if(!result?.ok||typeof result.photoId!=='string')throw Error('The library did not confirm the photo save.');
+ const confirmed=await request('resolve',{product:selected.product});
+ if(!Array.isArray(confirmed?.photos)||!confirmed.photos.some(photo=>photo.id===result.photoId))
+  throw Error('Photo save was acknowledged, but recall could not be confirmed.');
+ if(sameSelection(selected)){
+  await sync(true);
+  if(sameSelection(selected))notice(result.reused?'Photo already saved — existing library copy reused.':'Product photo saved and verified in the shared library.',true);
+ }
+ return result;
 }
 function button(container,label,handler){
  const b=document.createElement('button');b.type='button';b.textContent=label;
@@ -147,6 +161,10 @@ function render(){
 }
 async function sync(force=false){
  const s=currentSession(),selected=selection();
+ const nativeSaved=$('smartPhotoNativeSaved');
+ if(nativeSaved&&(nativeNoticeOffer!==selected?.offer||nativeNoticeKey!==(selected?.product.productKey||''))){
+  nativeNoticeVersion++;nativeSaved.textContent='';nativeNoticeOffer=selected?.offer;nativeNoticeKey=selected?.product.productKey||'';
+ }
  const key=s&&selected?JSON.stringify([s.id,selected.product.barcode,
   selected.product.brand,selected.product.model,selected.product.description]):'';
  if(!force&&key===stamp)return;
@@ -232,6 +250,10 @@ function init(){
    const file=event.target.files?.[0],selected=selection();
    if(!file||!selected?.product.productKey)return;
    const before=selected.offer.photo,offer=selected.offer,key=selected.product.productKey;
+   nativeNoticeOffer=offer;nativeNoticeKey=key;
+   const version=++nativeNoticeVersion;
+   saved.textContent='';
+   const setSaved=message=>{if(version===nativeNoticeVersion&&sameSelection(selected))saved.textContent=message;};
    const optedIn=opt.checked;
    if(!optedIn){saved.textContent='Private flyer upload only. Not added to shared library.';return;}
    void (async()=>{
@@ -243,15 +265,15 @@ function init(){
      if(!current||current.offer!==offer||current.product.productKey!==key)return;
      if(!offer.photo||offer.photo===before)continue;
      if(!opt.checked){saved.textContent='Shared saving excluded.';return;}
-     saved.textContent='Saving product photo to shared library…';
-     try{await uploadFile(file,null,true);
-      saved.textContent='Product photo saved in shared library.';
+     setSaved('Saving product photo to shared library…');
+     try{const result=await uploadFile(file,null,true);
+      setSaved(result?.ok?'Product photo saved in shared library.':'Photo applied to this flyer only.');
      }catch(error){
-      saved.textContent='Flyer image retained; library save unavailable: '+error.message;
+      setSaved('Flyer image retained; library save unavailable: '+error.message);
      }
      return;
     }
-    saved.textContent='Photo was not shared (editor import not confirmed).';
+    setSaved('Photo was not shared (editor import not confirmed).');
    })();
   },true);
  }
