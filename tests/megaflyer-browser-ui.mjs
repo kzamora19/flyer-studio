@@ -133,9 +133,37 @@ try{
   assert.ok(g.after.freeCount>0&&g.after.left===0,'Freebie must render on right: '+g.type);
   assert.notDeepEqual(g.adjusted.freebie,g.after.freebie,'Freebie appearance controls should change artwork: '+g.type);
  }
+
+ // Actual canvas geometry for wide 2/3-column product cards.
+ const adaptive=await page.evaluate(()=>{
+  const main=document.createElement('canvas');main.width=80;main.height=60;
+  const bonus=document.createElement('canvas');bonus.width=100;bonus.height=40;
+  const base={sku:'WIDE',name:'SHARP SPLIT TYPE AIRCON',model:'AH-X15BEF',brand:'SHARP',promo:'39598',regular:'',items:'',badge:''};
+  const asset={image:main,frame:{x:0,y:0,width:80,height:60}},gift={image:bonus,frame:{x:0,y:0,width:100,height:40}};
+  function capture(w,h,text,appearance,withGift=true){
+    const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d'),images=[],words=[];
+    const draw=ctx.drawImage.bind(ctx),fill=ctx.fillText.bind(ctx);
+    ctx.drawImage=(image,...args)=>{images.push({kind:image===main?'main':'freebie',args});draw(image,...args);};
+    ctx.fillText=(value,x,y,...args)=>{words.push({value,x,y,font:ctx.font});fill(value,x,y,...args);};
+    const area=card(ctx,{...base,freebieText:text,freebieAppearance:appearance},asset,0,0,w,h,'front',null,withGift?gift:null);
+    return {area,main:images.find(v=>v.kind==='main'),gift:images.find(v=>v.kind==='freebie'),price:words.find(v=>v.value.includes('39,598')),description:words.filter(v=>v.value.includes('BONUS'))};
+  }
+  return [250,380].map(w=>({w,plain:capture(w,110,'',{},false),photo:capture(w,110,'',{}),auto:capture(w,110,'BONUS ITEM',{}),stack:capture(w,110,'BONUS ITEM',{layout:'stack'}),smaller:capture(w,110,'BONUS ITEM',{areaHeight:50}),right:capture(w,110,'BONUS ITEM',{layout:'side',textAlign:'right',textY:100})}));
+ });
+ for(const v of adaptive){
+  assert.deepEqual(v.photo.main,v.plain.main,'Wide card product photo preserved');
+  assert.deepEqual(v.auto.price,v.plain.price,'Wide card price preserved');
+  assert.ok(v.photo.area.wide&&v.photo.area.h>27.5,'Wider card must use more than the old 25% strip');
+  assert.ok(v.photo.area.x>=v.w*.5&&v.photo.area.y+v.photo.area.h<=110,'Freebie remains lower-right and inside card');
+  assert.ok(v.auto.description.length&&v.auto.gift,'Both freebie photo and description render');
+  assert.ok(v.smaller.area.h<v.auto.area.h,'Adjustable area height changes reserved space');
+  assert.notDeepEqual(v.auto.gift,v.stack.gift,'Side-by-side and stacked artwork render differently');
+  assert.notDeepEqual(v.auto.description,v.right.description,'Description position independently changes');
+ }
+ console.log('PASS wide 2/3-column adaptive freebies, independent description placement and unchanged main photo/price');
  await page.evaluate(()=>{const offer=placement(state.offers,'back').slots[0];offer.freebieAppearance={size:65,scale:120,x:80,y:20,fit:'fill',aspect:true,font:12};});
  const restored=await page.evaluate(()=>{const saved=validatedBackup(JSON.parse(JSON.stringify(state)));return saved.offers.find(o=>o.sku==='CARD-A').freebieAppearance;});
- assert.deepEqual(restored,{size:65,scale:120,x:80,y:20,fit:'fill',aspect:true,font:12});
+ assert.deepEqual(restored,{size:65,scale:120,x:80,y:20,fit:'fill',aspect:true,font:12,areaHeight:100,layout:'auto',textAlign:'left',textY:50});
  await page.locator('#arrangeCards').click();
  await page.evaluate(snapshot=>{state=snapshot;side='front';slotTarget.section='front';slotTarget.slot='1';setup();showTarget();},arrangementBaseline.snapshot);
  await page.locator('#front').click();
