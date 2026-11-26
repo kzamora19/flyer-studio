@@ -201,9 +201,20 @@ async function relayStoreCatalog(message){
   p.set('mode','image');p.set('url',url.href);
  }else throw Error('Unsupported store photo action.');
  let response;
- try{response=await fetch(catalogEndpoint+'?'+p,{method:'GET',credentials:'omit',
-   redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(20000)});}
- catch(error){throw Error(error.name==='TimeoutError'?'Store catalog request timed out.':'Cannot reach the store catalog service. Check the connection and try again.');}
+ for(let attempt=0;attempt<2;attempt++){
+  try{
+   response=await fetch(catalogEndpoint+'?'+p,{method:'GET',credentials:'omit',
+    redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(18000)});
+  }catch(error){
+   if(attempt===0){await new Promise(resolve=>setTimeout(resolve,800));continue;}
+   throw Error(error.name==='TimeoutError'?'Store catalog request timed out.':'Cannot reach the store catalog service. Check the connection and try again.');
+  }
+  if(attempt===0&&[502,503,504].includes(response.status)){
+   await response.body?.cancel().catch(()=>{});
+   await new Promise(resolve=>setTimeout(resolve,800));continue;
+  }
+  break;
+ }
  const type=response.headers.get('content-type')||'';
  if(!response.ok){
   const payload=await response.json().catch(()=>null);
@@ -236,7 +247,7 @@ function installCatalogRelay(){
   let readyTimer;try{await Promise.race([ready,new Promise((_,reject)=>{readyTimer=setTimeout(()=>reject(Error('Store catalog connection is unavailable. Reopen MegaFlyer.')),5000);})]);}
   finally{clearTimeout(readyTimer);}
   return new Promise((resolve,reject)=>{
-   const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('Store photo request timed out.'));},25000);
+   const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(Error('Store photo request timed out.'));},45000);
    pending.set(id,{resolve,reject,timer});port.postMessage({...fields,id});
   });
  };
