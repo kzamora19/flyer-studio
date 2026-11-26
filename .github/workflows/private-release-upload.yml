@@ -1,0 +1,40 @@
+name: Authorized MegaFlyer universal cards and watermarks private release transfer
+on:
+  push:
+    branches: [release/universal-cards-watermarks-20261126]
+    paths: ['.github/workflows/private-release-upload.yml']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  upload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 375426862c6e65bb3a266efd02b019fcc9dac9cc
+      - uses: actions/checkout@v4
+        with:
+          ref: 8906c710de8f72f0607109c142518588df87e207
+          path: historical-build
+      - uses: actions/checkout@v4
+        with:
+          ref: 039395a9f8299fc92d2bbb22ec4ae3a5a40ecc19
+          path: historical-transfer
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebuild and verify exact staged candidate
+        run: |
+          mkdir -p scripts staging
+          cp historical-build/scripts/build-private-flyer.mjs scripts/
+          cp historical-build/staging/editor-storage-bridge.js staging/
+          cp historical-transfer/staging/private-release-upload.mjs staging/
+          node scripts/build-private-flyer.mjs "$RUNNER_TEMP/branchline-private-bundle"
+          echo 'fe8df2d37e5755fb03a6cd911d2729e7b5c288664a337184d65e3aa88dde214c  '"$RUNNER_TEMP/branchline-private-bundle/private/studio.html" | sha256sum -c
+      - name: Transfer only verified private editor using existing attested uploader
+        run: |
+          npm init -y >/dev/null
+          npm install --no-save --no-package-lock --ignore-scripts @supabase/supabase-js@2.49.8
+          node staging/private-release-upload.mjs
